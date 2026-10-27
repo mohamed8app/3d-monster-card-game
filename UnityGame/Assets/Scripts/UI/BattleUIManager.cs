@@ -21,6 +21,10 @@ namespace MonsterCardGame.UI
         public Text playerPowerText;
         public Text turnInfoText;
 
+        [Header("Opponent Hand Display (Face-Down Cards)")]
+        public Transform enemyHandContainer;
+        public Text enemyHandCountText;
+
         [Header("Controls")]
         public Button attackButton;
         public Button endTurnButton;
@@ -53,6 +57,14 @@ namespace MonsterCardGame.UI
             if (sacrificeButton != null) sacrificeButton.onClick.AddListener(OnSacrificeClicked);
 
             UpdateUI();
+            StartCoroutine(DelayedInitialUpdate());
+        }
+
+        private System.Collections.IEnumerator DelayedInitialUpdate()
+        {
+            // ننتظر فريم واحد حتى ينتهي GameManager من إعداد وتجهيز كروت البداية
+            yield return null;
+            UpdateUI();
         }
 
         private void Update()
@@ -64,6 +76,16 @@ namespace MonsterCardGame.UI
                 #else
                 Application.Quit();
                 #endif
+            }
+
+            // فحص أمان تلقائي: لو يد اللاعب بها كروت ولكن لم ترسم بعد، يتم التحديث فوراً
+            var gm = GameManager.Instance;
+            if (gm != null && gm.humanPlayer != null && gm.humanPlayer.hand != null && gm.humanPlayer.hand.Count > 0)
+            {
+                if (playerHandContainer != null && playerHandContainer.childCount == 0)
+                {
+                    UpdateUI();
+                }
             }
         }
 
@@ -102,8 +124,11 @@ namespace MonsterCardGame.UI
             // 5. تحديث خانات الساحة
             UpdateSlots();
 
-            // 6. تحديث كروت اليد
+            // 6. تحديث كروت يد اللاعب
             RefreshPlayerHand();
+
+            // 7. تحديث كروت يد الخصم (تظهر مقلوبة من ظهرها فقط)
+            RefreshEnemyHand();
         }
 
         private void UpdateSlots()
@@ -156,10 +181,71 @@ namespace MonsterCardGame.UI
             }
         }
 
+        private void RefreshEnemyHand()
+        {
+            var gm = GameManager.Instance;
+            if (gm == null || enemyHandContainer == null) return;
+
+            // مسح الكروت القديمة في يد الخصم
+            foreach (Transform child in enemyHandContainer)
+            {
+                Destroy(child.gameObject);
+            }
+
+            int handCount = gm.aiPlayer.hand.Count;
+            if (enemyHandCountText != null)
+            {
+                enemyHandCountText.text = ArabicFixer.Fix($"🎴 كروت يد الخصم: {handCount} بطاقات مستترة");
+            }
+
+            // رسم كل بطاقة من ظهرها فقط بأناقة وفخامة
+            for (int i = 0; i < handCount; i++)
+            {
+                CreateFaceDownCardUI(enemyHandContainer, i);
+            }
+        }
+
+        private GameObject CreateFaceDownCardUI(Transform parent, int index)
+        {
+            // الغلاف الخارجي لظهر البطاقة
+            var cardObj = GameBootstrapper.CreatePanel(parent, $"EnemyCardBack_{index}", new Color(0.12f, 0.09f, 0.20f, 0.98f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(58, 52));
+
+            var layoutElem = cardObj.AddComponent<LayoutElement>();
+            layoutElem.preferredWidth = 58;
+            layoutElem.preferredHeight = 52;
+            layoutElem.minWidth = 58;
+            layoutElem.minHeight = 52;
+
+            var outline = cardObj.AddComponent<Outline>();
+            outline.effectColor = new Color(0.92f, 0.76f, 0.28f, 0.95f); // إطار ذهبي ملكي متوهج
+            outline.effectDistance = new Vector2(2, 2);
+
+            // بطانة داخلية مزخرفة
+            var innerPanel = GameBootstrapper.CreatePanel(cardObj.transform, "InnerRuneBorder", new Color(0.08f, 0.06f, 0.14f, 0.95f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(46, 40));
+
+            var innerOutline = innerPanel.AddComponent<Outline>();
+            innerOutline.effectColor = new Color(0.55f, 0.35f, 0.8f, 0.7f); // وهج أرجواني سحري
+            innerOutline.effectDistance = new Vector2(1, 1);
+
+            // الرمز السحري لظهر البطاقة في المنتصف
+            GameBootstrapper.CreateText(innerPanel.transform, "RuneSymbol", "🔮", 16,
+                new Color(1f, 0.85f, 0.35f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(42, 36));
+
+            return cardObj;
+        }
+
         private GameObject CreateDynamicCardUI(Transform parent, MonsterData card)
         {
             var cardObj = GameBootstrapper.CreatePanel(parent, $"Card_{card.name}", new Color(0.16f, 0.18f, 0.25f),
                 new Vector2(0, 0.5f), new Vector2(0, 0.5f), Vector2.zero, new Vector2(170, 95));
+
+            var layoutElem = cardObj.AddComponent<LayoutElement>();
+            layoutElem.preferredWidth = 170;
+            layoutElem.preferredHeight = 95;
+            layoutElem.minWidth = 170;
+            layoutElem.minHeight = 95;
 
             var outline = cardObj.AddComponent<Outline>();
             Color elemColor = card.element switch

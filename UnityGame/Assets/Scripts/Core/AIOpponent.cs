@@ -24,10 +24,12 @@ namespace MonsterCardGame.Core
 
             // 1. التضحية
             DecideSacrifice();
+            if (MonsterCardGame.UI.BattleUIManager.Instance != null) MonsterCardGame.UI.BattleUIManager.Instance.UpdateUI();
             yield return new WaitForSeconds(0.4f);
 
             // 2. الاستدعاء في أفضل الخانات
             DecideSummons(currentTurn);
+            if (MonsterCardGame.UI.BattleUIManager.Instance != null) MonsterCardGame.UI.BattleUIManager.Instance.UpdateUI();
             yield return new WaitForSeconds(0.5f);
 
             // 3. تنفيذ مرحلة الهجوم بالرسوم المتحركة

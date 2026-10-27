@@ -171,19 +171,45 @@ namespace MonsterCardGame.UI
 
             // 1. شريط القائد الخصم (أعلى الشاشة Y: +460)
             var enemyBar = CreatePanel(canvas, "EnemyBar", new Color(0.18f, 0.12f, 0.15f, 0.9f),
-                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0, -50), new Vector2(1800, 70));
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0, -42), new Vector2(1650, 55));
             
             ui.enemyHpText = CreateText(enemyBar.transform, "EnemyHpText", "🔴 قائد العدو: 1000 / 1000 HP", 22,
-                new Color(1f, 0.4f, 0.4f), TextAnchor.MiddleLeft, new Vector2(0, 0), new Vector2(500, 50));
+                new Color(1f, 0.4f, 0.4f), TextAnchor.MiddleLeft, new Vector2(-550, 0), new Vector2(450, 50));
             
-            var eHandCount = CreateText(enemyBar.transform, "EnemyHandCount", "🎴 كروت يد الخصم: 6 كروت", 18,
-                new Color(0.8f, 0.8f, 0.9f), TextAnchor.MiddleRight, new Vector2(520, 0), new Vector2(350, 50));
+            var eHandCount = CreateText(enemyBar.transform, "EnemyHandCount", "🎴 كروت يد الخصم: 6 بطاقات مستترة", 18,
+                new Color(0.85f, 0.85f, 0.95f), TextAnchor.MiddleRight, new Vector2(500, 0), new Vector2(400, 50));
+            ui.enemyHandCountText = eHandCount;
+
+            // 1.1 حاوية كروت يد الخصم المقلوبة (تظهر من الظهر فقط Face-Down)
+            var enemyHandPanel = CreatePanel(canvas, "EnemyHandPanel", new Color(0.10f, 0.08f, 0.15f, 0.88f),
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0, -104), new Vector2(1050, 62));
+
+            var eOutline = enemyHandPanel.AddComponent<Outline>();
+            eOutline.effectColor = new Color(0.6f, 0.45f, 0.25f, 0.7f);
+            eOutline.effectDistance = new Vector2(1.5f, 1.5f);
+
+            CreateText(enemyHandPanel.transform, "EnemyHandLabel", "يد الخصم (مستترة):", 13,
+                new Color(0.85f, 0.75f, 0.95f), TextAnchor.MiddleLeft, new Vector2(-440, 0), new Vector2(140, 30));
+
+            var enemyCardsContainer = new GameObject("EnemyCardsContainer");
+            enemyCardsContainer.transform.SetParent(enemyHandPanel.transform, false);
+            var rectEC = enemyCardsContainer.AddComponent<RectTransform>();
+            rectEC.sizeDelta = new Vector2(860, 56);
+            rectEC.anchoredPosition = new Vector2(60, 0);
+
+            var ecLayout = enemyCardsContainer.AddComponent<HorizontalLayoutGroup>();
+            ecLayout.spacing = 10;
+            ecLayout.childAlignment = TextAnchor.MiddleCenter;
+            ecLayout.childControlWidth = false;
+            ecLayout.childControlHeight = false;
+
+            ui.enemyHandContainer = enemyCardsContainer.transform;
 
             // زر إغلاق وإنهاء اللعبة في أعلى يمين الشاشة (Exit Game Button)
             CreateAnchorButton(canvas, "QuitGameBtn", "❌ خروج",
                 new Color(0.85f, 0.2f, 0.25f, 0.95f), Color.white,
                 new Vector2(1f, 1f), new Vector2(1f, 1f),
-                new Vector2(-60, -48), new Vector2(95, 45),
+                new Vector2(-60, -42), new Vector2(95, 45),
                 () => {
                     Debug.Log("🚪 الخروج من اللعبة...");
                     #if UNITY_EDITOR
@@ -341,6 +367,8 @@ namespace MonsterCardGame.UI
             txt.fontSize = fontSize;
             txt.color = color;
             txt.alignment = align;
+            txt.horizontalOverflow = HorizontalWrapMode.Overflow;
+            txt.verticalOverflow = VerticalWrapMode.Overflow;
             return txt;
         }
 

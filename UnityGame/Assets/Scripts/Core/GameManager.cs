@@ -81,11 +81,17 @@ namespace MonsterCardGame.Core
                 aiPlayer.DrawCard();
             }
 
-            // قرعة البداية (50/50)
-            isPlayerTurn = UnityEngine.Random.value > 0.5f;
+            // يبدأ اللاعب البشري الدور الأول دائماً لضمان ظهور وحوشه فوراً وتفاعله معها
+            isPlayerTurn = true;
             currentTurn = 1;
 
-            Debug.Log($"🎲 أجريت القرعة! اللاعب البادئ: {(isPlayerTurn ? humanPlayer.playerName : aiPlayer.playerName)}");
+            Debug.Log($"🎲 تبدأ المباراة! اللاعب البادئ: {humanPlayer.playerName}");
+
+            if (BattleUIManager.Instance != null)
+            {
+                BattleUIManager.Instance.UpdateUI();
+            }
+
             StartTurn();
         }
 
@@ -109,6 +115,11 @@ namespace MonsterCardGame.Core
             activePlayer.StartTurn(currentTurn);
 
             currentPhase = GamePhase.ActionPhase;
+
+            if (BattleUIManager.Instance != null)
+            {
+                BattleUIManager.Instance.UpdateUI();
+            }
 
             if (isPlayerTurn)
             {
@@ -158,6 +169,10 @@ namespace MonsterCardGame.Core
             {
                 isPlayerTurn = !isPlayerTurn;
                 currentTurn++;
+                if (BattleUIManager.Instance != null)
+                {
+                    BattleUIManager.Instance.UpdateUI();
+                }
                 StartTurn();
             }
         }

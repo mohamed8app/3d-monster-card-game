@@ -83,6 +83,8 @@ namespace MonsterCardGame.UI
                 txt.fontSize = 14;
                 txt.alignment = TextAnchor.MiddleCenter;
                 txt.color = Color.white;
+                txt.horizontalOverflow = HorizontalWrapMode.Overflow;
+                txt.verticalOverflow = VerticalWrapMode.Overflow;
                 txt.text = ArabicFixer.Fix($"{data.name}\n{instance.baseAtk}⚔️  {instance.currentDef}🛡️");
             }
             else
@@ -90,6 +92,8 @@ namespace MonsterCardGame.UI
                 var txt = dynamicInfo.GetComponent<Text>();
                 if (txt != null)
                 {
+                    txt.horizontalOverflow = HorizontalWrapMode.Overflow;
+                    txt.verticalOverflow = VerticalWrapMode.Overflow;
                     txt.text = ArabicFixer.Fix($"{data.name}\n{instance.baseAtk}⚔️  {instance.currentDef}🛡️");
                 }
                 dynamicInfo.gameObject.SetActive(true);
