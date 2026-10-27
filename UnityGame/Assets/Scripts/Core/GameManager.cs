@@ -48,6 +48,11 @@ namespace MonsterCardGame.Core
 
         private void LoadMonsterDatabase()
         {
+            if (monstersJsonFile == null)
+            {
+                monstersJsonFile = Resources.Load<TextAsset>("monsters_150");
+            }
+
             if (monstersJsonFile != null)
             {
                 string json = monstersJsonFile.text;

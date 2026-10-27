@@ -136,22 +136,57 @@ namespace MonsterCardGame.UI
             // رسم الكروت الحالية
             foreach (var card in gm.humanPlayer.hand)
             {
-                if (cardPrefab != null)
+                var cardObj = CreateDynamicCardUI(playerHandContainer, card);
+                var btn = cardObj.GetComponent<Button>();
+                if (btn != null)
                 {
-                    var cardObj = Instantiate(cardPrefab, playerHandContainer);
-                    var cardView = cardObj.GetComponent<CardView>();
-                    if (cardView != null)
-                    {
-                        cardView.Setup(card);
-                        var btn = cardObj.GetComponent<Button>();
-                        if (btn != null)
-                        {
-                            var targetCard = card;
-                            btn.onClick.AddListener(() => OnCardSelectedInHand(targetCard));
-                        }
-                    }
+                    var targetCard = card;
+                    btn.onClick.AddListener(() => OnCardSelectedInHand(targetCard));
                 }
             }
+        }
+
+        private GameObject CreateDynamicCardUI(Transform parent, MonsterData card)
+        {
+            var cardObj = GameBootstrapper.CreatePanel(parent, $"Card_{card.name}", new Color(0.16f, 0.18f, 0.25f),
+                new Vector2(0, 0.5f), new Vector2(0, 0.5f), Vector2.zero, new Vector2(170, 95));
+
+            var outline = cardObj.AddComponent<Outline>();
+            Color elemColor = card.element switch
+            {
+                "نار" => new Color(1f, 0.3f, 0.2f),
+                "مياه" => new Color(0.2f, 0.6f, 1f),
+                "جليد" => new Color(0.4f, 0.9f, 1f),
+                "أرض" => new Color(0.7f, 0.5f, 0.3f),
+                "كهرباء" => new Color(1f, 0.9f, 0.2f),
+                "رياح" => new Color(0.4f, 0.95f, 0.7f),
+                "غابة" => new Color(0.3f, 0.8f, 0.3f),
+                "ضياء" => new Color(1f, 0.95f, 0.6f),
+                "ظلام" => new Color(0.45f, 0.2f, 0.65f),
+                "ميكا" => new Color(0.7f, 0.75f, 0.85f),
+                "أشباح" => new Color(0.7f, 0.5f, 0.9f),
+                "سحر" => new Color(0.9f, 0.4f, 0.9f),
+                _ => Color.white
+            };
+            outline.effectColor = elemColor;
+            outline.effectDistance = new Vector2(2, 2);
+
+            var btn = cardObj.AddComponent<Button>();
+            btn.targetGraphic = cardObj.GetComponent<Image>();
+
+            // سطر علوي: العنصر والتكلفة
+            GameBootstrapper.CreateText(cardObj.transform, "TopInfo", $"{card.element} | {card.cost}⚡", 13,
+                elemColor, TextAnchor.UpperCenter, new Vector2(0, 32), new Vector2(160, 22));
+
+            // اسم الوحش في المنتصف
+            GameBootstrapper.CreateText(cardObj.transform, "Name", card.name, 14,
+                Color.white, TextAnchor.MiddleCenter, new Vector2(0, 5), new Vector2(160, 26));
+
+            // سطر سفلي: الهجوم والدفاع
+            GameBootstrapper.CreateText(cardObj.transform, "Stats", $"{card.atk}⚔️   {card.def}🛡️", 14,
+                new Color(0.95f, 0.85f, 0.4f), TextAnchor.LowerCenter, new Vector2(0, -30), new Vector2(160, 22));
+
+            return cardObj;
         }
 
         public void OnCardSelectedInHand(MonsterData card)

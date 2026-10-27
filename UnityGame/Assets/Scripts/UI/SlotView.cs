@@ -70,6 +70,34 @@ namespace MonsterCardGame.UI
             {
                 placedCardView.Setup(data, instance);
                 placedCardView.gameObject.SetActive(true);
+                return;
+            }
+
+            // عرض تلقائي لاسم الوحش وأرقامه داخل الخانة
+            var dynamicInfo = transform.Find("DynamicMonsterInfo");
+            if (dynamicInfo == null)
+            {
+                var infoObj = new GameObject("DynamicMonsterInfo");
+                infoObj.transform.SetParent(transform, false);
+                var rect = infoObj.AddComponent<RectTransform>();
+                rect.anchoredPosition = new Vector2(0, 10);
+                rect.sizeDelta = new Vector2(150, 50);
+
+                var txt = infoObj.AddComponent<Text>();
+                txt.font = GameBootstrapper.GetFont();
+                txt.fontSize = 14;
+                txt.alignment = TextAnchor.MiddleCenter;
+                txt.color = Color.white;
+                txt.text = $"{data.name}\n{instance.baseAtk}⚔️  {instance.currentDef}🛡️";
+            }
+            else
+            {
+                var txt = dynamicInfo.GetComponent<Text>();
+                if (txt != null)
+                {
+                    txt.text = $"{data.name}\n{instance.baseAtk}⚔️  {instance.currentDef}🛡️";
+                }
+                dynamicInfo.gameObject.SetActive(true);
             }
         }
 
@@ -78,6 +106,11 @@ namespace MonsterCardGame.UI
             if (placedCardView != null)
             {
                 placedCardView.gameObject.SetActive(false);
+            }
+            var dynamicInfo = transform.Find("DynamicMonsterInfo");
+            if (dynamicInfo != null)
+            {
+                dynamicInfo.gameObject.SetActive(false);
             }
         }
     }
