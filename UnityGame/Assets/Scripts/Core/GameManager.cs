@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using MonsterCardGame.Data;
+using MonsterCardGame.UI;
 
 namespace MonsterCardGame.Core
 {
@@ -109,8 +110,19 @@ namespace MonsterCardGame.Core
 
             currentPhase = GamePhase.ActionPhase;
 
-            if (!isPlayerTurn)
+            if (isPlayerTurn)
             {
+                if (BattleUIManager.Instance != null)
+                {
+                    BattleUIManager.Instance.ShowBanner($"🟢 دورك الآن (الجولة {currentTurn})", new Color(0.2f, 0.95f, 0.5f));
+                }
+            }
+            else
+            {
+                if (BattleUIManager.Instance != null)
+                {
+                    BattleUIManager.Instance.ShowBanner($"🔴 دور الخصم (يفكر...)", new Color(1f, 0.35f, 0.35f));
+                }
                 // دور الذكاء الاصطناعي
                 aiOpponent.PlayTurn(currentTurn, activeEnvironment, EndTurn);
             }
@@ -121,15 +133,20 @@ namespace MonsterCardGame.Core
             if (!isPlayerTurn || currentPhase != GamePhase.ActionPhase) return;
 
             currentPhase = GamePhase.CombatPhase;
-            CombatSystem.Instance.ExecuteCombatPhase(humanPlayer, aiPlayer, activeEnvironment);
 
-            // فحص الفوز أو الخسارة
-            CheckGameOver();
-
-            if (currentPhase != GamePhase.GameOver)
+            if (BattleUIManager.Instance != null)
             {
-                EndTurn();
+                BattleUIManager.Instance.ShowBanner("⚔️ مرحلة الهجوم الميداني!", new Color(1f, 0.85f, 0.2f));
             }
+
+            StartCoroutine(CombatSystem.Instance.ExecuteCombatPhaseAnimated(humanPlayer, aiPlayer, activeEnvironment, () =>
+            {
+                CheckGameOver();
+                if (currentPhase != GamePhase.GameOver)
+                {
+                    EndTurn();
+                }
+            }));
         }
 
         public void EndTurn()

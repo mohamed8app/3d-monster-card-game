@@ -1,6 +1,8 @@
 using System;
+using System.Collections;
 using UnityEngine;
 using MonsterCardGame.Data;
+using MonsterCardGame.UI;
 
 namespace MonsterCardGame.Core
 {
@@ -15,89 +17,99 @@ namespace MonsterCardGame.Core
         }
 
         /// <summary>
-        /// تنفيذ مرحلة الهجوم في اتجاه واحد (One-Way Combat Phase)
-        /// وحوش اللاعب النشط فقط تهاجم، والخصم يمتص الضرر بدفاعه
+        /// تنفيذ مرحلة الهجوم مع حركات الاندفاع والاهتزاز وتطاير أرقام الضرر (Animated Combat Phase)
         /// </summary>
         public void ExecuteCombatPhase(PlayerState attacker, PlayerState defender, EnvironmentCardData activeEnv)
         {
-            Debug.Log($"⚔️ بدأ هجوم جيش [{attacker.playerName}] نحو خطوط دفاع [{defender.playerName}]...");
-
-            // 1. هجوم الأجنحة (0، 1، 4، 5)
-            int[] wingSlots = { 0, 1, 4, 5 };
-            foreach (int slotIdx in wingSlots)
-            {
-                var slot = attacker.slots[slotIdx];
-                if (slot != null && slot.IsOccupied && slot.currentMonster.canAttack)
-                {
-                    ExecuteWingAttack(slot.currentMonster, slotIdx, defender, activeEnv);
-                }
-            }
-
-            // 2. هجوم الوسط (2، 3)
-            int[] centerSlots = { 2, 3 };
-            foreach (int slotIdx in centerSlots)
-            {
-                var slot = attacker.slots[slotIdx];
-                if (slot != null && slot.IsOccupied && slot.currentMonster.canAttack)
-                {
-                    ExecuteCenterAttack(slot.currentMonster, slotIdx, defender, activeEnv);
-                }
-            }
+            StartCoroutine(ExecuteCombatPhaseAnimated(attacker, defender, activeEnv, null));
         }
 
-        private void ExecuteWingAttack(MonsterInstance attackerMonster, int slotIdx, PlayerState defender, EnvironmentCardData activeEnv)
+        public IEnumerator ExecuteCombatPhaseAnimated(PlayerState attacker, PlayerState defender, EnvironmentCardData activeEnv, Action onComplete)
         {
-            int atkPower = attackerMonster.GetEffectiveAtk(activeEnv);
-            if (atkPower <= 0) return;
+            bool isAttackerPlayer = (attacker == GameManager.Instance.humanPlayer);
+            string sideName = isAttackerPlayer ? "جيشك" : "جيش الخصم";
+            Debug.Log($"⚔️ بدأ هجوم [{sideName}] الميداني بالرسوم المتحركة!");
 
-            var targetSlot = defender.slots[slotIdx];
+            int[] attackSlots = { 0, 1, 2, 3, 4, 5 };
 
-            if (targetSlot != null && targetSlot.IsOccupied)
+            foreach (int slotIdx in attackSlots)
             {
-                // الخانة المقابلة فيها وحش: ضرب الوحش المقابل
-                var enemyMonster = targetSlot.currentMonster;
+                var slot = attacker.slots[slotIdx];
+                if (slot == null || !slot.IsOccupied || !slot.currentMonster.canAttack)
+                    continue;
+
+                var attackerMonster = slot.currentMonster;
+                int atkPower = attackerMonster.GetEffectiveAtk(activeEnv);
+                if (atkPower <= 0) continue;
+
+                var attackerSlotView = BattleUIManager.Instance != null ? BattleUIManager.Instance.GetSlotView(slotIdx, isAttackerPlayer) : null;
+                var defenderSlot = defender.slots[slotIdx];
+                var defenderSlotView = BattleUIManager.Instance != null ? BattleUIManager.Instance.GetSlotView(slotIdx, !isAttackerPlayer) : null;
+                var defenderLeaderTransform = BattleUIManager.Instance != null ? BattleUIManager.Instance.GetLeaderTransform(!isAttackerPlayer) : null;
+
+                bool isDirectToLeader = (defenderSlot == null || !defenderSlot.IsOccupied);
+                Vector3 targetPos = (!isDirectToLeader && defenderSlotView != null)
+                    ? defenderSlotView.transform.position
+                    : (defenderLeaderTransform != null ? defenderLeaderTransform.position : Vector3.zero);
+
+                // حركة اندفاع الكارت الهجومية نحو الهدف مع لحظة الاصطدام
+                if (attackerSlotView != null)
+                {
+                    yield return BattleAnimations.AnimateCardAttack(attackerSlotView.transform, targetPos, () =>
+                    {
+                        ApplyDamageImpact(attackerMonster, atkPower, slotIdx, defender, defenderSlot, defenderSlotView, defenderLeaderTransform, isDirectToLeader);
+                    });
+                }
+                else
+                {
+                    ApplyDamageImpact(attackerMonster, atkPower, slotIdx, defender, defenderSlot, defenderSlotView, defenderLeaderTransform, isDirectToLeader);
+                }
+
+                // انتظار بين كل ضربة ليعيش اللاعب تجربة تبادل الضربات
+                yield return new WaitForSeconds(0.35f);
+            }
+
+            yield return new WaitForSeconds(0.25f);
+            onComplete?.Invoke();
+        }
+
+        private void ApplyDamageImpact(MonsterInstance attackerMonster, int atkPower, int slotIdx, PlayerState defender, BoardSlot defenderSlot, SlotView defenderSlotView, Transform defenderLeaderTransform, bool isDirectToLeader)
+        {
+            if (!isDirectToLeader)
+            {
+                var enemyMonster = defenderSlot.currentMonster;
                 enemyMonster.TakeDamage(atkPower);
+
+                if (defenderSlotView != null && BattleUIManager.Instance != null)
+                {
+                    BattleUIManager.Instance.TriggerHitShake(defenderSlotView.transform, Color.red);
+                    BattleUIManager.Instance.SpawnDamageNumber(defenderSlotView.transform.position, atkPower, false);
+                }
 
                 if (!enemyMonster.IsAlive)
                 {
-                    Debug.Log($"💀 تم تدمير وحش الخصم بالجناح [{enemyMonster.data.name}]!");
                     defender.graveyard.Add(enemyMonster.data);
-                    targetSlot.ClearSlot();
+                    defenderSlot.ClearSlot();
                 }
             }
             else
             {
-                // الجناح المقابل فارغ: ضربة مباشرة تخترق نحو القائد (1,000 HP)!
-                Debug.Log($"🦅 الجناح {slotIdx} فارغ! وحش [{attackerMonster.data.name}] يوجه ضربة مباشرة للقائد بـ {atkPower} ضرر!");
                 defender.TakeLeaderDamage(atkPower);
-            }
-        }
 
-        private void ExecuteCenterAttack(MonsterInstance attackerMonster, int slotIdx, PlayerState defender, EnvironmentCardData activeEnv)
-        {
-            int atkPower = attackerMonster.GetEffectiveAtk(activeEnv);
-            if (atkPower <= 0) return;
-
-            var targetSlot = defender.slots[slotIdx];
-
-            if (targetSlot != null && targetSlot.IsOccupied)
-            {
-                // وسط الخصم مشغول: ضرب الوحش المقابل
-                var enemyMonster = targetSlot.currentMonster;
-                enemyMonster.TakeDamage(atkPower);
-
-                if (!enemyMonster.IsAlive)
+                if (BattleUIManager.Instance != null)
                 {
-                    Debug.Log($"💀 تم تدمير وحش وسط الخصم [{enemyMonster.data.name}]!");
-                    defender.graveyard.Add(enemyMonster.data);
-                    targetSlot.ClearSlot();
+                    if (defenderLeaderTransform != null)
+                    {
+                        BattleUIManager.Instance.TriggerHitShake(defenderLeaderTransform, Color.red);
+                        BattleUIManager.Instance.SpawnDamageNumber(defenderLeaderTransform.position, atkPower, true);
+                    }
+                    BattleUIManager.Instance.ShakeScreen();
                 }
             }
-            else
+
+            if (BattleUIManager.Instance != null)
             {
-                // وسط الخصم فارغ (تم إلغاء المدافع الخلفي): ضرب القائد مباشرة!
-                Debug.Log($"🎯 خط الوسط {slotIdx} فارغ! وحش [{attackerMonster.data.name}] يضرب القائد مباشرة بـ {atkPower} ضرر!");
-                defender.TakeLeaderDamage(atkPower);
+                BattleUIManager.Instance.UpdateUI();
             }
         }
     }

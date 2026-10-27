@@ -179,6 +179,11 @@ namespace MonsterCardGame.UI
             {
                 BattleUIManager.Instance.LogCombatMessage($"✅ تم سحب وإنزال [{cardData.name}] في الخانة {slotIndex}.");
                 BattleUIManager.Instance.UpdateUI();
+                var sv = BattleUIManager.Instance.GetSlotView(slotIndex, true);
+                if (sv != null)
+                {
+                    BattleUIManager.Instance.StartCoroutine(BattleAnimations.AnimateCardSummon(sv.transform));
+                }
                 return true;
             }
             else

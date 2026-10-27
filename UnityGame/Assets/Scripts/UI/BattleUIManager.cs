@@ -205,6 +205,10 @@ namespace MonsterCardGame.UI
                 LogCombatMessage($"✅ تم إنزال [{selectedCardForAction.name}] في الخانة {slotIndex}.");
                 selectedCardForAction = null;
                 UpdateUI();
+                if (slotIndex >= 0 && slotIndex < playerSlotViews.Length && playerSlotViews[slotIndex] != null)
+                {
+                    StartCoroutine(BattleAnimations.AnimateCardSummon(playerSlotViews[slotIndex].transform));
+                }
             }
             else
             {
@@ -260,6 +264,58 @@ namespace MonsterCardGame.UI
                 combatLogText.text = ArabicFixer.Fix(string.Join("\n", logEntries));
             }
             Debug.Log($"[LOG]: {msg}");
+        }
+
+        public void ShowBanner(string text, Color color)
+        {
+            var canvas = GetComponentInParent<Canvas>();
+            if (canvas != null)
+            {
+                StartCoroutine(BattleAnimations.AnimateTurnBanner(canvas, text, color));
+            }
+        }
+
+        public void SpawnDamageNumber(Vector3 worldPos, int damage, bool isLeaderHit)
+        {
+            var canvas = GetComponentInParent<Canvas>();
+            if (canvas != null)
+            {
+                StartCoroutine(BattleAnimations.AnimateFloatingDamage(canvas.transform, worldPos, damage, isLeaderHit));
+            }
+        }
+
+        public void ShakeScreen()
+        {
+            var canvas = GetComponentInParent<Canvas>();
+            if (canvas != null)
+            {
+                StartCoroutine(BattleAnimations.AnimateScreenShake(canvas.transform));
+            }
+        }
+
+        public void TriggerHitShake(Transform target, Color color)
+        {
+            if (target != null)
+            {
+                StartCoroutine(BattleAnimations.AnimateHitShake(target, color));
+            }
+        }
+
+        public SlotView GetSlotView(int index, bool isPlayer)
+        {
+            var arr = isPlayer ? playerSlotViews : enemySlotViews;
+            if (arr != null && index >= 0 && index < arr.Length)
+            {
+                return arr[index];
+            }
+            return null;
+        }
+
+        public Transform GetLeaderTransform(bool isPlayer)
+        {
+            return isPlayer 
+                ? (playerHpText != null ? playerHpText.transform.parent : null) 
+                : (enemyHpText != null ? enemyHpText.transform.parent : null);
         }
     }
 }

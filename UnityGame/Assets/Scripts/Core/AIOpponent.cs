@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using MonsterCardGame.Data;
@@ -13,20 +14,24 @@ namespace MonsterCardGame.Core
         public void PlayTurn(int currentTurn, EnvironmentCardData activeEnv, Action onTurnFinished)
         {
             if (!aiPlayer.IsAlive) return;
+            StartCoroutine(PlayTurnCoroutine(currentTurn, activeEnv, onTurnFinished));
+        }
 
+        private IEnumerator PlayTurnCoroutine(int currentTurn, EnvironmentCardData activeEnv, Action onTurnFinished)
+        {
             Debug.Log("🤖 يبدأ ذكاء البوت الاصطناعي بالتفكير التكتيكي...");
+            yield return new WaitForSeconds(0.6f);
 
             // 1. التضحية
             DecideSacrifice();
+            yield return new WaitForSeconds(0.4f);
 
             // 2. الاستدعاء في أفضل الخانات
             DecideSummons(currentTurn);
+            yield return new WaitForSeconds(0.5f);
 
-            // 3. تنفيذ مرحلة الهجوم
-            CombatSystem.Instance.ExecuteCombatPhase(aiPlayer, humanPlayer, activeEnv);
-
-            // 4. إنهاء الدور
-            onTurnFinished?.Invoke();
+            // 3. تنفيذ مرحلة الهجوم بالرسوم المتحركة
+            yield return CombatSystem.Instance.ExecuteCombatPhaseAnimated(aiPlayer, humanPlayer, activeEnv, onTurnFinished);
         }
 
         private void DecideSacrifice()
