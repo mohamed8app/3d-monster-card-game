@@ -261,49 +261,63 @@ namespace MonsterCardGame.UI
 
         private GameObject CreateDynamicCardUI(Transform parent, MonsterData card)
         {
-            var cardObj = GameBootstrapper.CreatePanel(parent, $"Card_{card.name}", new Color(0.16f, 0.18f, 0.25f),
-                new Vector2(0, 0.5f), new Vector2(0, 0.5f), Vector2.zero, new Vector2(170, 95));
+            Color elemColor = MonsterArtLoader.GetElementColor(card.element);
+            string elemEmoji = MonsterArtLoader.GetElementEmoji(card.element);
+
+            var cardObj = GameBootstrapper.CreatePanel(parent, $"Card_{card.name}", new Color(0.09f, 0.10f, 0.15f, 0.98f),
+                new Vector2(0, 0.5f), new Vector2(0, 0.5f), Vector2.zero, new Vector2(170, 102));
 
             var layoutElem = cardObj.AddComponent<LayoutElement>();
             layoutElem.preferredWidth = 170;
-            layoutElem.preferredHeight = 95;
+            layoutElem.preferredHeight = 102;
             layoutElem.minWidth = 170;
-            layoutElem.minHeight = 95;
+            layoutElem.minHeight = 102;
 
             var outline = cardObj.AddComponent<Outline>();
-            Color elemColor = card.element switch
-            {
-                "نار" => new Color(1f, 0.3f, 0.2f),
-                "مياه" => new Color(0.2f, 0.6f, 1f),
-                "جليد" => new Color(0.4f, 0.9f, 1f),
-                "أرض" => new Color(0.7f, 0.5f, 0.3f),
-                "كهرباء" => new Color(1f, 0.9f, 0.2f),
-                "رياح" => new Color(0.4f, 0.95f, 0.7f),
-                "غابة" => new Color(0.3f, 0.8f, 0.3f),
-                "ضياء" => new Color(1f, 0.95f, 0.6f),
-                "ظلام" => new Color(0.45f, 0.2f, 0.65f),
-                "ميكا" => new Color(0.7f, 0.75f, 0.85f),
-                "أشباح" => new Color(0.7f, 0.5f, 0.9f),
-                "سحر" => new Color(0.9f, 0.4f, 0.9f),
-                _ => Color.white
-            };
             outline.effectColor = elemColor;
             outline.effectDistance = new Vector2(2, 2);
 
             var btn = cardObj.AddComponent<Button>();
             btn.targetGraphic = cardObj.GetComponent<Image>();
 
-            // سطر علوي: العنصر والتكلفة
-            GameBootstrapper.CreateText(cardObj.transform, "TopInfo", $"{card.element} | {card.cost}⚡", 13,
-                elemColor, TextAnchor.UpperCenter, new Vector2(0, 32), new Vector2(160, 22));
+            // 1. صورة الوحش الفنية في الكارت
+            var artObj = new GameObject("CardArt");
+            artObj.transform.SetParent(cardObj.transform, false);
+            var rectArt = artObj.AddComponent<RectTransform>();
+            rectArt.anchoredPosition = new Vector2(0, 14);
+            rectArt.sizeDelta = new Vector2(160, 52);
+            var artImg = artObj.AddComponent<Image>();
+            var sprite = MonsterArtLoader.GetMonsterSprite(card);
+            if (sprite != null) artImg.sprite = sprite;
+            artImg.raycastTarget = false;
 
-            // اسم الوحش في المنتصف
-            GameBootstrapper.CreateText(cardObj.transform, "Name", card.name, 14,
-                Color.white, TextAnchor.MiddleCenter, new Vector2(0, 5), new Vector2(160, 26));
+            // 2. سطر علوي: العنصر والتكلفة
+            var topPanel = GameBootstrapper.CreatePanel(cardObj.transform, "TopInfo", new Color(0.06f, 0.07f, 0.10f, 0.85f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 42), new Vector2(160, 16));
+            var txtTop = GameBootstrapper.CreateText(topPanel.transform, "TopText", $"{elemEmoji} {card.element} | {card.cost}⚡", 11,
+                elemColor, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(155, 16));
+            txtTop.raycastTarget = false;
 
-            // سطر سفلي: الهجوم والدفاع
-            GameBootstrapper.CreateText(cardObj.transform, "Stats", $"{card.atk}⚔️   {card.def}🛡️", 14,
-                new Color(0.95f, 0.85f, 0.4f), TextAnchor.LowerCenter, new Vector2(0, -30), new Vector2(160, 22));
+            // 3. اسم الوحش في الوسط بشريط زجاجي أنيق
+            var namePanel = GameBootstrapper.CreatePanel(cardObj.transform, "NamePlate", new Color(0.05f, 0.06f, 0.09f, 0.92f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -16), new Vector2(160, 18));
+            var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", card.name, 12,
+                Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(155, 18));
+            txtName.raycastTarget = false;
+
+            // 4. شارة الهجوم (يسار)
+            var atkBadge = GameBootstrapper.CreatePanel(cardObj.transform, "AtkBadge", new Color(0.6f, 0.15f, 0.15f, 0.95f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-42, -39), new Vector2(70, 18));
+            var txtAtk = GameBootstrapper.CreateText(atkBadge.transform, "AtkText", $"⚔️ {card.atk}", 11,
+                new Color(1f, 0.95f, 0.4f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(68, 18));
+            txtAtk.raycastTarget = false;
+
+            // 5. شارة الدفاع (يمين)
+            var defBadge = GameBootstrapper.CreatePanel(cardObj.transform, "DefBadge", new Color(0.12f, 0.32f, 0.65f, 0.95f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(42, -39), new Vector2(70, 18));
+            var txtDef = GameBootstrapper.CreateText(defBadge.transform, "DefText", $"🛡️ {card.def}", 11,
+                new Color(0.4f, 0.95f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(68, 18));
+            txtDef.raycastTarget = false;
 
             return cardObj;
         }
