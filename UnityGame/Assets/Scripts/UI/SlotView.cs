@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using MonsterCardGame.Core;
 using MonsterCardGame.Data;
+using MonsterCardGame.Utils;
 
 namespace MonsterCardGame.UI
 {
@@ -26,7 +27,7 @@ namespace MonsterCardGame.UI
 
             if (slotNameText != null)
             {
-                slotNameText.text = GetArabicSlotName(index);
+                slotNameText.text = ArabicFixer.Fix(GetArabicSlotName(index));
             }
 
             if (slotBorder != null)
@@ -88,14 +89,14 @@ namespace MonsterCardGame.UI
                 txt.fontSize = 14;
                 txt.alignment = TextAnchor.MiddleCenter;
                 txt.color = Color.white;
-                txt.text = $"{data.name}\n{instance.baseAtk}⚔️  {instance.currentDef}🛡️";
+                txt.text = ArabicFixer.Fix($"{data.name}\n{instance.baseAtk}⚔️  {instance.currentDef}🛡️");
             }
             else
             {
                 var txt = dynamicInfo.GetComponent<Text>();
                 if (txt != null)
                 {
-                    txt.text = $"{data.name}\n{instance.baseAtk}⚔️  {instance.currentDef}🛡️";
+                    txt.text = ArabicFixer.Fix($"{data.name}\n{instance.baseAtk}⚔️  {instance.currentDef}🛡️");
                 }
                 dynamicInfo.gameObject.SetActive(true);
             }

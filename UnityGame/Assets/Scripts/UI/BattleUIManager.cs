@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using MonsterCardGame.Core;
 using MonsterCardGame.Data;
+using MonsterCardGame.Utils;
 
 namespace MonsterCardGame.UI
 {
@@ -60,22 +61,22 @@ namespace MonsterCardGame.UI
             if (gm == null) return;
 
             // 1. تحديث صحة القائدين
-            if (playerHpText != null) playerHpText.text = $"{gm.humanPlayer.currentHp} / 1000 HP";
+            if (playerHpText != null) playerHpText.text = ArabicFixer.Fix($"قائدك: {gm.humanPlayer.currentHp} / 1000 HP");
             if (playerHpSlider != null) playerHpSlider.value = gm.humanPlayer.currentHp / 1000f;
 
-            if (enemyHpText != null) enemyHpText.text = $"{gm.aiPlayer.currentHp} / 1000 HP";
+            if (enemyHpText != null) enemyHpText.text = ArabicFixer.Fix($"قائد الخصم: {gm.aiPlayer.currentHp} / 1000 HP");
             if (enemyHpSlider != null) enemyHpSlider.value = gm.aiPlayer.currentHp / 1000f;
 
             // 2. تحديث المانا والباور
             if (playerPowerText != null)
             {
-                playerPowerText.text = $"⚡ الباور: {gm.humanPlayer.currentPower} / المانا: {gm.humanPlayer.manaCapacity}";
+                playerPowerText.text = ArabicFixer.Fix($"⚡ الباور: {gm.humanPlayer.currentPower} / المانا: {gm.humanPlayer.manaCapacity}");
             }
 
             // 3. مؤشر الدور
             if (turnInfoText != null)
             {
-                turnInfoText.text = gm.isPlayerTurn ? "🟢 دورك الآن (اختر كارت أو هاجم)" : "🔴 دور الخصم (يفكر...)";
+                turnInfoText.text = ArabicFixer.Fix(gm.isPlayerTurn ? "🟢 دورك الآن (اختر كارت أو هاجم)" : "🔴 دور الخصم (يفكر...)");
             }
 
             // 4. أزرار التحكم
@@ -259,7 +260,7 @@ namespace MonsterCardGame.UI
 
             if (combatLogText != null)
             {
-                combatLogText.text = string.Join("\n", logEntries);
+                combatLogText.text = ArabicFixer.Fix(string.Join("\n", logEntries));
             }
             Debug.Log($"[LOG]: {msg}");
         }

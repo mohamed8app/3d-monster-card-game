@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using MonsterCardGame.Data;
 using MonsterCardGame.Core;
+using MonsterCardGame.Utils;
 
 namespace MonsterCardGame.UI
 {
@@ -31,12 +32,12 @@ namespace MonsterCardGame.UI
             monsterData = data;
             monsterInstance = instance;
 
-            if (nameText != null) nameText.text = data.name;
+            if (nameText != null) nameText.text = ArabicFixer.Fix(data.name);
             if (costText != null) costText.text = $"{data.cost}⚡";
             if (atkText != null) atkText.text = $"{data.atk}⚔️";
             if (defText != null) defText.text = $"{data.def}🛡️";
-            if (elementText != null) elementText.text = data.element;
-            if (roleText != null) roleText.text = data.role;
+            if (elementText != null) elementText.text = ArabicFixer.Fix(data.element);
+            if (roleText != null) roleText.text = ArabicFixer.Fix(data.role);
 
             ApplyElementColor(data.element);
         }

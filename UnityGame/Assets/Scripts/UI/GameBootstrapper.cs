@@ -310,7 +310,7 @@ namespace MonsterCardGame.UI
 
             var txt = obj.AddComponent<Text>();
             txt.font = GetFont();
-            txt.text = content;
+            txt.text = MonsterCardGame.Utils.ArabicFixer.Fix(content);
             txt.fontSize = fontSize;
             txt.color = color;
             txt.alignment = align;
