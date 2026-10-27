@@ -134,16 +134,13 @@ namespace MonsterCardGame.UI
                 Destroy(child.gameObject);
             }
 
-            // رسم الكروت الحالية
+            // رسم الكروت الحالية مع خاصية السحب والإفلات (Drag & Drop)
+            var mainCanvas = GetComponentInParent<Canvas>();
             foreach (var card in gm.humanPlayer.hand)
             {
                 var cardObj = CreateDynamicCardUI(playerHandContainer, card);
-                var btn = cardObj.GetComponent<Button>();
-                if (btn != null)
-                {
-                    var targetCard = card;
-                    btn.onClick.AddListener(() => OnCardSelectedInHand(targetCard));
-                }
+                var draggable = cardObj.AddComponent<DraggableCard>();
+                draggable.Setup(card, mainCanvas);
             }
         }
 
