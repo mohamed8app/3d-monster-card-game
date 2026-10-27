@@ -1,0 +1,1535 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>لعبة كروت الوحوش التكتيكية 3D - Battle Arena</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&family=Cairo:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #07090e;
+      --card-bg: rgba(18, 24, 38, 0.85);
+      --border-glow: rgba(0, 229, 255, 0.4);
+      --cyan-glow: #00e5ff;
+      --gold: #ffb703;
+      --crimson: #ff2a5f;
+      --emerald: #10b981;
+      --purple: #a855f7;
+      --blue: #3b82f6;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 50% 20%, rgba(26, 38, 74, 0.5) 0%, transparent 60%),
+        radial-gradient(circle at 50% 80%, rgba(45, 20, 40, 0.4) 0%, transparent 60%),
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+      color: var(--text-main);
+      font-family: 'Tajawal', 'Cairo', sans-serif;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header Bar */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 24px;
+      background: rgba(10, 14, 24, 0.9);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(10px);
+      z-index: 100;
+    }
+
+    .game-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 1.25rem;
+      font-weight: 900;
+      background: linear-gradient(135deg, #00e5ff, #ffb703);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: 0.5px;
+    }
+
+    .turn-status-banner {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 6px 20px;
+      border-radius: 999px;
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
+
+    .turn-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--cyan-glow);
+      box-shadow: 0 0 10px var(--cyan-glow);
+      animation: pulse 1.5s infinite;
+    }
+
+    .header-controls {
+      display: flex;
+      gap: 12px;
+    }
+
+    .icon-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: white;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    .icon-btn:hover {
+      background: rgba(0, 229, 255, 0.2);
+      border-color: var(--cyan-glow);
+      box-shadow: 0 0 12px rgba(0, 229, 255, 0.3);
+    }
+
+    /* Main Battle Layout */
+    .battlefield {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 280px 1fr 280px;
+      gap: 16px;
+      padding: 12px 20px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Side Panels: Log & Stats */
+    .side-panel {
+      background: rgba(12, 17, 30, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+
+    .panel-header {
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--gold);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .combat-log-content {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+      font-size: 0.82rem;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .combat-log-content::-webkit-scrollbar {
+      width: 4px;
+    }
+    .combat-log-content::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
+
+    .log-entry {
+      background: rgba(255, 255, 255, 0.03);
+      border-right: 3px solid var(--cyan-glow);
+      padding: 6px 10px;
+      border-radius: 4px 6px 6px 4px;
+      line-height: 1.4;
+      animation: fadeIn 0.3s ease;
+    }
+    .log-entry.damage { border-right-color: var(--crimson); }
+    .log-entry.heal { border-right-color: var(--emerald); }
+    .log-entry.sacrifice { border-right-color: var(--gold); }
+    .log-entry.enemy { border-right-color: var(--purple); }
+
+    /* Environment Widget */
+    .environment-card {
+      margin: 10px;
+      padding: 12px;
+      border-radius: 12px;
+      background: linear-gradient(145deg, rgba(255, 87, 34, 0.15), rgba(18, 24, 38, 0.8));
+      border: 1px solid rgba(255, 87, 34, 0.3);
+      position: relative;
+    }
+    .env-title {
+      font-weight: 800;
+      font-size: 0.95rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .env-badge {
+      background: rgba(255, 183, 3, 0.2);
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .env-desc {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    /* Central Arena */
+    .arena-center {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 8px;
+      position: relative;
+    }
+
+    /* Leader HP Bars */
+    .leader-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: rgba(14, 20, 34, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 8px 16px;
+      position: relative;
+      transition: all 0.3s ease;
+    }
+    .leader-row.enemy-leader {
+      border-color: rgba(255, 42, 95, 0.3);
+    }
+    .leader-row.player-leader {
+      border-color: rgba(0, 229, 255, 0.3);
+    }
+
+    .leader-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 0 15px rgba(0,0,0,0.5);
+    }
+    .enemy-leader .leader-avatar { border-color: var(--crimson); box-shadow: 0 0 15px rgba(255, 42, 95, 0.3); }
+    .player-leader .leader-avatar { border-color: var(--cyan-glow); box-shadow: 0 0 15px rgba(0, 229, 255, 0.3); }
+
+    .leader-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .leader-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+    .hp-bar-bg {
+      height: 14px;
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 7px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      position: relative;
+    }
+    .hp-fill {
+      height: 100%;
+      width: 100%;
+      border-radius: 6px;
+      transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .enemy-hp { background: linear-gradient(90deg, #ff2a5f, #ff758c); box-shadow: 0 0 10px rgba(255, 42, 95, 0.5); }
+    .player-hp { background: linear-gradient(90deg, #00e5ff, #00b4d8); box-shadow: 0 0 10px rgba(0, 229, 255, 0.5); }
+
+    .leader-resources {
+      display: flex;
+      gap: 14px;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+    .res-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .res-power { color: var(--gold); border-color: rgba(255, 183, 3, 0.3); }
+    .res-mana { color: var(--cyan-glow); border-color: rgba(0, 229, 255, 0.3); }
+
+    /* Formation Grid Boards */
+    .board-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .formation-zone {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+      perspective: 800px;
+    }
+
+    .tactical-slot {
+      height: 110px;
+      background: rgba(15, 21, 37, 0.6);
+      border: 2px dashed rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      overflow: hidden;
+    }
+    .tactical-slot:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+    .tactical-slot.highlight-valid {
+      border: 2px solid var(--cyan-glow);
+      background: rgba(0, 229, 255, 0.1);
+      box-shadow: 0 0 15px rgba(0, 229, 255, 0.3) inset;
+      animation: pulseBorder 1.2s infinite;
+    }
+    .tactical-slot.guardian-slot {
+      border-style: double;
+      border-width: 3px;
+      border-color: rgba(168, 85, 247, 0.4);
+      background: rgba(45, 20, 60, 0.25);
+    }
+    .slot-label {
+      position: absolute;
+      bottom: 4px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.4);
+      pointer-events: none;
+    }
+
+    /* Cards Inside Slots (On Board) */
+    .board-card {
+      width: 100%;
+      height: 100%;
+      border-radius: 8px;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      background: linear-gradient(160deg, rgba(25, 34, 58, 0.95), rgba(13, 17, 30, 0.95));
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .board-card.attacking {
+      animation: strikeAnim 0.6s ease;
+    }
+    .board-card.hit {
+      animation: shakeHit 0.4s ease;
+    }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.72rem;
+      font-weight: 800;
+    }
+    .card-element-tag {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .card-cost-tag {
+      background: var(--gold);
+      color: #000;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 0.7rem;
+    }
+
+    .card-center {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+    }
+    .card-icon {
+      font-size: 1.5rem;
+      filter: drop-shadow(0 0 6px rgba(255,255,255,0.3));
+    }
+    .card-name {
+      font-size: 0.75rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 80px;
+    }
+    .card-role-pill {
+      font-size: 0.62rem;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-muted);
+    }
+
+    .card-bottom-stats {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 900;
+      font-size: 0.85rem;
+      padding: 0 4px;
+    }
+    .stat-atk { color: #f87171; display: flex; align-items: center; gap: 2px; }
+    .stat-def { color: #60a5fa; display: flex; align-items: center; gap: 2px; }
+
+    /* Middle Arena Separator & Action Bar */
+    .arena-midline {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 4px 0;
+      position: relative;
+    }
+    .midline-rule {
+      position: absolute;
+      width: 100%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+      z-index: 0;
+    }
+
+    .action-btn-group {
+      display: flex;
+      gap: 12px;
+      z-index: 2;
+    }
+
+    .battle-btn {
+      padding: 8px 22px;
+      border-radius: 999px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    }
+    .battle-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none !important;
+      box-shadow: none !important;
+    }
+
+    .btn-attack {
+      background: linear-gradient(135deg, #ff2a5f, #e11d48);
+      color: white;
+    }
+    .btn-attack:hover:not(:disabled) {
+      transform: translateY(-2px) scale(1.03);
+      box-shadow: 0 0 20px rgba(255, 42, 95, 0.6);
+    }
+
+    .btn-sacrifice {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #000;
+    }
+    .btn-sacrifice:hover:not(:disabled) {
+      transform: translateY(-2px) scale(1.03);
+      box-shadow: 0 0 20px rgba(245, 158, 11, 0.6);
+    }
+
+    .btn-end-turn {
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      color: white;
+    }
+    .btn-end-turn:hover:not(:disabled) {
+      transform: translateY(-2px) scale(1.03);
+      box-shadow: 0 0 20px rgba(59, 130, 246, 0.6);
+    }
+
+    /* Hand Card Tray */
+    .hand-container {
+      height: 140px;
+      background: rgba(10, 14, 24, 0.9);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 8px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      position: relative;
+      z-index: 50;
+      overflow-x: auto;
+    }
+    .hand-container::-webkit-scrollbar {
+      height: 4px;
+    }
+    .hand-container::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+    }
+
+    .hand-card {
+      width: 105px;
+      height: 124px;
+      border-radius: 10px;
+      background: linear-gradient(150deg, #1c2438, #0e1322);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      flex-shrink: 0;
+      box-shadow: 0 6px 15px rgba(0,0,0,0.5);
+    }
+    .hand-card:hover {
+      transform: translateY(-16px) scale(1.08);
+      border-color: var(--cyan-glow);
+      box-shadow: 0 12px 25px rgba(0, 229, 255, 0.35);
+      z-index: 10;
+    }
+    .hand-card.selected {
+      border: 2px solid var(--gold);
+      transform: translateY(-20px) scale(1.1);
+      box-shadow: 0 0 25px rgba(255, 183, 3, 0.7);
+      z-index: 20;
+    }
+
+    /* Floating Combat Text / FX */
+    .floating-text {
+      position: absolute;
+      font-weight: 900;
+      font-size: 1.5rem;
+      pointer-events: none;
+      animation: floatDamage 1s forwards ease-out;
+      z-index: 1000;
+      text-shadow: 0 0 10px rgba(0,0,0,0.9), 0 0 20px currentColor;
+    }
+
+    /* Modal / Game Over Overlay */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(12px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .modal-box {
+      background: linear-gradient(160deg, #161e33, #0a0e1a);
+      border: 2px solid var(--gold);
+      border-radius: 20px;
+      padding: 36px 48px;
+      text-align: center;
+      max-width: 480px;
+      width: 90%;
+      box-shadow: 0 0 50px rgba(255, 183, 3, 0.4);
+      animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .modal-title {
+      font-size: 2.2rem;
+      font-weight: 900;
+      margin-bottom: 12px;
+    }
+    .modal-subtitle {
+      font-size: 1rem;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+
+    /* Animations */
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.2); }
+    }
+    @keyframes pulseBorder {
+      0%, 100% { box-shadow: 0 0 8px rgba(0, 229, 255, 0.4) inset; }
+      50% { box-shadow: 0 0 20px rgba(0, 229, 255, 0.8) inset; }
+    }
+    @keyframes popIn {
+      0% { transform: scale(0.6); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    @keyframes strikeAnim {
+      0% { transform: translateY(0); }
+      40% { transform: translateY(-25px) scale(1.1); filter: brightness(1.5); }
+      100% { transform: translateY(0); }
+    }
+    @keyframes shakeHit {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-8px); filter: brightness(2) drop-shadow(0 0 8px red); }
+      40% { transform: translateX(8px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(4px); }
+    }
+    @keyframes floatDamage {
+      0% { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-45px) scale(1.3); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header Navigation -->
+  <header>
+    <div class="game-logo">
+      <span>🐉 ساحة معركة كروت الوحوش التكتيكية 3D</span>
+    </div>
+
+    <div class="turn-status-banner">
+      <span class="turn-indicator" id="turnIndicator"></span>
+      <span id="turnStatusText">دورك الحالي: استدعاء وتضحية</span>
+      <span style="color: rgba(255,255,255,0.4)">|</span>
+      <span>الجولة: <strong id="roundNumber" style="color: var(--gold)">1</strong></span>
+    </div>
+
+    <div class="header-controls">
+      <button class="icon-btn" id="audioToggleBtn" onclick="toggleAudio()">🔊 المؤثرات: تشغيل</button>
+      <button class="icon-btn" onclick="restartMatch()">🔄 جولة جديدة</button>
+    </div>
+  </header>
+
+  <!-- Main Battlefield View -->
+  <main class="battlefield">
+    
+    <!-- Left Side: Battlefield Environment & Formations Guide -->
+    <aside class="side-panel">
+      <div class="panel-header">
+        <span>🌍 بيئة الساحة النشطة</span>
+      </div>
+      <div class="environment-card" id="envCard">
+        <div class="env-title">
+          <span id="envName">🔥 بركان هائج</span>
+          <span class="env-badge" id="envLevel">مستوى 2</span>
+        </div>
+        <p class="env-desc" id="envDesc">
+          تعزيز هجوم وحوش عنصر <strong>النار</strong> بـ +4، بينما تعاني وحوش الطبيعة من -3 دفاع.
+        </p>
+      </div>
+
+      <div class="panel-header" style="margin-top: 10px;">
+        <span>🛡️ التشكيل التكتيكي (7 خانات)</span>
+      </div>
+      <div style="padding: 12px; font-size: 0.8rem; line-height: 1.6; color: var(--text-muted);">
+        <p>• <strong>الأجنحة (0, 1) & (4, 5):</strong> تهاجم الأجنحة المقابلة، وإذا فرغت تضرب <strong>القائد (1,000 HP)</strong> مباشرة!</p>
+        <p style="margin-top: 6px;">• <strong>الوسط (2, 3):</strong> يهاجم الوسط، وإذا فرغ يجب هزيمة <strong>حامي المؤخرة (6)</strong> قبل لمس القائد!</p>
+        <p style="margin-top: 6px;">• <strong>الحصن الخلفي (6):</strong> يصد كل ضربات الوسط ويحمي القائد حتى يموت.</p>
+      </div>
+    </aside>
+
+    <!-- Center: The Battle Arena -->
+    <section class="arena-center">
+
+      <!-- Enemy Leader (Top) -->
+      <div class="leader-row enemy-leader" id="enemyLeaderRow">
+        <div class="leader-avatar">🤖</div>
+        <div class="leader-info">
+          <div class="leader-header">
+            <span>قائد الخصم (الذكاء الاصطناعي)</span>
+            <span id="enemyHpText">1,000 / 1,000 HP</span>
+          </div>
+          <div class="hp-bar-bg">
+            <div class="hp-fill enemy-hp" id="enemyHpFill" style="width: 100%;"></div>
+          </div>
+        </div>
+        <div class="leader-resources">
+          <div class="res-badge res-power" title="الباور المتاح">⚡ <span id="enemyPowerText">1</span></div>
+          <div class="res-badge res-mana" title="سقف المانا">💎 <span id="enemyManaText">1/8</span></div>
+        </div>
+      </div>
+
+      <!-- Enemy Board (7 Slots) -->
+      <div class="board-container">
+        <!-- Enemy Slots: 0,1 (Left Wings), 2,3 (Center), 4,5 (Right Wings), 6 (Backline Guardian) -->
+        <div class="formation-zone" id="enemySlotsRow">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Middle Clash Line & Player Action Buttons -->
+      <div class="arena-midline">
+        <div class="midline-rule"></div>
+        <div class="action-btn-group">
+          <button class="battle-btn btn-attack" id="attackBtn" onclick="executePlayerAttackPhase()">
+            ⚔️ تنفيذ الهجوم
+          </button>
+          <button class="battle-btn btn-sacrifice" id="sacrificeBtn" onclick="sacrificeSelectedCard()">
+            🔥 تضحية بكارت (+1 مانا & +1 باور)
+          </button>
+          <button class="battle-btn btn-end-turn" id="endTurnBtn" onclick="endPlayerTurn()">
+            🔁 إنهاء الدور للخصم
+          </button>
+        </div>
+      </div>
+
+      <!-- Player Board (7 Slots) -->
+      <div class="board-container">
+        <div class="formation-zone" id="playerSlotsRow">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Player Leader (Bottom) -->
+      <div class="leader-row player-leader" id="playerLeaderRow">
+        <div class="leader-avatar">👑</div>
+        <div class="leader-info">
+          <div class="leader-header">
+            <span>قائدك (البطل)</span>
+            <span id="playerHpText">1,000 / 1,000 HP</span>
+          </div>
+          <div class="hp-bar-bg">
+            <div class="hp-fill player-hp" id="playerHpFill" style="width: 100%;"></div>
+          </div>
+        </div>
+        <div class="leader-resources">
+          <div class="res-badge res-power" title="الباور القابل للصرف">⚡ <span id="playerPowerText">1</span></div>
+          <div class="res-badge res-mana" title="سقف المانا الدائم">💎 <span id="playerManaText">1/8</span></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Right Side: Live Combat Log / Commentary -->
+    <aside class="side-panel">
+      <div class="panel-header">
+        <span>📜 معلق ومسجل المعركة</span>
+      </div>
+      <div class="combat-log-content" id="combatLog">
+        <div class="log-entry">⚔️ مرحباً بك في ساحة المعركة! اسحب الكروت واستدعِ تشكيلتك التكتيكية.</div>
+      </div>
+    </aside>
+
+  </main>
+
+  <!-- Player Hand Tray (Bottom Dock) -->
+  <footer class="hand-container" id="playerHandTray">
+    <!-- Hand cards populated by JS -->
+  </footer>
+
+  <!-- Victory / Defeat Modal -->
+  <div class="modal-overlay" id="gameOverModal">
+    <div class="modal-box">
+      <div class="modal-title" id="modalResultTitle">🏆 انتصار أسطوري!</div>
+      <div class="modal-subtitle" id="modalResultDesc">
+        تم سحق قائد الخصم بالكامل وتدمير تشكيلته بنجاح!
+      </div>
+      <button class="battle-btn btn-attack" style="margin: 0 auto;" onclick="restartMatch()">
+        🎮 بدء معركة جديدة فوراً
+      </button>
+    </div>
+  </div>
+
+  <!-- Load Database of 150 Monsters -->
+  <script src="monsters_data.js"></script>
+
+  <script>
+    /* ==========================================================================
+       SYNTHESIZED WEB AUDIO API SOUND SYSTEM (100% Offline, Zero External Files)
+       ========================================================================== */
+    let audioCtx = null;
+    let audioEnabled = true;
+
+    function getAudioContext() {
+      if (!audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContext();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    function toggleAudio() {
+      audioEnabled = !audioEnabled;
+      document.getElementById('audioToggleBtn').textContent = audioEnabled ? '🔊 المؤثرات: تشغيل' : '🔇 المؤثرات: كتم';
+    }
+
+    function playSound(type) {
+      if (!audioEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        const now = ctx.currentTime;
+
+        if (type === 'draw') {
+          // Card Draw: Whoosh swoosh
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(300, now);
+          osc.frequency.exponentialRampToValueAtTime(700, now + 0.12);
+          gain.gain.setValueAtTime(0.15, now);
+          gain.gain.linearRampToValueAtTime(0, now + 0.12);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.12);
+        } else if (type === 'summon') {
+          // Card Summon: Heavy metallic bass thud + shimmer
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(120, now);
+          osc.frequency.exponentialRampToValueAtTime(45, now + 0.25);
+          gain.gain.setValueAtTime(0.35, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.3);
+        } else if (type === 'sacrifice') {
+          // Sacrifice: Rising flame whistle + snap
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(220, now);
+          osc.frequency.exponentialRampToValueAtTime(880, now + 0.2);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.25);
+        } else if (type === 'slash') {
+          // Attack swoosh
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(800, now);
+          osc.frequency.exponentialRampToValueAtTime(150, now + 0.15);
+          gain.gain.setValueAtTime(0.25, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.15);
+        } else if (type === 'hit') {
+          // Monster Hit Crunch
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(160, now);
+          osc.frequency.exponentialRampToValueAtTime(30, now + 0.2);
+          gain.gain.setValueAtTime(0.3, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.2);
+        } else if (type === 'leader_hit') {
+          // Direct Leader Explosion boom
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(90, now);
+          osc.frequency.exponentialRampToValueAtTime(25, now + 0.45);
+          gain.gain.setValueAtTime(0.45, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.5);
+        } else if (type === 'victory') {
+          // Fanfare
+          const notes = [261.6, 329.6, 392.0, 523.2];
+          notes.forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.2, now + i * 0.12);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.12 + 0.35);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now + i * 0.12);
+            osc.stop(now + i * 0.12 + 0.35);
+          });
+        }
+      } catch (e) {
+        console.warn("Audio error:", e);
+      }
+    }
+
+    /* ==========================================================================
+       TACTICAL 7-SLOT CARD GAME ENGINE
+       ========================================================================== */
+    const SLOT_NAMES = [
+      "جناح أيسر 1",
+      "جناح أيسر 2",
+      "قلب الهجوم 1",
+      "قلب الهجوم 2",
+      "جناح أيمن 1",
+      "جناح أيمن 2",
+      "🛡️ حامي المؤخرة"
+    ];
+
+    const ENVIRONMENTS = [
+      { name: "🔥 بركان هائج", level: "مستوى 2", desc: "تعزيز هجوم وحوش عنصر النار بـ +4، بينما تعاني وحوش الطبيعة من -3 دفاع." },
+      { name: "💧 محيط هادر", level: "مستوى 1", desc: "زيادة دفاع وحوش عنصر الماء بـ +5، وتقليل ضرر حرق النار." },
+      { name: "⚡ قمة العاصفة الرعدية", level: "مستوى 3", desc: "ضربات خاطفة تزيد هجوم عناصر الرعد والرياح بـ +6." },
+      { name: "🍃 غابة الأرواح القديمة", level: "مستوى 1", desc: "شفاء ذاتي دوري +2 دفاع لوحوش الطبيعة عند بداية كل جولة." },
+      { name: "🌌 فضاء كوني مظلم", level: "مستوى 2", desc: "كروت السحر والظلام تكتسب +4 هجوم مباشر." }
+    ];
+
+    // State Variables
+    let roundNumber = 1;
+    let isPlayerTurn = true;
+    let isCombatInProgress = false;
+    let selectedCardIndex = -1;
+
+    let player = {
+      hp: 1000,
+      maxHp: 1000,
+      manaCap: 1,
+      power: 1,
+      hasSacrificed: false,
+      deck: [],
+      hand: [],
+      board: [null, null, null, null, null, null, null] // 7 slots
+    };
+
+    let enemy = {
+      hp: 1000,
+      maxHp: 1000,
+      manaCap: 1,
+      power: 1,
+      hasSacrificed: false,
+      deck: [],
+      hand: [],
+      board: [null, null, null, null, null, null, null] // 7 slots
+    };
+
+    // Initialize Match
+    function initGame() {
+      if (!window.MONSTERS_DB || window.MONSTERS_DB.length === 0) {
+        alert("خطأ: لم يتم تحميل قاعدة بيانات الوحوش.");
+        return;
+      }
+
+      // Reset state
+      roundNumber = 1;
+      isPlayerTurn = true;
+      isCombatInProgress = false;
+      selectedCardIndex = -1;
+
+      player.hp = 1000;
+      player.manaCap = 1;
+      player.power = 1;
+      player.hasSacrificed = false;
+      player.board = [null, null, null, null, null, null, null];
+      player.deck = shuffleArray([...window.MONSTERS_DB]);
+      player.hand = [];
+
+      enemy.hp = 1000;
+      enemy.manaCap = 1;
+      enemy.power = 1;
+      enemy.hasSacrificed = false;
+      enemy.board = [null, null, null, null, null, null, null];
+      enemy.deck = shuffleArray([...window.MONSTERS_DB]);
+      enemy.hand = [];
+
+      // Initial Hand: 4 cards each
+      for (let i = 0; i < 4; i++) {
+        drawCard(player);
+        drawCard(enemy);
+      }
+
+      // Random Environment
+      const env = ENVIRONMENTS[Math.floor(Math.random() * ENVIRONMENTS.length)];
+      document.getElementById('envName').textContent = env.name;
+      document.getElementById('envLevel').textContent = env.level;
+      document.getElementById('envDesc').innerHTML = env.desc;
+
+      document.getElementById('gameOverModal').style.display = 'none';
+
+      clearLog();
+      addLog("⚔️ بدأت المعركة! 1,000 HP لكل قائد. استدعِ وحوشك بحكمة!");
+
+      updateUI();
+    }
+
+    function shuffleArray(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function drawCard(target) {
+      if (target.deck.length === 0) {
+        target.deck = shuffleArray([...window.MONSTERS_DB]);
+      }
+      if (target.hand.length < 8) {
+        const raw = target.deck.pop();
+        // Clone with active battle stats
+        const cardInstance = {
+          ...raw,
+          currentAtk: raw.atk,
+          currentDef: raw.def,
+          maxDef: raw.def,
+          instanceId: Math.random().toString(36).substr(2, 9)
+        };
+        target.hand.push(cardInstance);
+        if (target === player) playSound('draw');
+      }
+    }
+
+    /* ==========================================================================
+       UI RENDERING & UPDATES
+       ========================================================================== */
+    function updateUI() {
+      // Leaders
+      document.getElementById('playerHpText').textContent = `${Math.max(0, player.hp)} / ${player.maxHp} HP`;
+      document.getElementById('playerHpFill').style.width = `${Math.max(0, (player.hp / player.maxHp) * 100)}%`;
+      document.getElementById('playerPowerText').textContent = player.power;
+      document.getElementById('playerManaText').textContent = `${player.manaCap}/8`;
+
+      document.getElementById('enemyHpText').textContent = `${Math.max(0, enemy.hp)} / ${enemy.maxHp} HP`;
+      document.getElementById('enemyHpFill').style.width = `${Math.max(0, (enemy.hp / enemy.maxHp) * 100)}%`;
+      document.getElementById('enemyPowerText').textContent = enemy.power;
+      document.getElementById('enemyManaText').textContent = `${enemy.manaCap}/8`;
+
+      // Turn Status
+      document.getElementById('roundNumber').textContent = roundNumber;
+      const turnStatus = document.getElementById('turnStatusText');
+      const turnIndicator = document.getElementById('turnIndicator');
+      if (isPlayerTurn) {
+        turnStatus.textContent = 'دورك الحالي: مرحلة الاستدعاء والتضحية';
+        turnIndicator.style.background = 'var(--cyan-glow)';
+        turnIndicator.style.boxShadow = '0 0 10px var(--cyan-glow)';
+      } else {
+        turnStatus.textContent = 'دور الخصم: الذكاء الاصطناعي يفكر...';
+        turnIndicator.style.background = 'var(--crimson)';
+        turnIndicator.style.boxShadow = '0 0 10px var(--crimson)';
+      }
+
+      // Buttons
+      document.getElementById('attackBtn').disabled = !isPlayerTurn || isCombatInProgress;
+      document.getElementById('sacrificeBtn').disabled = !isPlayerTurn || isCombatInProgress || player.hasSacrificed || selectedCardIndex === -1;
+      document.getElementById('endTurnBtn').disabled = !isPlayerTurn || isCombatInProgress;
+
+      // Render Player Board Slots
+      renderSlots('playerSlotsRow', player.board, true);
+      // Render Enemy Board Slots
+      renderSlots('enemySlotsRow', enemy.board, false);
+
+      // Render Hand
+      renderHand();
+    }
+
+    function renderSlots(containerId, board, isPlayerBoard) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+
+      board.forEach((monster, slotIdx) => {
+        const slotEl = document.createElement('div');
+        slotEl.className = `tactical-slot ${slotIdx === 6 ? 'guardian-slot' : ''}`;
+        
+        // Highlight valid slots if player selected a card
+        if (isPlayerBoard && isPlayerTurn && !isCombatInProgress && selectedCardIndex !== -1 && monster === null) {
+          const card = player.hand[selectedCardIndex];
+          if (card && player.power >= card.cost) {
+            slotEl.classList.add('highlight-valid');
+          }
+        }
+
+        if (monster) {
+          slotEl.innerHTML = createCardHTML(monster);
+        } else {
+          slotEl.innerHTML = `<span class="slot-label">${SLOT_NAMES[slotIdx]}</span>`;
+        }
+
+        if (isPlayerBoard) {
+          slotEl.onclick = () => onPlayerSlotClick(slotIdx);
+        }
+
+        container.appendChild(slotEl);
+      });
+    }
+
+    function createCardHTML(monster) {
+      return `
+        <div class="board-card" id="card-${monster.instanceId}">
+          <div class="card-top">
+            <span class="card-element-tag">${monster.element_icon} ${monster.element}</span>
+            <span class="card-cost-tag">${monster.cost}</span>
+          </div>
+          <div class="card-center">
+            <div class="card-icon">${monster.element_icon}</div>
+            <div class="card-name" title="${monster.name}">${monster.name}</div>
+            <div class="card-role-pill">${monster.role}</div>
+          </div>
+          <div class="card-bottom-stats">
+            <span class="stat-atk">⚔️ ${monster.currentAtk}</span>
+            <span class="stat-def">🛡️ ${monster.currentDef}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderHand() {
+      const tray = document.getElementById('playerHandTray');
+      tray.innerHTML = '';
+
+      player.hand.forEach((card, idx) => {
+        const cardEl = document.createElement('div');
+        cardEl.className = `hand-card ${idx === selectedCardIndex ? 'selected' : ''}`;
+        cardEl.innerHTML = `
+          <div class="card-top">
+            <span class="card-element-tag">${card.element_icon} ${card.element}</span>
+            <span class="card-cost-tag">⚡${card.cost}</span>
+          </div>
+          <div class="card-center">
+            <div class="card-icon">${card.element_icon}</div>
+            <div class="card-name">${card.name}</div>
+            <div class="card-role-pill">${card.role}</div>
+          </div>
+          <div class="card-bottom-stats">
+            <span class="stat-atk">⚔️ ${card.atk}</span>
+            <span class="stat-def">🛡️ ${card.def}</span>
+          </div>
+        `;
+
+        cardEl.onclick = () => selectCardInHand(idx);
+        tray.appendChild(cardEl);
+      });
+    }
+
+    /* ==========================================================================
+       PLAYER ACTIONS & INTERACTIONS
+       ========================================================================== */
+    function selectCardInHand(index) {
+      if (!isPlayerTurn || isCombatInProgress) return;
+      if (selectedCardIndex === index) {
+        selectedCardIndex = -1; // Unselect
+      } else {
+        selectedCardIndex = index;
+        playSound('draw');
+      }
+      updateUI();
+    }
+
+    function onPlayerSlotClick(slotIdx) {
+      if (!isPlayerTurn || isCombatInProgress) return;
+      if (selectedCardIndex === -1) return;
+
+      const card = player.hand[selectedCardIndex];
+      if (!card) return;
+
+      if (player.power < card.cost) {
+        addLog(`⚠️ لا تمتلك باور كافياً! تكلفة الكارت: ${card.cost}، الباور المتاح: ${player.power}`);
+        return;
+      }
+
+      if (player.board[slotIdx] !== null) {
+        addLog(`⚠️ الخانة [${SLOT_NAMES[slotIdx]}] مشغولة بالفعل بوحش آخر!`);
+        return;
+      }
+
+      // Summon Card
+      player.power -= card.cost;
+      player.board[slotIdx] = card;
+      player.hand.splice(selectedCardIndex, 1);
+      selectedCardIndex = -1;
+
+      playSound('summon');
+      addLog(`✨ استدعيت [${card.name}] في خانة [${SLOT_NAMES[slotIdx]}] بقوة ⚔️ ${card.atk} / 🛡️ ${card.def}`);
+
+      updateUI();
+    }
+
+    function sacrificeSelectedCard() {
+      if (!isPlayerTurn || isCombatInProgress || player.hasSacrificed) return;
+      if (selectedCardIndex === -1) return;
+
+      const card = player.hand[selectedCardIndex];
+      if (!card) return;
+
+      player.hand.splice(selectedCardIndex, 1);
+      selectedCardIndex = -1;
+      player.hasSacrificed = true;
+
+      // Rule: +1 Mana Cap (up to 8) & +1 Power
+      if (player.manaCap < 8) {
+        player.manaCap += 1;
+      }
+      player.power += 1;
+
+      playSound('sacrifice');
+      addLog(`🔥 قمت بالتضحية بكارت [${card.name}]! ربحت +1 سقف مانا و +1 باور فوري.`);
+
+      updateUI();
+    }
+
+    /* ==========================================================================
+       COMBAT PHASE (Strict One-Way 7-Slot Tactical Formation)
+       ========================================================================== */
+    async function executePlayerAttackPhase() {
+      if (!isPlayerTurn || isCombatInProgress) return;
+      isCombatInProgress = true;
+      selectedCardIndex = -1;
+      updateUI();
+
+      addLog(`⚔️ بدأت مرحلة هجومك الميداني! تتقدم تشكيلتك لدك دفاعات الخصم...`);
+
+      // Resolve attacks sequentially across 7 slots
+      await runFormationCombat(player, enemy, true);
+
+      isCombatInProgress = false;
+      updateUI();
+
+      if (checkGameOver()) return;
+
+      // Pass turn to enemy
+      endPlayerTurn();
+    }
+
+    async function runFormationCombat(attacker, defender, isPlayerAttacking) {
+      // Slots 0,1: Left Wing
+      await resolveSlotAttack(attacker, defender, 0, [0, 1], isPlayerAttacking);
+      await resolveSlotAttack(attacker, defender, 1, [0, 1], isPlayerAttacking);
+
+      // Slots 4,5: Right Wing
+      await resolveSlotAttack(attacker, defender, 4, [4, 5], isPlayerAttacking);
+      await resolveSlotAttack(attacker, defender, 5, [4, 5], isPlayerAttacking);
+
+      // Slots 2,3: Center Attackers
+      await resolveSlotAttack(attacker, defender, 2, [2, 3], isPlayerAttacking, true);
+      await resolveSlotAttack(attacker, defender, 3, [2, 3], isPlayerAttacking, true);
+
+      // Slot 6 (Backline Guardian): Passive defense / protects leader, does not attack
+    }
+
+    async function resolveSlotAttack(attacker, defender, slotIdx, opposingSlots, isCenter = false) {
+      const monster = attacker.board[slotIdx];
+      if (!monster || monster.currentAtk <= 0) return;
+
+      // Visual attack animation on the card
+      const cardEl = document.getElementById(`card-${monster.instanceId}`);
+      if (cardEl) cardEl.classList.add('attacking');
+      playSound('slash');
+
+      await delay(350);
+
+      if (!isCenter) {
+        // --- WING COMBAT RULE ---
+        // Attacks opposing wing slot if occupied; else attacks the other wing slot; if both empty -> Direct Strike to Leader!
+        let targetSlot = -1;
+        if (defender.board[opposingSlots[0]] !== null) {
+          targetSlot = opposingSlots[0];
+        } else if (defender.board[opposingSlots[1]] !== null) {
+          targetSlot = opposingSlots[1];
+        }
+
+        if (targetSlot !== -1) {
+          // Hits defending monster in opposing wing
+          await applyDamageToMonster(defender, targetSlot, monster.currentAtk, monster.name);
+        } else {
+          // Both wing slots empty -> Direct Strike to Leader HP!
+          await applyDamageToLeader(defender, monster.currentAtk, monster.name, "اختراق مباشر من الجناح");
+        }
+      } else {
+        // --- CENTER COMBAT & GUARDIAN FORTRESS RULE ---
+        // Centers attack opposing centers [2, 3]. If both empty, MUST attack Guardian (Slot 6)!
+        // Only if Guardian 6 is also empty or dead, can they touch the Leader!
+        let targetSlot = -1;
+        if (defender.board[2] !== null) {
+          targetSlot = 2;
+        } else if (defender.board[3] !== null) {
+          targetSlot = 3;
+        } else if (defender.board[6] !== null) {
+          // Guardian intercepts and absorbs all center blows!
+          targetSlot = 6;
+        }
+
+        if (targetSlot !== -1) {
+          const isGuardian = targetSlot === 6;
+          await applyDamageToMonster(defender, targetSlot, monster.currentAtk, monster.name, isGuardian);
+        } else {
+          // Defense collapsed, center strikes Leader directly!
+          await applyDamageToLeader(defender, monster.currentAtk, monster.name, "اختراق مدمر من قلب الهجوم");
+        }
+      }
+
+      if (cardEl) cardEl.classList.remove('attacking');
+      await delay(250);
+    }
+
+    async function applyDamageToMonster(defender, targetSlot, damage, attackerName, isGuardian = false) {
+      const targetMonster = defender.board[targetSlot];
+      if (!targetMonster) return;
+
+      playSound('hit');
+      targetMonster.currentDef -= damage;
+
+      const targetCardEl = document.getElementById(`card-${targetMonster.instanceId}`);
+      if (targetCardEl) targetCardEl.classList.add('hit');
+
+      showFloatingText(`-${damage}`, targetCardEl || document.body, '#ef4444');
+
+      const guardianTag = isGuardian ? "🛡️ [حامي المؤخرة] " : "";
+      addLog(`💥 [${attackerName}] وجه ${damage} ضرر إلى ${guardianTag}[${targetMonster.name}] (${SLOT_NAMES[targetSlot]})! الدفاع المتبقي: ${Math.max(0, targetMonster.currentDef)}`);
+
+      await delay(350);
+
+      if (targetMonster.currentDef <= 0) {
+        addLog(`☠️ تم تدمير [${targetMonster.name}] وسقط إلى المقبرة!`);
+        defender.board[targetSlot] = null;
+      }
+
+      if (targetCardEl) targetCardEl.classList.remove('hit');
+      updateUI();
+    }
+
+    async function applyDamageToLeader(defender, damage, attackerName, reason) {
+      playSound('leader_hit');
+      defender.hp = Math.max(0, defender.hp - damage);
+
+      const leaderRow = defender === player ? document.getElementById('playerLeaderRow') : document.getElementById('enemyLeaderRow');
+      showFloatingText(`-${damage} HP!`, leaderRow, '#ff2a5f');
+
+      const sideName = defender === player ? "قائدك" : "قائد الخصم";
+      addLog(`⚡ ضربة مباشرة! [${attackerName}] ضرب ${sideName} بـ ${damage} ضرر (${reason})! الصحة المتبقية: ${defender.hp}`, 'damage');
+
+      updateUI();
+      await delay(350);
+    }
+
+    function showFloatingText(text, anchorEl, color = '#ff2a5f') {
+      const rect = anchorEl.getBoundingClientRect();
+      const span = document.createElement('span');
+      span.className = 'floating-text';
+      span.textContent = text;
+      span.style.color = color;
+      span.style.left = `${rect.left + rect.width / 2 - 20}px`;
+      span.style.top = `${rect.top + rect.height / 2 - 20}px`;
+      document.body.appendChild(span);
+
+      setTimeout(() => {
+        span.remove();
+      }, 1000);
+    }
+
+    /* ==========================================================================
+       TURN MANAGEMENT & SMART AI OPPONENT
+       ========================================================================== */
+    function endPlayerTurn() {
+      if (!isPlayerTurn || isCombatInProgress) return;
+      isPlayerTurn = false;
+      updateUI();
+
+      // Trigger AI Turn
+      setTimeout(runEnemyAITurn, 800);
+    }
+
+    async function runEnemyAITurn() {
+      isCombatInProgress = true;
+      addLog(`🤖 بدأ دور الذكاء الاصطناعي... يقوم بحساب أفضل الخطط.`);
+
+      // 1. Draw Card
+      drawCard(enemy);
+
+      // 2. Refresh Enemy Resources
+      enemy.power = enemy.manaCap;
+      enemy.hasSacrificed = false;
+      updateUI();
+      await delay(600);
+
+      // 3. AI Sacrifice Decision (If has expensive cards and needs mana)
+      const hasHighCostCard = enemy.hand.some(c => c.cost > enemy.power);
+      if (hasHighCostCard && enemy.manaCap < 8 && enemy.hand.length > 2) {
+        // Sacrifice lowest ATK/DEF card
+        enemy.hand.sort((a, b) => (a.atk + a.def) - (b.atk + b.def));
+        const sacCard = enemy.hand.shift();
+        enemy.manaCap += 1;
+        enemy.power += 1;
+        enemy.hasSacrificed = true;
+        playSound('sacrifice');
+        addLog(`🔥 قام الخصم بالتضحية بـ [${sacCard.name}] لكسب +1 مانا و +1 باور!`, 'enemy');
+        updateUI();
+        await delay(600);
+      }
+
+      // 4. AI Summoning Logic (Strategic slot placement)
+      // Sort hand by cost descending to play high-impact cards first
+      enemy.hand.sort((a, b) => b.cost - a.cost);
+
+      for (let i = enemy.hand.length - 1; i >= 0; i--) {
+        const card = enemy.hand[i];
+        if (card.cost <= enemy.power) {
+          // Find optimal slot:
+          // If Guardian (Slot 6) is empty -> put Defender/Shield there!
+          let targetSlot = -1;
+          if (enemy.board[6] === null && (card.role === 'مدافع' || card.role === 'درع' || card.def > 25)) {
+            targetSlot = 6;
+          } else {
+            // Find any empty slot (Prioritize Center 2,3 then Wings)
+            const preferredSlots = [2, 3, 0, 4, 1, 5, 6];
+            for (const s of preferredSlots) {
+              if (enemy.board[s] === null) {
+                targetSlot = s;
+                break;
+              }
+            }
+          }
+
+          if (targetSlot !== -1) {
+            enemy.power -= card.cost;
+            enemy.board[targetSlot] = card;
+            enemy.hand.splice(i, 1);
+            playSound('summon');
+            addLog(`🤖 استدعى الخصم [${card.name}] في خانة [${SLOT_NAMES[targetSlot]}]!`, 'enemy');
+            updateUI();
+            await delay(600);
+          }
+        }
+      }
+
+      // 5. AI Combat Phase
+      addLog(`⚔️ الخصم يشن هجومه الميداني ضد تشكيلتك!`, 'enemy');
+      await runFormationCombat(enemy, player, false);
+
+      if (checkGameOver()) return;
+
+      // 6. Turn Transition back to Player
+      roundNumber++;
+      isPlayerTurn = true;
+      isCombatInProgress = false;
+
+      // Player Turn Start
+      player.power = player.manaCap;
+      player.hasSacrificed = false;
+      drawCard(player);
+
+      addLog(`✨ بدأ دورك للجولة ${roundNumber}! تم تجديد الباور إلى ${player.power} وسحب كارت جديد.`);
+      updateUI();
+    }
+
+    /* ==========================================================================
+       WIN / LOSS CONDITIONS & UTILS
+       ========================================================================== */
+    function checkGameOver() {
+      if (enemy.hp <= 0) {
+        playSound('victory');
+        document.getElementById('modalResultTitle').textContent = '🏆 انتصار أسطوري ساحق!';
+        document.getElementById('modalResultTitle').style.color = 'var(--gold)';
+        document.getElementById('modalResultDesc').textContent = 'تم القضاء على قائد الخصم واختراق حصونه بنجاح تام!';
+        document.getElementById('gameOverModal').style.display = 'flex';
+        return true;
+      }
+      if (player.hp <= 0) {
+        playSound('defeat');
+        document.getElementById('modalResultTitle').textContent = '💀 هزيمة مأساوية!';
+        document.getElementById('modalResultTitle').style.color = 'var(--crimson)';
+        document.getElementById('modalResultDesc').textContent = 'سقط قائدك أمام هجمات الخصم. أعد المحاولة واستخدم الأجنحة وحامي المؤخرة بذكاء!';
+        document.getElementById('gameOverModal').style.display = 'flex';
+        return true;
+      }
+      return false;
+    }
+
+    function restartMatch() {
+      initGame();
+    }
+
+    function addLog(message, type = 'normal') {
+      const logContainer = document.getElementById('combatLog');
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      entry.innerHTML = message;
+      logContainer.appendChild(entry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    function clearLog() {
+      document.getElementById('combatLog').innerHTML = '';
+    }
+
+    function delay(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // Start on load
+    window.addEventListener('DOMContentLoaded', () => {
+      initGame();
+    });
+  </script>
+</body>
+</html>
