@@ -65,6 +65,8 @@ namespace MonsterCardGame.Core
                     ApplyDamageImpact(attackerMonster, atkPower, slotIdx, defender, defenderSlot, defenderSlotView, defenderLeaderTransform, isDirectToLeader);
                 }
 
+                attackerMonster.canAttack = false; // استهلك هجومه لهذا الدور
+
                 // انتظار بين كل ضربة ليعيش اللاعب تجربة تبادل الضربات
                 yield return new WaitForSeconds(0.35f);
             }

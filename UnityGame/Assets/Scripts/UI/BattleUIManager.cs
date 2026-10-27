@@ -29,6 +29,7 @@ namespace MonsterCardGame.UI
         public Button attackButton;
         public Button endTurnButton;
         public Button sacrificeButton;
+        public Button quitButton;
 
         [Header("Containers")]
         public Transform playerHandContainer;
@@ -56,6 +57,17 @@ namespace MonsterCardGame.UI
             if (endTurnButton != null) endTurnButton.onClick.AddListener(OnEndTurnClicked);
             if (sacrificeButton != null) sacrificeButton.onClick.AddListener(OnSacrificeClicked);
 
+            if (quitButton == null)
+            {
+                var qb = GameObject.Find("QuitGameBtn");
+                if (qb != null) quitButton = qb.GetComponent<Button>();
+            }
+            if (quitButton != null)
+            {
+                quitButton.onClick.RemoveAllListeners();
+                quitButton.onClick.AddListener(OnQuitClicked);
+            }
+
             UpdateUI();
             StartCoroutine(DelayedInitialUpdate());
         }
@@ -71,11 +83,7 @@ namespace MonsterCardGame.UI
         {
             if (Input.GetKeyDown(KeyCode.Escape))
             {
-                #if UNITY_EDITOR
-                UnityEditor.EditorApplication.isPlaying = false;
-                #else
-                Application.Quit();
-                #endif
+                OnQuitClicked();
             }
 
             // فحص أمان تلقائي: لو يد اللاعب بها كروت ولكن لم ترسم بعد، يتم التحديث فوراً
@@ -87,6 +95,21 @@ namespace MonsterCardGame.UI
                     UpdateUI();
                 }
             }
+        }
+
+        public void OnQuitClicked()
+        {
+            Debug.Log("🚪 تم الضغط على زر الخروج - إغلاق اللعبة الآن...");
+            #if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+            #else
+            Application.Quit();
+            try
+            {
+                System.Diagnostics.Process.GetCurrentProcess().Kill();
+            }
+            catch { }
+            #endif
         }
 
         public void UpdateUI()
@@ -344,11 +367,10 @@ namespace MonsterCardGame.UI
         private void OnEndTurnClicked()
         {
             var gm = GameManager.Instance;
-            if (gm == null) return;
+            if (gm == null || !gm.isPlayerTurn) return;
 
-            LogCombatMessage("🔁 أنهيت دورك. الآن دور الخصم...");
             selectedCardForAction = null;
-            gm.EndTurn();
+            gm.OnPlayerEndTurn();
             UpdateUI();
         }
 

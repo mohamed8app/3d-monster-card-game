@@ -206,18 +206,15 @@ namespace MonsterCardGame.UI
             ui.enemyHandContainer = enemyCardsContainer.transform;
 
             // زر إغلاق وإنهاء اللعبة في أعلى يمين الشاشة (Exit Game Button)
-            CreateAnchorButton(canvas, "QuitGameBtn", "❌ خروج",
+            var quitBtn = CreateAnchorButton(canvas, "QuitGameBtn", "❌ خروج",
                 new Color(0.85f, 0.2f, 0.25f, 0.95f), Color.white,
                 new Vector2(1f, 1f), new Vector2(1f, 1f),
                 new Vector2(-60, -42), new Vector2(95, 45),
                 () => {
-                    Debug.Log("🚪 الخروج من اللعبة...");
-                    #if UNITY_EDITOR
-                    UnityEditor.EditorApplication.isPlaying = false;
-                    #else
-                    Application.Quit();
-                    #endif
+                    if (BattleUIManager.Instance != null) BattleUIManager.Instance.OnQuitClicked();
                 });
+            quitBtn.gameObject.AddComponent<QuitButtonHandler>();
+            ui.quitButton = quitBtn;
 
             // 2. خانات العدو الـ 6 (الخط العلوي)
             BuildSlotsRow(canvas, ui, ai, false);
@@ -379,7 +376,8 @@ namespace MonsterCardGame.UI
             btn.targetGraphic = btnObj.GetComponent<Image>();
             if (onClick != null) btn.onClick.AddListener(onClick);
 
-            CreateText(btnObj.transform, "BtnText", label, 16, textColor, TextAnchor.MiddleCenter, Vector2.zero, size);
+            var txt = CreateText(btnObj.transform, "BtnText", label, 16, textColor, TextAnchor.MiddleCenter, Vector2.zero, size);
+            txt.raycastTarget = false;
             return btn;
         }
 
@@ -390,8 +388,34 @@ namespace MonsterCardGame.UI
             btn.targetGraphic = btnObj.GetComponent<Image>();
             if (onClick != null) btn.onClick.AddListener(onClick);
 
-            CreateText(btnObj.transform, "BtnText", label, 16, textColor, TextAnchor.MiddleCenter, Vector2.zero, size);
+            var txt = CreateText(btnObj.transform, "BtnText", label, 16, textColor, TextAnchor.MiddleCenter, Vector2.zero, size);
+            txt.raycastTarget = false;
             return btn;
+        }
+    }
+
+    public class QuitButtonHandler : MonoBehaviour, UnityEngine.EventSystems.IPointerClickHandler
+    {
+        public void OnPointerClick(UnityEngine.EventSystems.PointerEventData eventData)
+        {
+            Debug.Log("🚪 تم النقر على زر الخروج عبر PointerClick!");
+            if (BattleUIManager.Instance != null)
+            {
+                BattleUIManager.Instance.OnQuitClicked();
+            }
+            else
+            {
+                #if UNITY_EDITOR
+                UnityEditor.EditorApplication.isPlaying = false;
+                #else
+                Application.Quit();
+                try
+                {
+                    System.Diagnostics.Process.GetCurrentProcess().Kill();
+                }
+                catch { }
+                #endif
+            }
         }
     }
 }

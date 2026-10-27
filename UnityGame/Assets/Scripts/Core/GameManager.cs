@@ -143,6 +143,28 @@ namespace MonsterCardGame.Core
         {
             if (!isPlayerTurn || currentPhase != GamePhase.ActionPhase) return;
 
+            bool hasReadyAttackers = false;
+            foreach (var slot in humanPlayer.slots)
+            {
+                if (slot != null && slot.IsOccupied && slot.currentMonster != null && slot.currentMonster.canAttack)
+                {
+                    if (slot.currentMonster.GetEffectiveAtk(activeEnvironment) > 0)
+                    {
+                        hasReadyAttackers = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!hasReadyAttackers)
+            {
+                if (BattleUIManager.Instance != null)
+                {
+                    BattleUIManager.Instance.LogCombatMessage("⚠️ لا توجد وحوش جاهزة للهجوم حالياً بالساحة!");
+                }
+                return;
+            }
+
             currentPhase = GamePhase.CombatPhase;
 
             if (BattleUIManager.Instance != null)
@@ -158,6 +180,50 @@ namespace MonsterCardGame.Core
                     EndTurn();
                 }
             }));
+        }
+
+        public void OnPlayerEndTurn()
+        {
+            if (!isPlayerTurn || currentPhase != GamePhase.ActionPhase) return;
+
+            // فحص ما إذا كان لدى وحوش اللاعب هجمات جاهزة بالساحة
+            bool hasReadyAttackers = false;
+            foreach (var slot in humanPlayer.slots)
+            {
+                if (slot != null && slot.IsOccupied && slot.currentMonster != null && slot.currentMonster.canAttack)
+                {
+                    if (slot.currentMonster.GetEffectiveAtk(activeEnvironment) > 0)
+                    {
+                        hasReadyAttackers = true;
+                        break;
+                    }
+                }
+            }
+
+            if (hasReadyAttackers)
+            {
+                Debug.Log("⚔️ إنهاء الدور مع هجوم تلقائي للوحوش الجاهزة!");
+                if (BattleUIManager.Instance != null)
+                {
+                    BattleUIManager.Instance.LogCombatMessage("⚔️ تنفيذ هجوم وحوشك الميداني تلقائياً قبل إنهاء الدور...");
+                    BattleUIManager.Instance.ShowBanner("⚔️ هجوم ميداني تلقائي!", new Color(1f, 0.85f, 0.2f));
+                }
+
+                currentPhase = GamePhase.CombatPhase;
+
+                StartCoroutine(CombatSystem.Instance.ExecuteCombatPhaseAnimated(humanPlayer, aiPlayer, activeEnvironment, () =>
+                {
+                    CheckGameOver();
+                    if (currentPhase != GamePhase.GameOver)
+                    {
+                        EndTurn();
+                    }
+                }));
+            }
+            else
+            {
+                EndTurn();
+            }
         }
 
         public void EndTurn()
