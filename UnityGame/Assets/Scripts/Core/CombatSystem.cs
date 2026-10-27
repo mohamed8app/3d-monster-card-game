@@ -95,27 +95,9 @@ namespace MonsterCardGame.Core
             }
             else
             {
-                // وسط الخصم فارغ: فحص المدافع الخلفي (خانة 6)
-                var guardianSlot = defender.slots[6];
-                if (guardianSlot != null && guardianSlot.IsOccupied)
-                {
-                    var guardian = guardianSlot.currentMonster;
-                    Debug.Log($"🛡️ المدافع الخلفي بالوسط [{guardian.data.name}] يمتص ضربة الوسط لحماية القائد!");
-                    guardian.TakeDamage(atkPower);
-
-                    if (!guardian.IsAlive)
-                    {
-                        Debug.Log($"💥 سقط المدافع الخلفي بالوسط [{guardian.data.name}]! الآن مسار القائد مكشوف!");
-                        defender.graveyard.Add(guardian.data);
-                        guardianSlot.ClearSlot();
-                    }
-                }
-                else
-                {
-                    // الوسط فارغ والمدافع الخلفي مدمر: ضرب القائد مباشرة!
-                    Debug.Log($"🎯 خطوط الوسط مكشوفة والمدافع ساقط! وحش [{attackerMonster.data.name}] يضرب القائد مباشرة بـ {atkPower} ضرر!");
-                    defender.TakeLeaderDamage(atkPower);
-                }
+                // وسط الخصم فارغ (تم إلغاء المدافع الخلفي): ضرب القائد مباشرة!
+                Debug.Log($"🎯 خط الوسط {slotIdx} فارغ! وحش [{attackerMonster.data.name}] يضرب القائد مباشرة بـ {atkPower} ضرر!");
+                defender.TakeLeaderDamage(atkPower);
             }
         }
     }

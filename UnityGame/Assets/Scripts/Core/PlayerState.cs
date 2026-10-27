@@ -24,8 +24,8 @@ namespace MonsterCardGame.Core
         public List<MonsterData> hand = new List<MonsterData>();
         public List<MonsterData> graveyard = new List<MonsterData>();
 
-        [Header("7 Board Slots")]
-        public BoardSlot[] slots = new BoardSlot[7];
+        [Header("6 Board Slots (No Backline Guardian)")]
+        public BoardSlot[] slots = new BoardSlot[6];
 
         public bool IsAlive => currentHp > 0;
 
@@ -133,7 +133,7 @@ namespace MonsterCardGame.Core
 
         public bool SummonMonster(MonsterData card, int targetSlotIndex, int currentTurn)
         {
-            if (targetSlotIndex < 0 || targetSlotIndex >= 7)
+            if (targetSlotIndex < 0 || targetSlotIndex >= slots.Length)
                 return false;
 
             if (slots[targetSlotIndex].IsOccupied)

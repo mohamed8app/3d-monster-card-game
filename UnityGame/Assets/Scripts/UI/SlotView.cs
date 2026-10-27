@@ -32,20 +32,15 @@ namespace MonsterCardGame.UI
 
             if (slotBorder != null)
             {
-                // تمييز خانة المدافع الخلفي بلون ذهبي/درعي مميز
-                if (index == 6)
+                if (index == 2 || index == 3)
                 {
-                    slotBorder.color = new Color(1.0f, 0.8f, 0.2f, 0.8f);
-                }
-                else if (index == 0 || index == 1 || index == 4 || index == 5)
-                {
-                    // الأجنحة بلون أزرق/سماوي
-                    slotBorder.color = new Color(0.3f, 0.7f, 1.0f, 0.5f);
+                    // الوسط بلون برتقالي/هجومي
+                    slotBorder.color = new Color(1.0f, 0.45f, 0.2f, 0.7f);
                 }
                 else
                 {
-                    // الوسط بلون برتقالي/هجومي
-                    slotBorder.color = new Color(1.0f, 0.5f, 0.2f, 0.5f);
+                    // الأجنحة بلون أزرق/سماوي
+                    slotBorder.color = new Color(0.25f, 0.7f, 1.0f, 0.7f);
                 }
             }
         }
@@ -56,11 +51,10 @@ namespace MonsterCardGame.UI
             {
                 case 0: return "جناح أيسر 1";
                 case 1: return "جناح أيسر 2";
-                case 2: return "وسط أمامي 1";
-                case 3: return "وسط أمامي 2";
+                case 2: return "قلب الهجوم 1";
+                case 3: return "قلب الهجوم 2";
                 case 4: return "جناح أيمن 1";
                 case 5: return "جناح أيمن 2";
-                case 6: return "🛡️ مدافع خلفي";
                 default: return $"خانة {idx}";
             }
         }

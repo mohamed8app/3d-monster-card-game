@@ -77,11 +77,9 @@ namespace MonsterCardGame.Core
         {
             if (card.GetRoleEnum() == TacticalRole.PureShield)
             {
-                // الدرع الصرف: يفضل خانة المدافع الخلفي (6) أولاً
-                if (!aiPlayer.slots[6].IsOccupied) return 6;
-                // أو الأجنحة لصد الضربات
-                int[] wings = { 0, 5, 1, 4 };
-                foreach (int s in wings)
+                // الدرع الصرف: يفضل ملء الوسط ثم الأجنحة لصد الضربات
+                int[] shieldSlots = { 2, 3, 0, 5, 1, 4 };
+                foreach (int s in shieldSlots)
                 {
                     if (!aiPlayer.slots[s].IsOccupied) return s;
                 }
@@ -98,7 +96,7 @@ namespace MonsterCardGame.Core
             else
             {
                 // المدافع أو الداعم: ملء الوسط أو الشواغر
-                int[] balancedSlots = { 2, 3, 6, 0, 1, 4, 5 };
+                int[] balancedSlots = { 2, 3, 0, 1, 4, 5 };
                 foreach (int s in balancedSlots)
                 {
                     if (!aiPlayer.slots[s].IsOccupied) return s;

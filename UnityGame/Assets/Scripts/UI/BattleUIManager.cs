@@ -28,8 +28,8 @@ namespace MonsterCardGame.UI
 
         [Header("Containers")]
         public Transform playerHandContainer;
-        public SlotView[] playerSlotViews = new SlotView[7];
-        public SlotView[] enemySlotViews = new SlotView[7];
+        public SlotView[] playerSlotViews = new SlotView[6];
+        public SlotView[] enemySlotViews = new SlotView[6];
 
         [Header("Prefabs")]
         public GameObject cardPrefab;
@@ -99,7 +99,7 @@ namespace MonsterCardGame.UI
             var gm = GameManager.Instance;
             if (gm == null) return;
 
-            for (int i = 0; i < 7; i++)
+            for (int i = 0; i < 6; i++)
             {
                 var pSlot = gm.humanPlayer.slots[i];
                 if (pSlot != null && pSlot.IsOccupied && i < playerSlotViews.Length && playerSlotViews[i] != null)
