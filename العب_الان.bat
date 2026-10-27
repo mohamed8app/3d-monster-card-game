@@ -1,12 +1,11 @@
 @echo off
 chcp 65001 >nul
-title 3D Monster Card Game - تشغيل اللعبة
+title تشغيل لعبة كروت الوحوش 3D (MonsterCardGame.exe)
 echo ========================================================
-echo         🎮 جاري تشغيل لعبة كروت الوحوش التكتيكية 🎮
+echo        🎮 تشغيل لعبة كروت الوحوش التكتيكية 3D 🎮
 echo ========================================================
 echo.
-echo يتم فتح اللعبة الآن في متصفحك مباشرة للعب الفوري...
-start "" "%~dp0index.html"
+echo جاري تشغيل لعبة الكمبيوتر الحقيقية MonsterCardGame.exe ...
+start "" "%~dp0Game_Windows_Exe\MonsterCardGame.exe"
 echo.
-echo استمتع باللعب!
-pause
+echo نتمنى لك وقتاً ممتعاً بالمعركة!

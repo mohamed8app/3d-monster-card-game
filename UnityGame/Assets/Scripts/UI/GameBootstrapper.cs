@@ -16,10 +16,19 @@ namespace MonsterCardGame.UI
         {
             if (defaultFont == null)
             {
-                defaultFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
-                if (defaultFont == null)
+                try
                 {
                     defaultFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                }
+                catch { }
+
+                if (defaultFont == null)
+                {
+                    try
+                    {
+                        defaultFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
+                    }
+                    catch { }
                 }
             }
             return defaultFont;
