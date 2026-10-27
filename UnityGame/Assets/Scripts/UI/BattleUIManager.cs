@@ -55,6 +55,18 @@ namespace MonsterCardGame.UI
             UpdateUI();
         }
 
+        private void Update()
+        {
+            if (Input.GetKeyDown(KeyCode.Escape))
+            {
+                #if UNITY_EDITOR
+                UnityEditor.EditorApplication.isPlaying = false;
+                #else
+                Application.Quit();
+                #endif
+            }
+        }
+
         public void UpdateUI()
         {
             var gm = GameManager.Instance;

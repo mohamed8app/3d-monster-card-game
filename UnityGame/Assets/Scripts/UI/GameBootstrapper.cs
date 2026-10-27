@@ -177,7 +177,21 @@ namespace MonsterCardGame.UI
                 new Color(1f, 0.4f, 0.4f), TextAnchor.MiddleLeft, new Vector2(0, 0), new Vector2(500, 50));
             
             var eHandCount = CreateText(enemyBar.transform, "EnemyHandCount", "🎴 كروت يد الخصم: 6 كروت", 18,
-                new Color(0.8f, 0.8f, 0.9f), TextAnchor.MiddleRight, new Vector2(600, 0), new Vector2(400, 50));
+                new Color(0.8f, 0.8f, 0.9f), TextAnchor.MiddleRight, new Vector2(520, 0), new Vector2(350, 50));
+
+            // زر إغلاق وإنهاء اللعبة في أعلى يمين الشاشة (Exit Game Button)
+            CreateAnchorButton(canvas, "QuitGameBtn", "❌ خروج",
+                new Color(0.85f, 0.2f, 0.25f, 0.95f), Color.white,
+                new Vector2(1f, 1f), new Vector2(1f, 1f),
+                new Vector2(-60, -48), new Vector2(95, 45),
+                () => {
+                    Debug.Log("🚪 الخروج من اللعبة...");
+                    #if UNITY_EDITOR
+                    UnityEditor.EditorApplication.isPlaying = false;
+                    #else
+                    Application.Quit();
+                    #endif
+                });
 
             // 2. خانات العدو الـ 6 (الخط العلوي)
             BuildSlotsRow(canvas, ui, ai, false);
@@ -333,6 +347,17 @@ namespace MonsterCardGame.UI
         public static Button CreateButton(Transform parent, string name, string label, Color bgColor, Color textColor, Vector2 pos, Vector2 size, UnityEngine.Events.UnityAction onClick)
         {
             var btnObj = CreatePanel(parent, name, bgColor, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), pos, size);
+            var btn = btnObj.AddComponent<Button>();
+            btn.targetGraphic = btnObj.GetComponent<Image>();
+            if (onClick != null) btn.onClick.AddListener(onClick);
+
+            CreateText(btnObj.transform, "BtnText", label, 16, textColor, TextAnchor.MiddleCenter, Vector2.zero, size);
+            return btn;
+        }
+
+        public static Button CreateAnchorButton(Transform parent, string name, string label, Color bgColor, Color textColor, Vector2 anchorMin, Vector2 anchorMax, Vector2 pos, Vector2 size, UnityEngine.Events.UnityAction onClick)
+        {
+            var btnObj = CreatePanel(parent, name, bgColor, anchorMin, anchorMax, pos, size);
             var btn = btnObj.AddComponent<Button>();
             btn.targetGraphic = btnObj.GetComponent<Image>();
             if (onClick != null) btn.onClick.AddListener(onClick);
