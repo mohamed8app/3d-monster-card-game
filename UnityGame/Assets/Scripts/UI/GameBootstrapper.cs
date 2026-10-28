@@ -178,9 +178,12 @@ namespace MonsterCardGame.UI
             atmosRect.anchorMax = Vector2.one;
             atmosRect.sizeDelta = Vector2.zero;
             var atmosImg = atmosObj.AddComponent<Image>();
-            atmosImg.color = new Color(0.08f, 0.09f, 0.13f, 0.65f);
+            atmosImg.color = new Color(0.08f, 0.09f, 0.13f, 0.25f);
             atmosImg.raycastTarget = false;
             ui.envAtmosphereOverlay = atmosImg;
+
+            // 0.2 تأسيس محرك الغلاف الجوي الحربي والمناخي المتحرك (Living Battlefield & Weather Engine)
+            BattlefieldAtmosphereEngine.EnsureInstance(canvas, bgImg, atmosImg);
 
             // 1. وسام قائد الخصم (Top-Left Leader Crest)
             var enemyCrest = CreatePanel(canvas, "EnemyLeaderCrest", new Color(0.12f, 0.10f, 0.16f, 0.94f),

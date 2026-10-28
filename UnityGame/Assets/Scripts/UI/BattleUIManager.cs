@@ -93,8 +93,20 @@ namespace MonsterCardGame.UI
         private System.Collections.IEnumerator DelayedInitialUpdate()
         {
             yield return null;
+            EnsureAtmosphereEngine();
             UpdateUI();
             UpdateEnvironmentVisuals();
+        }
+
+        private void EnsureAtmosphereEngine()
+        {
+            var canvas = GetComponentInParent<Canvas>();
+            if (canvas != null)
+            {
+                var bgTr = canvas.transform.Find("ArenaBackground");
+                var bgImg = bgTr != null ? bgTr.GetComponent<Image>() : null;
+                BattlefieldAtmosphereEngine.EnsureInstance(canvas.transform, bgImg, envAtmosphereOverlay);
+            }
         }
 
         private void Update()
@@ -274,11 +286,11 @@ namespace MonsterCardGame.UI
                     envDebuffText.color = new Color(1f, 0.45f, 0.45f);
                 }
 
-                // تغيير لون الغلاف الجوي للساحة (Atmosphere Overlay)
-                if (envAtmosphereOverlay != null)
+                // تحديث محرك الغلاف الجوي والطقس الحربي المتحرك (Living Battlefield & Weather Engine)
+                EnsureAtmosphereEngine();
+                if (BattlefieldAtmosphereEngine.Instance != null)
                 {
-                    Color atmosColor = MonsterArtLoader.GetEnvironmentAtmosphereColor(env.element);
-                    envAtmosphereOverlay.color = atmosColor;
+                    BattlefieldAtmosphereEngine.Instance.ApplyEnvironmentProfile(env);
                 }
             }
             else
@@ -306,9 +318,10 @@ namespace MonsterCardGame.UI
                     envDebuffText.color = new Color(0.7f, 0.75f, 0.8f);
                 }
 
-                if (envAtmosphereOverlay != null)
+                EnsureAtmosphereEngine();
+                if (BattlefieldAtmosphereEngine.Instance != null)
                 {
-                    envAtmosphereOverlay.color = new Color(0.08f, 0.09f, 0.13f, 1f);
+                    BattlefieldAtmosphereEngine.Instance.ApplyEnvironmentProfile(null);
                 }
             }
         }
@@ -754,6 +767,11 @@ namespace MonsterCardGame.UI
             {
                 StartCoroutine(BattleAnimations.AnimateSpellCast(canvas, spellCard, casterName));
             }
+            if (BattlefieldAtmosphereEngine.Instance != null && spellCard != null)
+            {
+                Color c = MonsterArtLoader.GetElementColor(spellCard.element);
+                BattlefieldAtmosphereEngine.Instance.TriggerActionPulse(c, 1.35f);
+            }
         }
 
         public void ShowEnvironmentBanner(EnvironmentCardData envData, string activatorName)
@@ -763,6 +781,11 @@ namespace MonsterCardGame.UI
             {
                 StartCoroutine(BattleAnimations.AnimateEnvironmentShift(canvas, envData, activatorName));
             }
+            if (BattlefieldAtmosphereEngine.Instance != null && envData != null)
+            {
+                Color c = MonsterArtLoader.GetElementColor(envData.element);
+                BattlefieldAtmosphereEngine.Instance.TriggerActionPulse(c, 1.6f);
+            }
         }
 
         public void SpawnDamageNumber(Vector3 worldPos, int damage, bool isLeaderHit)
@@ -771,6 +794,11 @@ namespace MonsterCardGame.UI
             if (canvas != null)
             {
                 StartCoroutine(BattleAnimations.AnimateFloatingDamage(canvas.transform, worldPos, damage, isLeaderHit));
+            }
+            if (BattlefieldAtmosphereEngine.Instance != null)
+            {
+                Color pulseCol = isLeaderHit ? new Color(1f, 0.25f, 0.2f) : new Color(1f, 0.65f, 0.25f);
+                BattlefieldAtmosphereEngine.Instance.TriggerActionPulse(pulseCol, isLeaderHit ? 1.4f : 0.85f);
             }
         }
 
