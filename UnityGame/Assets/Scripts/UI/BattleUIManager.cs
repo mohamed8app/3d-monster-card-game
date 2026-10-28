@@ -51,6 +51,15 @@ namespace MonsterCardGame.UI
         public Text combatLogText;
         private List<string> logEntries = new List<string>();
 
+        [Header("Game Over Modal (خاتمة المعركة)")]
+        public GameObject gameOverPanel;
+        public Text gameOverTitleText;
+        public Text gameOverSubtitleText;
+        public Text gameOverStatsText;
+        public Outline gameOverModalOutline;
+        public Button restartGameButton;
+        public Button gameOverQuitButton;
+
         private CardData selectedCardForAction = null;
 
         private void Awake()
@@ -798,5 +807,81 @@ namespace MonsterCardGame.UI
                 ? (playerHpText != null ? playerHpText.transform.parent : null) 
                 : (enemyHpText != null ? enemyHpText.transform.parent : null);
         }
+
+        #region Game Over & Conclusion
+
+        public void ShowGameOverScreen(bool isVictory, int turns, int playerHp, int enemyHp, int monstersSummoned, int spellsCast, string envName, int manaCap)
+        {
+            if (gameOverPanel == null) return;
+
+            gameOverPanel.SetActive(true);
+
+            if (isVictory)
+            {
+                if (gameOverTitleText != null)
+                {
+                    gameOverTitleText.text = ArabicFixer.Fix("🏆 نصر أسطوري مؤزر!");
+                    gameOverTitleText.color = new Color(1f, 0.88f, 0.35f);
+                }
+                if (gameOverSubtitleText != null)
+                {
+                    gameOverSubtitleText.text = ArabicFixer.Fix("لقد سحقت قائد العدو وفرضت سيطرتك المطلقة على الساحة!");
+                    gameOverSubtitleText.color = new Color(0.85f, 1f, 0.9f);
+                }
+                if (gameOverModalOutline != null)
+                {
+                    gameOverModalOutline.effectColor = new Color(1f, 0.85f, 0.25f, 0.95f);
+                }
+            }
+            else
+            {
+                if (gameOverTitleText != null)
+                {
+                    gameOverTitleText.text = ArabicFixer.Fix("💀 سقط قائدك في الميدان!");
+                    gameOverTitleText.color = new Color(0.95f, 0.3f, 0.3f);
+                }
+                if (gameOverSubtitleText != null)
+                {
+                    gameOverSubtitleText.text = ArabicFixer.Fix("استبسل جيشك حتى الرمق الأخير.. حظاً أوفر في الجولة القادمة!");
+                    gameOverSubtitleText.color = new Color(1f, 0.8f, 0.8f);
+                }
+                if (gameOverModalOutline != null)
+                {
+                    gameOverModalOutline.effectColor = new Color(0.9f, 0.25f, 0.3f, 0.95f);
+                }
+            }
+
+            if (gameOverStatsText != null)
+            {
+                string stats = 
+                    $"⏱️ الجولات المستغرقة: {turns} جولات تكتيكية\n" +
+                    $"❤️ صحة بطلك المتبقية: {playerHp} / 1000 HP\n" +
+                    $"💀 صحة قائد الخصم: {enemyHp} / 1000 HP\n" +
+                    $"⚔️ الوحوش التي استدعيتها: {monstersSummoned} وحشاً\n" +
+                    $"🔮 التعاويذ التي أطلقتها: {spellsCast} تعويذة\n" +
+                    $"🌍 مناخ نهاية المعركة: {envName}\n" +
+                    $"💎 سقف المانا النهائي: {manaCap} / 8";
+
+                gameOverStatsText.text = ArabicFixer.Fix(stats);
+            }
+
+            var modalBox = gameOverPanel.transform.Find("ModalBox");
+            if (modalBox != null)
+            {
+                StartCoroutine(BattleAnimations.AnimateModalPopIn(modalBox));
+            }
+        }
+
+        public void OnRestartClicked()
+        {
+            if (gameOverPanel != null) gameOverPanel.SetActive(false);
+            var gm = GameManager.Instance;
+            if (gm != null)
+            {
+                gm.RestartGame();
+            }
+        }
+
+        #endregion
     }
 }

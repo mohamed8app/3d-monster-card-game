@@ -18,6 +18,7 @@ namespace MonsterCardGame.Core
         public const int MaxManaCap = 8;
         public bool hasSacrificedThisTurn = false;
         public int fatigueCount = 0;
+        public int monstersSummonedTotal = 0;
 
         [Header("Card Collections")]
         public List<CardData> deck = new List<CardData>();
@@ -39,6 +40,7 @@ namespace MonsterCardGame.Core
             manaCapacity = 1;
             currentPower = 1;
             fatigueCount = 0;
+            monstersSummonedTotal = 0;
             hasSacrificedThisTurn = false;
         }
 
@@ -150,6 +152,7 @@ namespace MonsterCardGame.Core
 
             currentPower -= card.cost;
             hand.Remove(card);
+            monstersSummonedTotal++;
 
             var instance = new MonsterInstance(card, currentTurn);
             slots[targetSlotIndex].PlaceMonster(instance);

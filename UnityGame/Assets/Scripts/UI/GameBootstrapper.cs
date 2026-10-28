@@ -380,6 +380,69 @@ namespace MonsterCardGame.UI
             hLayout.childControlHeight = false;
 
             ui.playerHandContainer = handCardsContainer.transform;
+
+            // 11. نافذة خاتمة ونهاية المعركة الملحمية (Game Over Modal)
+            BuildGameOverModal(canvas, ui);
+        }
+
+        private static void BuildGameOverModal(Transform canvas, BattleUIManager ui)
+        {
+            // غطاء معتم يغطي الشاشة بالكامل ويعزل المعركة
+            var overlay = CreatePanel(canvas, "GameOverModalOverlay", new Color(0.03f, 0.04f, 0.07f, 0.90f),
+                Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+
+            // الصندوق المركزي لخاتمة المعركة
+            var modalBox = CreatePanel(overlay.transform, "ModalBox", new Color(0.09f, 0.10f, 0.16f, 0.98f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(680, 560));
+
+            var modalOutline = modalBox.AddComponent<Outline>();
+            modalOutline.effectColor = new Color(1f, 0.85f, 0.25f, 0.95f);
+            modalOutline.effectDistance = new Vector2(3, 3);
+            ui.gameOverModalOutline = modalOutline;
+
+            // العنوان الرئيسي
+            ui.gameOverTitleText = CreateText(modalBox.transform, "TitleText", "🏆 نصر أسطوري مؤزر!", 28,
+                new Color(1f, 0.88f, 0.35f), TextAnchor.UpperCenter, new Vector2(0, 220), new Vector2(640, 42));
+
+            // العنوان الفرعي
+            ui.gameOverSubtitleText = CreateText(modalBox.transform, "SubtitleText", "لقد سحقت قائد العدو وفرضت سيطرتك المطلقة على الساحة!", 15,
+                new Color(0.9f, 0.95f, 1f), TextAnchor.UpperCenter, new Vector2(0, 175), new Vector2(640, 30));
+
+            // حاوية عرض الإحصائيات
+            var statsBox = CreatePanel(modalBox.transform, "StatsBox", new Color(0.06f, 0.07f, 0.11f, 0.90f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 20), new Vector2(600, 240));
+
+            var statsOutline = statsBox.AddComponent<Outline>();
+            statsOutline.effectColor = new Color(0.45f, 0.40f, 0.65f, 0.65f);
+            statsOutline.effectDistance = new Vector2(1.5f, 1.5f);
+
+            CreateText(statsBox.transform, "StatsHeader", "📊 تفاصيل وسجل المعركة", 15,
+                new Color(0.95f, 0.85f, 0.5f), TextAnchor.UpperCenter, new Vector2(0, 95), new Vector2(560, 24));
+
+            ui.gameOverStatsText = CreateText(statsBox.transform, "StatsContent", "جاري رصد إحصائيات المعركة...", 15,
+                Color.white, TextAnchor.MiddleCenter, new Vector2(0, -12), new Vector2(560, 180));
+
+            // أزرار التحكم بالأسفل
+            // 1. زر معركة جديدة
+            ui.restartGameButton = CreateButton(modalBox.transform, "RestartBtn", "🔁 معركة جديدة (Play Again)",
+                new Color(0.18f, 0.65f, 0.35f, 0.98f), Color.white,
+                new Vector2(-155, -220), new Vector2(270, 52),
+                () => ui.SendMessage("OnRestartClicked"));
+            var rbOutline = ui.restartGameButton.gameObject.AddComponent<Outline>();
+            rbOutline.effectColor = new Color(0.4f, 1f, 0.6f, 0.9f);
+            rbOutline.effectDistance = new Vector2(2, 2);
+
+            // 2. زر الخروج
+            ui.gameOverQuitButton = CreateButton(modalBox.transform, "QuitBtn", "🚪 خروج من اللعبة",
+                new Color(0.75f, 0.18f, 0.22f, 0.98f), Color.white,
+                new Vector2(155, -220), new Vector2(240, 52),
+                () => ui.SendMessage("OnQuitClicked"));
+            var qbOutline = ui.gameOverQuitButton.gameObject.AddComponent<Outline>();
+            qbOutline.effectColor = new Color(1f, 0.4f, 0.4f, 0.9f);
+            qbOutline.effectDistance = new Vector2(2, 2);
+
+            overlay.SetActive(false);
+            ui.gameOverPanel = overlay;
         }
 
         private static void BuildSlotsRow(Transform canvas, BattleUIManager ui, PlayerState player, bool isPlayerSide)

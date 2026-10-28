@@ -31,6 +31,9 @@ namespace MonsterCardGame.Core
         public GamePhase currentPhase = GamePhase.StartingCoinToss;
         public EnvironmentCardData activeEnvironment = null;
 
+        [Header("Match Statistics")]
+        public int playerSpellsCastCount = 0;
+
         [Header("Database")]
         public TextAsset monstersJsonFile;
         public List<MonsterData> allMonsters = new List<MonsterData>();
@@ -180,6 +183,11 @@ namespace MonsterCardGame.Core
             caster.currentPower -= spellCard.cost;
             caster.hand.Remove(spellCard);
             caster.graveyard.Add(spellCard);
+
+            if (caster == humanPlayer)
+            {
+                playerSpellsCastCount++;
+            }
 
             // إشعار وبانر بصري فاخر للتعويذة
             if (BattleUIManager.Instance != null)
@@ -635,24 +643,55 @@ namespace MonsterCardGame.Core
 
         private void CheckGameOver()
         {
+            if (currentPhase == GamePhase.GameOver) return;
+
             if (!aiPlayer.IsAlive)
             {
                 currentPhase = GamePhase.GameOver;
                 Debug.Log("🏆 مبروك! لقد هزمت قائد الخصم وانتصرت في المعركة!");
+                string envName = activeEnvironment != null ? activeEnvironment.name : "مناخ مستقر ☀️";
                 if (BattleUIManager.Instance != null)
                 {
-                    BattleUIManager.Instance.ShowBanner("🏆 انتصار ملحمي! لقد سحقت قائد الخصم!", new Color(1f, 0.85f, 0.2f));
+                    BattleUIManager.Instance.ShowGameOverScreen(true, currentTurn, humanPlayer.currentHp, aiPlayer.currentHp,
+                        humanPlayer.monstersSummonedTotal, playerSpellsCastCount, envName, humanPlayer.manaCapacity);
                 }
             }
             else if (!humanPlayer.IsAlive)
             {
                 currentPhase = GamePhase.GameOver;
                 Debug.Log("💀 سقط قائدك! لقد خسرت المعركة، حظاً أوفر في الجولة القادمة.");
+                string envName = activeEnvironment != null ? activeEnvironment.name : "مناخ مستقر ☀️";
                 if (BattleUIManager.Instance != null)
                 {
-                    BattleUIManager.Instance.ShowBanner("💀 سقط قائدك! هزيمة في المعركة...", new Color(0.9f, 0.25f, 0.25f));
+                    BattleUIManager.Instance.ShowGameOverScreen(false, currentTurn, humanPlayer.currentHp, aiPlayer.currentHp,
+                        humanPlayer.monstersSummonedTotal, playerSpellsCastCount, envName, humanPlayer.manaCapacity);
                 }
             }
+        }
+
+        public void RestartGame()
+        {
+            Debug.Log("🔄 بدء معركة تكتيكية جديدة من الصفر...");
+
+            for (int i = 0; i < humanPlayer.slots.Length; i++)
+            {
+                if (humanPlayer.slots[i] != null) humanPlayer.slots[i].ClearSlot();
+                if (aiPlayer.slots[i] != null) aiPlayer.slots[i].ClearSlot();
+            }
+
+            playerSpellsCastCount = 0;
+            activeEnvironment = null;
+
+            if (BattleUIManager.Instance != null)
+            {
+                if (BattleUIManager.Instance.gameOverPanel != null)
+                {
+                    BattleUIManager.Instance.gameOverPanel.SetActive(false);
+                }
+                BattleUIManager.Instance.DeselectHandCards();
+            }
+
+            StartGame();
         }
     }
 }

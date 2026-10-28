@@ -230,6 +230,28 @@ namespace MonsterCardGame.UI
         }
 
         /// <summary>
+        /// حركة ظهور سينمائية لنافذة الخاتمة والانتصار / الهزيمة (Modal Pop-in & Bounce)
+        /// </summary>
+        public static IEnumerator AnimateModalPopIn(Transform target)
+        {
+            if (target == null) yield break;
+
+            Vector3 origScale = Vector3.one;
+            target.localScale = Vector3.one * 0.35f;
+
+            float t = 0;
+            float dur = 0.35f;
+            while (t < dur)
+            {
+                t += Time.deltaTime;
+                float p = t / dur;
+                target.localScale = Vector3.one * Mathf.Lerp(0.35f, 1f, EaseOutBack(p));
+                yield return null;
+            }
+            target.localScale = origScale;
+        }
+
+        /// <summary>
         /// مؤثر إطلاق تعويذة سحرية مع وميض أركيني وشعار التعويذة
         /// </summary>
         public static IEnumerator AnimateSpellCast(Canvas canvas, MonsterCardGame.Data.CardData spellCard, string casterName)
