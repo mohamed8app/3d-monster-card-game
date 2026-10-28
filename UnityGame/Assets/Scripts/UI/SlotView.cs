@@ -57,7 +57,7 @@ namespace MonsterCardGame.UI
             }
         }
 
-        public void DisplayMonster(MonsterData data, MonsterInstance instance)
+        public void DisplayMonster(CardData data, MonsterInstance instance)
         {
             if (data == null || instance == null)
             {
@@ -104,10 +104,29 @@ namespace MonsterCardGame.UI
                 tokenNameText.text = ArabicFixer.Fix(data.name);
             }
 
-            // 5. أرقام الهجوم والدفاع
+            // 5. أرقام الهجوم والدفاع مع تأثير البيئة والمناخ الحية
+            var gm = GameManager.Instance;
+            var activeEnv = gm != null ? gm.activeEnvironment : null;
+            int effectiveAtk = instance.GetEffectiveAtk(activeEnv);
+            float envMod = instance.GetEnvironmentModifier(activeEnv);
+
             if (tokenAtkText != null)
             {
-                tokenAtkText.text = ArabicFixer.Fix($"⚔️ {instance.baseAtk}");
+                if (envMod > 1.01f)
+                {
+                    tokenAtkText.text = ArabicFixer.Fix($"⚔️ {effectiveAtk} ⬆️");
+                    tokenAtkText.color = new Color(0.2f, 1f, 0.4f);
+                }
+                else if (envMod < 0.99f)
+                {
+                    tokenAtkText.text = ArabicFixer.Fix($"⚔️ {effectiveAtk} ⬇️");
+                    tokenAtkText.color = new Color(1f, 0.4f, 0.35f);
+                }
+                else
+                {
+                    tokenAtkText.text = ArabicFixer.Fix($"⚔️ {effectiveAtk}");
+                    tokenAtkText.color = new Color(1f, 0.92f, 0.45f);
+                }
             }
             if (tokenDefText != null)
             {

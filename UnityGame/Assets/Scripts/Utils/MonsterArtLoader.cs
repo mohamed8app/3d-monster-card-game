@@ -6,14 +6,14 @@ using MonsterCardGame.Data;
 namespace MonsterCardGame.Utils
 {
     /// <summary>
-    /// مدير تحميل وتوزيع رسومات وصور الوحوش الفنية وعناصرها بذكاء.
-    /// Manages high-resolution monster illustrations, elemental colors and visual sprites.
+    /// مدير تحميل وتوزيع رسومات وصور الوحوش والتعاويذ وكروت البيئة وعناصرها بذكاء.
+    /// Manages high-resolution illustrations, elemental colors, spells and weather visuals.
     /// </summary>
     public static class MonsterArtLoader
     {
         private static readonly Dictionary<string, Sprite> spriteCache = new Dictionary<string, Sprite>();
 
-        public static Sprite GetMonsterSprite(MonsterData data)
+        public static Sprite GetCardSprite(CardData data)
         {
             if (data == null) return null;
 
@@ -25,7 +25,7 @@ namespace MonsterCardGame.Utils
                 return cachedSprite;
             }
 
-            // 2. البحث عن صورة خاصة برقم الوحش في Resources
+            // 2. البحث عن صورة خاصة برقم البطاقة في Resources
             if (Resources.Load<Texture2D>(key) != null)
             {
                 var customTex = Resources.Load<Texture2D>(key);
@@ -70,6 +70,11 @@ namespace MonsterCardGame.Utils
             return null;
         }
 
+        public static Sprite GetMonsterSprite(CardData data)
+        {
+            return GetCardSprite(data);
+        }
+
         private static Sprite CreateSpriteFromTexture(Texture2D tex)
         {
             if (tex == null) return null;
@@ -96,6 +101,26 @@ namespace MonsterCardGame.Utils
             };
         }
 
+        public static Color GetEnvironmentAtmosphereColor(string element)
+        {
+            return element switch
+            {
+                "نار" => new Color(0.18f, 0.08f, 0.08f, 0.95f),       // وهج بركاني ناري
+                "مياه" => new Color(0.06f, 0.12f, 0.22f, 0.95f),      // زرقة المحيط السحيق
+                "جليد" => new Color(0.07f, 0.15f, 0.24f, 0.95f),      // صقيع العاصفة الثلجية
+                "أرض" => new Color(0.15f, 0.11f, 0.07f, 0.95f),       // تراب وزلازل صخرية
+                "كهرباء" => new Color(0.14f, 0.13f, 0.06f, 0.95f),    // عاصفة برق مشحونة
+                "رياح" => new Color(0.07f, 0.15f, 0.14f, 0.95f),      // إعصار هوائي عاتٍ
+                "غابة" => new Color(0.06f, 0.15f, 0.08f, 0.95f),      // غابة استوائية عميقة
+                "ضياء" => new Color(0.17f, 0.16f, 0.09f, 0.95f),      // شفق مقدس ساطع
+                "ظلام" => new Color(0.09f, 0.05f, 0.15f, 0.95f),      // كسوف كوني داكن
+                "ميكا" => new Color(0.11f, 0.13f, 0.16f, 0.95f),      // مصنع آلي رمادي
+                "أشباح" => new Color(0.12f, 0.08f, 0.18f, 0.95f),     // عالم أثيري شبحي
+                "سحر" => new Color(0.16f, 0.06f, 0.18f, 0.95f),      // فضاء كوني أركيني
+                _ => new Color(0.08f, 0.09f, 0.13f, 1f)
+            };
+        }
+
         public static string GetElementEmoji(string element)
         {
             return element switch
@@ -103,16 +128,54 @@ namespace MonsterCardGame.Utils
                 "نار" => "🔥",
                 "مياه" => "💧",
                 "جليد" => "❄️",
+                "أرض" => "🪨",
                 "كهرباء" => "⚡",
-                "ظلام" => "🌑",
-                "أشباح" => "👻",
-                "ميكا" => "⚙️",
-                "سحر" => "🔮",
-                "ضياء" => "✨",
-                "أرض" => "⛰️",
                 "رياح" => "🌪️",
                 "غابة" => "🌿",
-                _ => "⚔️"
+                "ضياء" => "✨",
+                "ظلام" => "🌑",
+                "ميكا" => "⚙️",
+                "أشباح" => "👻",
+                "سحر" => "🔮",
+                _ => "⭐"
+            };
+        }
+
+        public static string GetSpellIcon(SpellType type)
+        {
+            return type switch
+            {
+                SpellType.DirectDamage => "☄️",
+                SpellType.BoardAOE => "⚡",
+                SpellType.LeaderHeal => "💚",
+                SpellType.BoardBuff => "🛡️",
+                SpellType.FreezeBoard => "❄️",
+                SpellType.DrawAndEnergy => "📜",
+                SpellType.LifeDrain => "🩸",
+                SpellType.ManaTheft => "🔮",
+                SpellType.ExecuteStrongest => "💀",
+                SpellType.ArcaneBlast => "💥",
+                _ => "✨"
+            };
+        }
+
+        public static string GetEnvironmentEmoji(string element)
+        {
+            return element switch
+            {
+                "نار" => "🌋",
+                "مياه" => "🌊",
+                "جليد" => "❄️",
+                "أرض" => "🪨",
+                "كهرباء" => "⚡",
+                "رياح" => "🌪️",
+                "غابة" => "🌿",
+                "ضياء" => "✨",
+                "ظلام" => "🌑",
+                "ميكا" => "⚙️",
+                "أشباح" => "👻",
+                "سحر" => "🔮",
+                _ => "☀️"
             };
         }
     }

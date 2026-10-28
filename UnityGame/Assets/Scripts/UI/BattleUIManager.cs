@@ -29,6 +29,7 @@ namespace MonsterCardGame.UI
         public Button attackButton;
         public Button endTurnButton;
         public Button sacrificeButton;
+        public Button playCardButton;
         public Button quitButton;
 
         [Header("Containers")]
@@ -36,14 +37,21 @@ namespace MonsterCardGame.UI
         public SlotView[] playerSlotViews = new SlotView[6];
         public SlotView[] enemySlotViews = new SlotView[6];
 
-        [Header("Prefabs")]
-        public GameObject cardPrefab;
+        [Header("Environment Altar (محراب المناخ والبيئة)")]
+        public GameObject envAltarPanel;
+        public Text envIconText;
+        public Text envNameText;
+        public Text envLevelText;
+        public Text envDurationText;
+        public Text envBuffText;
+        public Text envDebuffText;
+        public Image envAtmosphereOverlay;
 
         [Header("Combat Log")]
         public Text combatLogText;
         private List<string> logEntries = new List<string>();
 
-        private MonsterData selectedCardForAction = null;
+        private CardData selectedCardForAction = null;
 
         private void Awake()
         {
@@ -56,6 +64,7 @@ namespace MonsterCardGame.UI
             if (attackButton != null) attackButton.onClick.AddListener(OnAttackClicked);
             if (endTurnButton != null) endTurnButton.onClick.AddListener(OnEndTurnClicked);
             if (sacrificeButton != null) sacrificeButton.onClick.AddListener(OnSacrificeClicked);
+            if (playCardButton != null) playCardButton.onClick.AddListener(OnPlayCardClicked);
 
             if (quitButton == null)
             {
@@ -74,9 +83,9 @@ namespace MonsterCardGame.UI
 
         private System.Collections.IEnumerator DelayedInitialUpdate()
         {
-            // ننتظر فريم واحد حتى ينتهي GameManager من إعداد وتجهيز كروت البداية
             yield return null;
             UpdateUI();
+            UpdateEnvironmentVisuals();
         }
 
         private void Update()
@@ -118,22 +127,31 @@ namespace MonsterCardGame.UI
             if (gm == null) return;
 
             // 1. تحديث صحة القائدين
-            if (playerHpText != null) playerHpText.text = ArabicFixer.Fix($"{gm.humanPlayer.currentHp} / 1000 HP");
+            if (playerHpText != null) playerHpText.text = ArabicFixer.Fix($"❤️ {gm.humanPlayer.currentHp} / 1000 HP");
             if (playerHpSlider != null) playerHpSlider.value = gm.humanPlayer.currentHp / 1000f;
 
-            if (enemyHpText != null) enemyHpText.text = ArabicFixer.Fix($"{gm.aiPlayer.currentHp} / 1000 HP");
+            if (enemyHpText != null) enemyHpText.text = ArabicFixer.Fix($"❤️ {gm.aiPlayer.currentHp} / 1000 HP");
             if (enemyHpSlider != null) enemyHpSlider.value = gm.aiPlayer.currentHp / 1000f;
 
-            // 2. تحديث المانا والباور
+            // 2. تحديث المانا والباور مع رسم جواهر المانا المتوهجة (Mana Crystals)
             if (playerPowerText != null)
             {
-                playerPowerText.text = ArabicFixer.Fix($"💎 الباور: {gm.humanPlayer.currentPower}  |  المانا: {gm.humanPlayer.manaCapacity}");
+                string crystals = "";
+                int power = gm.humanPlayer.currentPower;
+                int maxCap = gm.humanPlayer.manaCapacity;
+
+                for (int i = 0; i < maxCap; i++)
+                {
+                    crystals += (i < power) ? "💎" : "◇";
+                }
+
+                playerPowerText.text = ArabicFixer.Fix($"[ {crystals} ]  الباور: {power}/{maxCap}  |  المانا: {maxCap}/8");
             }
 
             // 3. مؤشر الدور
             if (turnInfoText != null)
             {
-                turnInfoText.text = ArabicFixer.Fix(gm.isPlayerTurn ? "⚔️ دورك الآن (انشر أو هاجم)" : "⏳ دور الخصم (يفكر...)");
+                turnInfoText.text = ArabicFixer.Fix(gm.isPlayerTurn ? "⚔️ دورك الآن (استدعِ، ألقِ السحر، أو هاجم)" : "⏳ دور الخصم (يفكر...)");
             }
 
             // 4. أزرار التحكم
@@ -141,7 +159,27 @@ namespace MonsterCardGame.UI
             if (endTurnButton != null) endTurnButton.interactable = gm.isPlayerTurn;
             if (sacrificeButton != null)
             {
-                sacrificeButton.interactable = gm.isPlayerTurn && !gm.humanPlayer.hasSacrificedThisTurn;
+                sacrificeButton.interactable = gm.isPlayerTurn && !gm.humanPlayer.hasSacrificedThisTurn && selectedCardForAction != null;
+            }
+
+            // تحديث زر تفعيل السحر أو البيئة عند تحديد بطاقة
+            if (playCardButton != null)
+            {
+                bool canPlaySelected = gm.isPlayerTurn && selectedCardForAction != null && 
+                    (selectedCardForAction.cardType == CardType.Spell || selectedCardForAction.cardType == CardType.Environment) &&
+                    selectedCardForAction.cost <= gm.humanPlayer.currentPower;
+
+                playCardButton.interactable = canPlaySelected;
+                var txt = playCardButton.GetComponentInChildren<Text>();
+                if (txt != null)
+                {
+                    if (selectedCardForAction != null && selectedCardForAction.cardType == CardType.Spell)
+                        txt.text = ArabicFixer.Fix($"🔮 إطلاق التعويذة ({selectedCardForAction.cost}⚡)");
+                    else if (selectedCardForAction != null && selectedCardForAction.cardType == CardType.Environment)
+                        txt.text = ArabicFixer.Fix($"🌍 تنشيط المناخ ({selectedCardForAction.cost}⚡)");
+                    else
+                        txt.text = ArabicFixer.Fix("✨ تفعيل البطاقة");
+                }
             }
 
             // 5. تحديث خانات الساحة
@@ -150,8 +188,11 @@ namespace MonsterCardGame.UI
             // 6. تحديث كروت يد اللاعب
             RefreshPlayerHand();
 
-            // 7. تحديث كروت يد الخصم (تظهر مقلوبة من ظهرها فقط)
+            // 7. تحديث كروت يد الخصم
             RefreshEnemyHand();
+
+            // 8. تحديث محراب البيئة والمناخ
+            UpdateEnvironmentVisuals();
         }
 
         private void UpdateSlots()
@@ -183,18 +224,96 @@ namespace MonsterCardGame.UI
             }
         }
 
+        public void UpdateEnvironmentVisuals()
+        {
+            var gm = GameManager.Instance;
+            if (gm == null) return;
+
+            var env = gm.activeEnvironment;
+            if (env != null)
+            {
+                string envEmoji = MonsterArtLoader.GetEnvironmentEmoji(env.element);
+                Color elemColor = MonsterArtLoader.GetElementColor(env.element);
+
+                if (envIconText != null) envIconText.text = envEmoji;
+                if (envNameText != null)
+                {
+                    envNameText.text = ArabicFixer.Fix($"{env.name}");
+                    envNameText.color = elemColor;
+                }
+                if (envLevelText != null)
+                {
+                    string stars = new string('★', env.level);
+                    envLevelText.text = ArabicFixer.Fix($"{stars} المستوى {env.level}");
+                    envLevelText.color = new Color(1f, 0.9f, 0.4f);
+                }
+                if (envDurationText != null)
+                {
+                    envDurationText.text = ArabicFixer.Fix($"⏳ متبقي: {env.turnsRemaining} جولات");
+                }
+                if (envBuffText != null)
+                {
+                    int buffPercent = Mathf.RoundToInt(env.buffPct * 100);
+                    envBuffText.text = ArabicFixer.Fix($"⬆️ {env.buffedElement}: +{buffPercent}% هجوم");
+                    envBuffText.color = new Color(0.2f, 1f, 0.45f);
+                }
+                if (envDebuffText != null)
+                {
+                    int debuffPercent = Mathf.RoundToInt(env.debuffPct * 100);
+                    string debuffedStr = string.Join("، ", env.debuffedElements);
+                    envDebuffText.text = ArabicFixer.Fix($"⬇️ {debuffedStr}: -{debuffPercent}%");
+                    envDebuffText.color = new Color(1f, 0.45f, 0.45f);
+                }
+
+                // تغيير لون الغلاف الجوي للساحة (Atmosphere Overlay)
+                if (envAtmosphereOverlay != null)
+                {
+                    Color atmosColor = MonsterArtLoader.GetEnvironmentAtmosphereColor(env.element);
+                    envAtmosphereOverlay.color = atmosColor;
+                }
+            }
+            else
+            {
+                if (envIconText != null) envIconText.text = "☀️";
+                if (envNameText != null)
+                {
+                    envNameText.text = ArabicFixer.Fix("المناخ: مستقر");
+                    envNameText.color = new Color(0.85f, 0.9f, 1f);
+                }
+                if (envLevelText != null)
+                {
+                    envLevelText.text = ArabicFixer.Fix("طبيعي (محايد)");
+                    envLevelText.color = new Color(0.65f, 0.75f, 0.85f);
+                }
+                if (envDurationText != null) envDurationText.text = ArabicFixer.Fix("⏳ دائم");
+                if (envBuffText != null)
+                {
+                    envBuffText.text = ArabicFixer.Fix("• لا توجد تعزيزات نشطة");
+                    envBuffText.color = new Color(0.7f, 0.75f, 0.8f);
+                }
+                if (envDebuffText != null)
+                {
+                    envDebuffText.text = ArabicFixer.Fix("• كافة العناصر متكافئة");
+                    envDebuffText.color = new Color(0.7f, 0.75f, 0.8f);
+                }
+
+                if (envAtmosphereOverlay != null)
+                {
+                    envAtmosphereOverlay.color = new Color(0.08f, 0.09f, 0.13f, 1f);
+                }
+            }
+        }
+
         private void RefreshPlayerHand()
         {
             var gm = GameManager.Instance;
             if (gm == null || playerHandContainer == null) return;
 
-            // مسح الكروت القديمة في اليد
             foreach (Transform child in playerHandContainer)
             {
                 Destroy(child.gameObject);
             }
 
-            // رسم الكروت الحالية مع خاصية السحب والإفلات (Drag & Drop)
             var mainCanvas = GetComponentInParent<Canvas>();
             foreach (var card in gm.humanPlayer.hand)
             {
@@ -209,7 +328,6 @@ namespace MonsterCardGame.UI
             var gm = GameManager.Instance;
             if (gm == null || enemyHandContainer == null) return;
 
-            // مسح الكروت القديمة في يد الخصم
             foreach (Transform child in enemyHandContainer)
             {
                 Destroy(child.gameObject);
@@ -221,7 +339,6 @@ namespace MonsterCardGame.UI
                 enemyHandCountText.text = ArabicFixer.Fix($"🎴 يد الخصم: {handCount} بطاقات مستترة");
             }
 
-            // رسم كل بطاقة من ظهرها فقط بأناقة وفخامة
             for (int i = 0; i < handCount; i++)
             {
                 CreateFaceDownCardUI(enemyHandContainer, i);
@@ -230,7 +347,6 @@ namespace MonsterCardGame.UI
 
         private GameObject CreateFaceDownCardUI(Transform parent, int index)
         {
-            // الغلاف الخارجي لظهر البطاقة العمودية (Portrait 52x72)
             var cardObj = GameBootstrapper.CreatePanel(parent, $"EnemyCardBack_{index}", new Color(0.11f, 0.08f, 0.18f, 0.98f),
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(52, 72));
 
@@ -241,31 +357,36 @@ namespace MonsterCardGame.UI
             layoutElem.minHeight = 72;
 
             var outline = cardObj.AddComponent<Outline>();
-            outline.effectColor = new Color(0.92f, 0.76f, 0.28f, 0.95f); // إطار ذهبي ملكي متوهج
+            outline.effectColor = new Color(0.92f, 0.76f, 0.28f, 0.95f);
             outline.effectDistance = new Vector2(1.5f, 1.5f);
 
-            // بطانة داخلية مزخرفة
             var innerPanel = GameBootstrapper.CreatePanel(cardObj.transform, "InnerRuneBorder", new Color(0.07f, 0.05f, 0.12f, 0.95f),
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(42, 60));
 
             var innerOutline = innerPanel.AddComponent<Outline>();
-            innerOutline.effectColor = new Color(0.55f, 0.35f, 0.8f, 0.7f); // وهج أرجواني سحري
+            innerOutline.effectColor = new Color(0.55f, 0.35f, 0.8f, 0.7f);
             innerOutline.effectDistance = new Vector2(1, 1);
 
-            // الرمز السحري لظهر البطاقة في المنتصف
             GameBootstrapper.CreateText(innerPanel.transform, "RuneSymbol", "🔮", 16,
                 new Color(1f, 0.85f, 0.35f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(38, 48));
 
             return cardObj;
         }
 
-        private GameObject CreateDynamicCardUI(Transform parent, MonsterData card)
+        private GameObject CreateDynamicCardUI(Transform parent, CardData card)
         {
             Color elemColor = MonsterArtLoader.GetElementColor(card.element);
             string elemEmoji = MonsterArtLoader.GetElementEmoji(card.element);
 
-            // بطاقة رأسية فاخرة (Portrait 135x195)
-            var cardObj = GameBootstrapper.CreatePanel(parent, $"Card_{card.name}", new Color(0.08f, 0.09f, 0.14f, 0.98f),
+            // الغلاف الخارجي للبطاقة العمودية الفاخرة (Portrait 135x195)
+            Color cardBgColor = card.cardType switch
+            {
+                CardType.Spell => new Color(0.10f, 0.06f, 0.16f, 0.98f),       // أرجواني سحري غامق
+                CardType.Environment => new Color(0.06f, 0.11f, 0.14f, 0.98f), // زمردي/سيان مناخي
+                _ => new Color(0.08f, 0.09f, 0.14f, 0.98f)                     // رمادي فضي للوحوش
+            };
+
+            var cardObj = GameBootstrapper.CreatePanel(parent, $"Card_{card.name}", cardBgColor,
                 new Vector2(0, 0.5f), new Vector2(0, 0.5f), Vector2.zero, new Vector2(135, 195));
 
             var layoutElem = cardObj.AddComponent<LayoutElement>();
@@ -275,14 +396,15 @@ namespace MonsterCardGame.UI
             layoutElem.minHeight = 195;
 
             var outline = cardObj.AddComponent<Outline>();
-            outline.effectColor = elemColor;
+            outline.effectColor = (card.cardType == CardType.Spell) 
+                ? new Color(0.95f, 0.75f, 0.25f, 0.95f) // إطار ذهبي سحري
+                : elemColor;
             outline.effectDistance = new Vector2(2, 2);
 
             var btn = cardObj.AddComponent<Button>();
             btn.targetGraphic = cardObj.GetComponent<Image>();
 
-            // 1. سطر علوي: تكلفة المانا (يسار) والعنصر (يمين)
-            // جوهرة المانا (يسار)
+            // 1. شارة الباور / المانا (أعلى اليسار)
             var manaBadge = GameBootstrapper.CreatePanel(cardObj.transform, "ManaBadge", new Color(0.85f, 0.65f, 0.15f, 0.95f),
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-40, 80), new Vector2(40, 22));
             var manaOutline = manaBadge.AddComponent<Outline>();
@@ -292,61 +414,166 @@ namespace MonsterCardGame.UI
                 new Color(0.1f, 0.08f, 0.05f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(38, 20));
             txtMana.raycastTarget = false;
 
-            // شارة العنصر (يمين)
+            // 2. شارة نوع البطاقة والعنصر (أعلى اليمين)
+            string typeLabel = card.cardType switch
+            {
+                CardType.Spell => "🔮 سحر",
+                CardType.Environment => "🌍 بيئة",
+                _ => $"{elemEmoji} {card.element}"
+            };
+
             var elemBadge = GameBootstrapper.CreatePanel(cardObj.transform, "ElemBadge", new Color(0.06f, 0.07f, 0.10f, 0.90f),
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(28, 80), new Vector2(66, 22));
             var elemBadgeOutline = elemBadge.AddComponent<Outline>();
             elemBadgeOutline.effectColor = elemColor;
             elemBadgeOutline.effectDistance = new Vector2(1, 1);
-            var txtElem = GameBootstrapper.CreateText(elemBadge.transform, "ElemText", $"{elemEmoji} {card.element}", 11,
+            var txtElem = GameBootstrapper.CreateText(elemBadge.transform, "ElemText", typeLabel, 11,
                 elemColor, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(64, 20));
             txtElem.raycastTarget = false;
 
-            // 2. صورة الوحش الفنية الملحمية
-            var artObj = new GameObject("CardArt");
-            artObj.transform.SetParent(cardObj.transform, false);
-            var rectArt = artObj.AddComponent<RectTransform>();
-            rectArt.anchoredPosition = new Vector2(0, 24);
-            rectArt.sizeDelta = new Vector2(125, 82);
-            var artImg = artObj.AddComponent<Image>();
-            var sprite = MonsterArtLoader.GetMonsterSprite(card);
-            if (sprite != null) artImg.sprite = sprite;
-            artImg.raycastTarget = false;
+            if (card.cardType == CardType.Monster)
+            {
+                // تفاصيل بطاقة الوحش:
+                // صورة الوحش الفنية الملحمية
+                var artObj = new GameObject("CardArt");
+                artObj.transform.SetParent(cardObj.transform, false);
+                var rectArt = artObj.AddComponent<RectTransform>();
+                rectArt.anchoredPosition = new Vector2(0, 24);
+                rectArt.sizeDelta = new Vector2(125, 82);
+                var artImg = artObj.AddComponent<Image>();
+                var sprite = MonsterArtLoader.GetMonsterSprite(card);
+                if (sprite != null) artImg.sprite = sprite;
+                artImg.raycastTarget = false;
 
-            // 3. اسم الوحش في شريط زجاجي أنيق
-            var namePanel = GameBootstrapper.CreatePanel(cardObj.transform, "NamePlate", new Color(0.05f, 0.06f, 0.09f, 0.92f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -28), new Vector2(125, 20));
-            var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", card.name, 12,
-                Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(120, 20));
-            txtName.raycastTarget = false;
+                // اسم الوحش في شريط زجاجي
+                var namePanel = GameBootstrapper.CreatePanel(cardObj.transform, "NamePlate", new Color(0.05f, 0.06f, 0.09f, 0.92f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -28), new Vector2(125, 20));
+                var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", card.name, 12,
+                    Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(120, 20));
+                txtName.raycastTarget = false;
 
-            // 4. شارة الهجوم (يسار)
-            var atkBadge = GameBootstrapper.CreatePanel(cardObj.transform, "AtkBadge", new Color(0.65f, 0.16f, 0.16f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-34, -68), new Vector2(54, 24));
-            var atkOutline = atkBadge.AddComponent<Outline>();
-            atkOutline.effectColor = new Color(1f, 0.4f, 0.4f, 0.8f);
-            atkOutline.effectDistance = new Vector2(1, 1);
-            var txtAtk = GameBootstrapper.CreateText(atkBadge.transform, "AtkText", $"⚔️ {card.atk}", 12,
-                new Color(1f, 0.95f, 0.45f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(52, 22));
-            txtAtk.raycastTarget = false;
+                // شارة الهجوم (يسار)
+                var atkBadge = GameBootstrapper.CreatePanel(cardObj.transform, "AtkBadge", new Color(0.65f, 0.16f, 0.16f, 0.95f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-34, -68), new Vector2(54, 24));
+                var atkOutline = atkBadge.AddComponent<Outline>();
+                atkOutline.effectColor = new Color(1f, 0.4f, 0.4f, 0.8f);
+                atkOutline.effectDistance = new Vector2(1, 1);
+                var txtAtk = GameBootstrapper.CreateText(atkBadge.transform, "AtkText", $"⚔️ {card.atk}", 12,
+                    new Color(1f, 0.95f, 0.45f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(52, 22));
+                txtAtk.raycastTarget = false;
 
-            // 5. شارة الدفاع (يمين)
-            var defBadge = GameBootstrapper.CreatePanel(cardObj.transform, "DefBadge", new Color(0.14f, 0.34f, 0.70f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(34, -68), new Vector2(54, 24));
-            var defOutline = defBadge.AddComponent<Outline>();
-            defOutline.effectColor = new Color(0.35f, 0.75f, 1f, 0.8f);
-            defOutline.effectDistance = new Vector2(1, 1);
-            var txtDef = GameBootstrapper.CreateText(defBadge.transform, "DefText", $"🛡️ {card.def}", 12,
-                new Color(0.45f, 0.95f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(52, 22));
-            txtDef.raycastTarget = false;
+                // شارة الدفاع (يمين)
+                var defBadge = GameBootstrapper.CreatePanel(cardObj.transform, "DefBadge", new Color(0.14f, 0.34f, 0.70f, 0.95f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(34, -68), new Vector2(54, 24));
+                var defOutline = defBadge.AddComponent<Outline>();
+                defOutline.effectColor = new Color(0.35f, 0.75f, 1f, 0.8f);
+                defOutline.effectDistance = new Vector2(1, 1);
+                var txtDef = GameBootstrapper.CreateText(defBadge.transform, "DefText", $"🛡️ {card.def}", 12,
+                    new Color(0.45f, 0.95f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(52, 22));
+                txtDef.raycastTarget = false;
+            }
+            else if (card.cardType == CardType.Spell)
+            {
+                // تفاصيل بطاقة السحر:
+                // أيقونة السحر المتوهجة
+                string spellIcon = MonsterArtLoader.GetSpellIcon(card.spellType);
+                var iconObj = GameBootstrapper.CreateText(cardObj.transform, "SpellIcon", spellIcon, 36,
+                    new Color(1f, 0.9f, 0.35f), TextAnchor.MiddleCenter, new Vector2(0, 32), new Vector2(120, 50));
+                iconObj.raycastTarget = false;
+
+                // اسم التعويذة
+                var namePanel = GameBootstrapper.CreatePanel(cardObj.transform, "NamePlate", new Color(0.18f, 0.12f, 0.28f, 0.92f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -2), new Vector2(125, 22));
+                var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", card.name, 12,
+                    new Color(1f, 0.9f, 0.4f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(120, 20));
+                txtName.raycastTarget = false;
+
+                // مربع وصف مفعول التعويذة
+                var descPanel = GameBootstrapper.CreatePanel(cardObj.transform, "DescPanel", new Color(0.06f, 0.05f, 0.10f, 0.85f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -42), new Vector2(125, 52));
+                var txtDesc = GameBootstrapper.CreateText(descPanel.transform, "DescText", card.description, 10,
+                    new Color(0.92f, 0.92f, 0.96f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(120, 48));
+                txtDesc.raycastTarget = false;
+
+                // شارة الاستخدام الفوري بالأسفل
+                var actionBadge = GameBootstrapper.CreatePanel(cardObj.transform, "ActionBadge", new Color(0.45f, 0.20f, 0.65f, 0.95f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -78), new Vector2(122, 22));
+                var txtAction = GameBootstrapper.CreateText(actionBadge.transform, "ActionText", "✨ إلقاء فوري", 11,
+                    Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(120, 20));
+                txtAction.raycastTarget = false;
+            }
+            else if (card.cardType == CardType.Environment)
+            {
+                // تفاصيل بطاقة البيئة والمناخ:
+                string envEmoji = MonsterArtLoader.GetEnvironmentEmoji(card.element);
+                var iconObj = GameBootstrapper.CreateText(cardObj.transform, "EnvIcon", envEmoji, 36,
+                    elemColor, TextAnchor.MiddleCenter, new Vector2(0, 32), new Vector2(120, 50));
+                iconObj.raycastTarget = false;
+
+                // اسم البيئة
+                var namePanel = GameBootstrapper.CreatePanel(cardObj.transform, "NamePlate", new Color(0.08f, 0.14f, 0.18f, 0.92f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -2), new Vector2(125, 22));
+                var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", card.name, 12,
+                    elemColor, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(120, 20));
+                txtName.raycastTarget = false;
+
+                // وصف تأثير البيئة
+                var descPanel = GameBootstrapper.CreatePanel(cardObj.transform, "DescPanel", new Color(0.05f, 0.08f, 0.11f, 0.85f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -42), new Vector2(125, 52));
+                var txtDesc = GameBootstrapper.CreateText(descPanel.transform, "DescText", card.description, 10,
+                    new Color(0.9f, 0.95f, 0.95f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(120, 48));
+                txtDesc.raycastTarget = false;
+
+                // شارة مدة البيئة
+                var actionBadge = GameBootstrapper.CreatePanel(cardObj.transform, "ActionBadge", new Color(0.15f, 0.40f, 0.55f, 0.95f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -78), new Vector2(122, 22));
+                var txtAction = GameBootstrapper.CreateText(actionBadge.transform, "ActionText", $"⏳ تدوم {card.duration} جولات", 11,
+                    new Color(0.9f, 0.98f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(120, 20));
+                txtAction.raycastTarget = false;
+            }
 
             return cardObj;
         }
 
-        public void OnCardSelectedInHand(MonsterData card)
+        public void OnCardSelectedInHand(CardData card)
         {
             selectedCardForAction = card;
-            LogCombatMessage($"تم تحديد الكارت: [{card.name}] (تكلفة: {card.cost}⚡) - اضغط على خانة شاغرة لإنزاله أو اضغط 'تضحية'.");
+
+            if (card.cardType == CardType.Monster)
+            {
+                LogCombatMessage($"تم تحديد الوحش: [{card.name}] (تكلفة: {card.cost}⚡) - اضغط على خانة شاغرة لإنزاله أو اضغط 'تضحية'.");
+            }
+            else if (card.cardType == CardType.Spell)
+            {
+                LogCombatMessage($"تم تحديد التعويذة: [{card.name}] (تكلفة: {card.cost}⚡) - اضغط زر 'إطلاق التعويذة' أو اسحبها للأعلى لإلقائها فوراً!");
+            }
+            else if (card.cardType == CardType.Environment)
+            {
+                LogCombatMessage($"تم تحديد بطاقة المناخ: [{card.name}] (تكلفة: {card.cost}⚡) - اضغط زر 'تنشيط المناخ' أو اسحبها للأعلى لتبديل بيئة المعركة!");
+            }
+
+            if (playCardButton != null)
+            {
+                var gm = GameManager.Instance;
+                bool canPlay = gm != null && gm.isPlayerTurn && card.cost <= gm.humanPlayer.currentPower &&
+                    (card.cardType == CardType.Spell || card.cardType == CardType.Environment);
+                playCardButton.interactable = canPlay;
+
+                var txt = playCardButton.GetComponentInChildren<Text>();
+                if (txt != null)
+                {
+                    if (card.cardType == CardType.Spell)
+                        txt.text = ArabicFixer.Fix($"🔮 إطلاق التعويذة ({card.cost}⚡)");
+                    else if (card.cardType == CardType.Environment)
+                        txt.text = ArabicFixer.Fix($"🌍 تنشيط المناخ ({card.cost}⚡)");
+                }
+            }
+
+            if (sacrificeButton != null)
+            {
+                var gm = GameManager.Instance;
+                sacrificeButton.interactable = gm != null && gm.isPlayerTurn && !gm.humanPlayer.hasSacrificedThisTurn;
+            }
         }
 
         public void OnSlotClicked(int slotIndex, bool isPlayerSide)
@@ -355,6 +582,12 @@ namespace MonsterCardGame.UI
 
             var gm = GameManager.Instance;
             if (gm == null || !gm.isPlayerTurn) return;
+
+            if (selectedCardForAction.cardType != CardType.Monster)
+            {
+                LogCombatMessage("⚠️ هذه البطاقة ليست وحشاً! بطاقات السحر والبيئة لا تحتل خانات الوحوش.");
+                return;
+            }
 
             if (gm.humanPlayer.SummonMonster(selectedCardForAction, slotIndex, gm.currentTurn))
             {
@@ -368,7 +601,31 @@ namespace MonsterCardGame.UI
             }
             else
             {
-                LogCombatMessage($"❌ لا يمكنك إنزال الكارت في الخانة {slotIndex} (تأكد من الباور والشواغر).");
+                LogCombatMessage($"❌ لا يمكنك إنزال الوحش في الخانة {slotIndex} (تأكد من الباور والشواغر).");
+            }
+        }
+
+        private void OnPlayCardClicked()
+        {
+            if (selectedCardForAction == null) return;
+            var gm = GameManager.Instance;
+            if (gm == null || !gm.isPlayerTurn) return;
+
+            if (selectedCardForAction.cardType == CardType.Spell)
+            {
+                if (gm.CastSpell(gm.humanPlayer, gm.aiPlayer, selectedCardForAction))
+                {
+                    selectedCardForAction = null;
+                    UpdateUI();
+                }
+            }
+            else if (selectedCardForAction.cardType == CardType.Environment)
+            {
+                if (gm.PlayEnvironmentCard(gm.humanPlayer, selectedCardForAction))
+                {
+                    selectedCardForAction = null;
+                    UpdateUI();
+                }
             }
         }
 
@@ -427,6 +684,24 @@ namespace MonsterCardGame.UI
             if (canvas != null)
             {
                 StartCoroutine(BattleAnimations.AnimateTurnBanner(canvas, text, color));
+            }
+        }
+
+        public void ShowSpellBanner(CardData spellCard, string casterName)
+        {
+            var canvas = GetComponentInParent<Canvas>();
+            if (canvas != null)
+            {
+                StartCoroutine(BattleAnimations.AnimateSpellCast(canvas, spellCard, casterName));
+            }
+        }
+
+        public void ShowEnvironmentBanner(EnvironmentCardData envData, string activatorName)
+        {
+            var canvas = GetComponentInParent<Canvas>();
+            if (canvas != null)
+            {
+                StartCoroutine(BattleAnimations.AnimateEnvironmentShift(canvas, envData, activatorName));
             }
         }
 

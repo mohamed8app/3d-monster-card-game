@@ -35,7 +35,6 @@ namespace MonsterCardGame.UI
             return defaultFont;
         }
 
-        // يتم تشغيل هذه الدالة تلقائياً بمجرد الضغط على Play في أي مشهد
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         public static void AutoInitializeGame()
         {
@@ -45,7 +44,7 @@ namespace MonsterCardGame.UI
                 return;
             }
 
-            Debug.Log("🚀 جاري بناء ساحة المعركة التكتيكية 3D المحدثة تلقائياً...");
+            Debug.Log("🚀 جاري بناء ساحة المعركة التكتيكية 3D المحدثة بالكامل مع محراب البيئة وبطاقات السحر...");
 
             // 1. الكاميرا
             EnsureCamera();
@@ -105,7 +104,7 @@ namespace MonsterCardGame.UI
             var jsonAsset = Resources.Load<TextAsset>("monsters_150");
             gm.monstersJsonFile = jsonAsset;
 
-            Debug.Log("🎉 اكتمل بناء ساحة المعركة التكتيكية الفاخرة بنجاح! اللعبة تعمل الآن.");
+            Debug.Log("🎉 اكتمل بناء ساحة المعركة التكتيكية الفاخرة بنجاح! اللعبة جاهزة للقتال.");
         }
 
         private static void EnsureCamera()
@@ -117,7 +116,7 @@ namespace MonsterCardGame.UI
                 camObj.tag = "MainCamera";
                 camObj.transform.position = new Vector3(0, 0, -10);
                 cam.clearFlags = CameraClearFlags.SolidColor;
-                cam.backgroundColor = new Color(0.06f, 0.07f, 0.11f); // كحلي غامق سينمائي
+                cam.backgroundColor = new Color(0.06f, 0.07f, 0.11f);
             }
         }
 
@@ -170,8 +169,21 @@ namespace MonsterCardGame.UI
                 bgImg.color = new Color(0.08f, 0.09f, 0.13f);
             }
 
+            // 0.1 طبقة الغلاف الجوي المتغير حسب المناخ والبيئة (Environment Atmosphere Overlay)
+            var atmosObj = new GameObject("EnvironmentAtmosphereOverlay");
+            atmosObj.transform.SetParent(canvas, false);
+            atmosObj.transform.SetSiblingIndex(1);
+            var atmosRect = atmosObj.AddComponent<RectTransform>();
+            atmosRect.anchorMin = Vector2.zero;
+            atmosRect.anchorMax = Vector2.one;
+            atmosRect.sizeDelta = Vector2.zero;
+            var atmosImg = atmosObj.AddComponent<Image>();
+            atmosImg.color = new Color(0.08f, 0.09f, 0.13f, 0.65f);
+            atmosImg.raycastTarget = false;
+            ui.envAtmosphereOverlay = atmosImg;
+
             // 1. وسام قائد الخصم (Top-Left Leader Crest)
-            var enemyCrest = CreatePanel(canvas, "EnemyLeaderCrest", new Color(0.12f, 0.10f, 0.15f, 0.92f),
+            var enemyCrest = CreatePanel(canvas, "EnemyLeaderCrest", new Color(0.12f, 0.10f, 0.16f, 0.94f),
                 new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(195, -75), new Vector2(330, 95));
             var eCrestOutline = enemyCrest.AddComponent<Outline>();
             eCrestOutline.effectColor = new Color(0.85f, 0.25f, 0.3f, 0.85f);
@@ -180,7 +192,6 @@ namespace MonsterCardGame.UI
             CreateText(enemyCrest.transform, "EnemyLeaderTitle", "💀 قائد الظلال (الخصم)", 17,
                 new Color(0.95f, 0.75f, 0.75f), TextAnchor.UpperCenter, new Vector2(0, 22), new Vector2(310, 26));
 
-            // شريط صحة الخصم
             ui.enemyHpSlider = CreateSlider(enemyCrest.transform, "EnemyHpBar",
                 new Color(0.18f, 0.14f, 0.2f, 0.95f), new Color(0.9f, 0.2f, 0.25f),
                 new Vector2(0, -10), new Vector2(290, 16));
@@ -226,24 +237,53 @@ namespace MonsterCardGame.UI
             quitBtn.gameObject.AddComponent<QuitButtonHandler>();
             ui.quitButton = quitBtn;
 
-            // 4. مؤشر الدور العائم في منتصف الساحة (Central Floating Status Pill - Rift is fully visible!)
+            // 4. محراب المناخ والبيئة العالمي في منتصف يسار الشاشة (Left-Center Environment Altar)
+            var envAltar = CreatePanel(canvas, "EnvironmentAltarPanel", new Color(0.08f, 0.09f, 0.15f, 0.92f),
+                new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(105, 5), new Vector2(175, 230));
+            var eaOutline = envAltar.AddComponent<Outline>();
+            eaOutline.effectColor = new Color(0.35f, 0.75f, 1f, 0.85f);
+            eaOutline.effectDistance = new Vector2(2, 2);
+            ui.envAltarPanel = envAltar;
+
+            CreateText(envAltar.transform, "AltarTitle", "🏛️ محراب المناخ", 14,
+                new Color(0.85f, 0.92f, 1f), TextAnchor.UpperCenter, new Vector2(0, 95), new Vector2(165, 22));
+
+            ui.envIconText = CreateText(envAltar.transform, "EnvIcon", "☀️", 34,
+                Color.white, TextAnchor.MiddleCenter, new Vector2(0, 50), new Vector2(160, 48));
+
+            ui.envNameText = CreateText(envAltar.transform, "EnvName", "المناخ: مستقر", 14,
+                new Color(1f, 0.9f, 0.45f), TextAnchor.MiddleCenter, new Vector2(0, 16), new Vector2(165, 22));
+
+            ui.envLevelText = CreateText(envAltar.transform, "EnvLevel", "طبيعي (محايد)", 12,
+                new Color(0.7f, 0.8f, 0.9f), TextAnchor.MiddleCenter, new Vector2(0, -6), new Vector2(165, 18));
+
+            ui.envDurationText = CreateText(envAltar.transform, "EnvDuration", "⏳ دائم", 12,
+                new Color(0.9f, 0.9f, 0.95f), TextAnchor.MiddleCenter, new Vector2(0, -28), new Vector2(165, 18));
+
+            ui.envBuffText = CreateText(envAltar.transform, "EnvBuff", "• لا توجد تعزيزات", 11,
+                new Color(0.2f, 0.95f, 0.45f), TextAnchor.MiddleCenter, new Vector2(0, -52), new Vector2(165, 18));
+
+            ui.envDebuffText = CreateText(envAltar.transform, "EnvDebuff", "• كافة العناصر متكافئة", 11,
+                new Color(1f, 0.45f, 0.45f), TextAnchor.MiddleCenter, new Vector2(0, -74), new Vector2(165, 18));
+
+            // 5. مؤشر الدور العائم في منتصف الساحة (Central Floating Status Pill)
             var statusPill = CreatePanel(canvas, "StatusPill", new Color(0.08f, 0.10f, 0.16f, 0.75f),
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 0), new Vector2(380, 38));
             var spOutline = statusPill.AddComponent<Outline>();
             spOutline.effectColor = new Color(0.92f, 0.75f, 0.25f, 0.85f);
             spOutline.effectDistance = new Vector2(1.5f, 1.5f);
 
-            ui.turnInfoText = CreateText(statusPill.transform, "TurnInfoText", "⚔️ دورك الآن (اختر كارت أو هاجم)", 17,
+            ui.turnInfoText = CreateText(statusPill.transform, "TurnInfoText", "⚔️ دورك الآن (انشر أو هاجم)", 17,
                 new Color(1f, 0.92f, 0.45f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(370, 36));
 
-            // 5. خانات العدو الـ 6 (Runic Summoning Circles - Top Row Y: +145)
+            // 6. خانات العدو الـ 6 (Runic Summoning Circles - Top Row Y: +145)
             BuildSlotsRow(canvas, ui, ai, false);
 
-            // 6. خانات اللاعب الـ 6 (Runic Summoning Circles - Bottom Row Y: -140)
+            // 7. خانات اللاعب الـ 6 (Runic Summoning Circles - Bottom Row Y: -140)
             BuildSlotsRow(canvas, ui, human, true);
 
-            // 7. وسام قائدك والباور (Bottom-Left Leader Crest & Mana)
-            var playerCrest = CreatePanel(canvas, "PlayerLeaderCrest", new Color(0.09f, 0.12f, 0.18f, 0.92f),
+            // 8. وسام قائدك والباور والمانا (Bottom-Left Leader Crest & Mana Crystals)
+            var playerCrest = CreatePanel(canvas, "PlayerLeaderCrest", new Color(0.09f, 0.12f, 0.18f, 0.94f),
                 new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(195, 140), new Vector2(330, 115));
             var pCrestOutline = playerCrest.AddComponent<Outline>();
             pCrestOutline.effectColor = new Color(0.95f, 0.8f, 0.3f, 0.9f);
@@ -252,7 +292,6 @@ namespace MonsterCardGame.UI
             CreateText(playerCrest.transform, "PlayerLeaderTitle", "👑 البطل (أنت)", 18,
                 new Color(1f, 0.92f, 0.5f), TextAnchor.UpperCenter, new Vector2(0, 34), new Vector2(310, 26));
 
-            // شريط صحة اللاعب
             ui.playerHpSlider = CreateSlider(playerCrest.transform, "PlayerHpBar",
                 new Color(0.12f, 0.18f, 0.14f, 0.95f), new Color(0.2f, 0.9f, 0.35f),
                 new Vector2(0, 6), new Vector2(290, 16));
@@ -260,64 +299,73 @@ namespace MonsterCardGame.UI
             ui.playerHpText = CreateText(playerCrest.transform, "PlayerHpText", "1000 / 1000 HP", 14,
                 Color.white, TextAnchor.MiddleCenter, new Vector2(0, 6), new Vector2(290, 20));
 
-            // عداد الباور والمانا
-            ui.playerPowerText = CreateText(playerCrest.transform, "PlayerPowerText", "💎 الباور: 1 / 1  |  المانا: 1", 16,
-                new Color(0.35f, 0.9f, 1f), TextAnchor.MiddleCenter, new Vector2(0, -28), new Vector2(300, 26));
+            ui.playerPowerText = CreateText(playerCrest.transform, "PlayerPowerText", "[ 💎 ]  الباور: 1/1  |  المانا: 1/8", 15,
+                new Color(0.35f, 0.9f, 1f), TextAnchor.MiddleCenter, new Vector2(0, -28), new Vector2(310, 26));
 
-            // 8. لوحة الأوامر وسجل المعركة على اليمين (Right Side Command Center & Combat Log)
-            // 8.1 سجل المعركة العائم
-            var logPanel = CreatePanel(canvas, "CombatLogPanel", new Color(0.08f, 0.09f, 0.14f, 0.82f),
-                new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-175, 135), new Vector2(300, 180));
+            // 9. لوحة الأوامر وسجل المعركة على اليمين (Right Side Command Center & Combat Log)
+            // 9.1 سجل المعركة العائم
+            var logPanel = CreatePanel(canvas, "CombatLogPanel", new Color(0.08f, 0.09f, 0.14f, 0.85f),
+                new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-175, 140), new Vector2(300, 180));
             var logOutline = logPanel.AddComponent<Outline>();
             logOutline.effectColor = new Color(0.65f, 0.5f, 0.25f, 0.75f);
             logOutline.effectDistance = new Vector2(1.5f, 1.5f);
 
-            CreateText(logPanel.transform, "LogHeader", "📜 سجل المعركة", 14,
+            CreateText(logPanel.transform, "LogHeader", "📜 سجل المعركة والتعاويذ", 14,
                 new Color(0.95f, 0.85f, 0.5f), TextAnchor.UpperCenter, new Vector2(0, 72), new Vector2(280, 24));
 
-            ui.combatLogText = CreateText(logPanel.transform, "CombatLogText", "تبدأ المباراة بـ 1,000 HP و 6 خانات تكتيكية...", 13,
+            ui.combatLogText = CreateText(logPanel.transform, "CombatLogText", "تبدأ المباراة بـ 1,000 HP وبطاقات سحر وبيئة...", 13,
                 new Color(0.9f, 0.92f, 0.96f), TextAnchor.UpperLeft, new Vector2(0, -12), new Vector2(280, 135));
 
-            // 8.2 أزرار الأوامر
+            // 9.2 أزرار الأوامر
             // زر هجوم الوحوش
             ui.attackButton = CreateAnchorButton(canvas, "AttackBtn", "⚔️ هجوم الوحوش",
                 new Color(0.80f, 0.20f, 0.20f, 0.95f), Color.white,
                 new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
-                new Vector2(-175, -50), new Vector2(210, 46),
+                new Vector2(-175, -28), new Vector2(210, 42),
                 () => ui.SendMessage("OnAttackClicked"));
             var abOutline = ui.attackButton.gameObject.AddComponent<Outline>();
             abOutline.effectColor = new Color(1f, 0.45f, 0.45f, 0.8f);
             abOutline.effectDistance = new Vector2(1.5f, 1.5f);
 
+            // زر تفعيل البطاقة المحددة (سحر أو بيئة)
+            ui.playCardButton = CreateAnchorButton(canvas, "PlayCardBtn", "✨ تفعيل البطاقة",
+                new Color(0.55f, 0.20f, 0.80f, 0.95f), Color.white,
+                new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
+                new Vector2(-175, -78), new Vector2(210, 42),
+                () => ui.SendMessage("OnPlayCardClicked"));
+            var pcbOutline = ui.playCardButton.gameObject.AddComponent<Outline>();
+            pcbOutline.effectColor = new Color(0.95f, 0.75f, 0.35f, 0.85f);
+            pcbOutline.effectDistance = new Vector2(1.5f, 1.5f);
+
             // زر التضحية
             ui.sacrificeButton = CreateAnchorButton(canvas, "SacrificeBtn", "🔥 تضحية بكارت (+1 مانا)",
                 new Color(0.85f, 0.60f, 0.12f, 0.95f), new Color(0.08f, 0.08f, 0.1f),
                 new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
-                new Vector2(-175, -105), new Vector2(210, 46),
+                new Vector2(-175, -128), new Vector2(210, 42),
                 () => ui.SendMessage("OnSacrificeClicked"));
             var sbOutline = ui.sacrificeButton.gameObject.AddComponent<Outline>();
             sbOutline.effectColor = new Color(1f, 0.85f, 0.35f, 0.8f);
             sbOutline.effectDistance = new Vector2(1.5f, 1.5f);
 
-            // زر إنهاء الدور الفخم (Hearthstone-style Turn Medallion)
+            // زر إنهاء الدور الفخم
             ui.endTurnButton = CreateAnchorButton(canvas, "EndTurnBtn", "🔁 إنهاء الدور",
                 new Color(0.18f, 0.50f, 0.85f, 0.95f), Color.white,
                 new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
-                new Vector2(-175, -175), new Vector2(210, 65),
+                new Vector2(-175, -192), new Vector2(210, 60),
                 () => ui.SendMessage("OnEndTurnClicked"));
             var etOutline = ui.endTurnButton.gameObject.AddComponent<Outline>();
             etOutline.effectColor = new Color(0.95f, 0.85f, 0.3f, 0.95f);
             etOutline.effectDistance = new Vector2(2.5f, 2.5f);
 
-            // 9. منطقة يد الكروت بالأسفل بتدرج زجاجي مفتوح (Bottom Player Hand - Portrait Cards)
-            var handPanel = CreatePanel(canvas, "HandPanel", new Color(0.06f, 0.07f, 0.11f, 0.72f),
+            // 10. منطقة يد الكروت بالأسفل بتدرج زجاجي مفتوح (Bottom Player Hand)
+            var handPanel = CreatePanel(canvas, "HandPanel", new Color(0.06f, 0.07f, 0.11f, 0.75f),
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0, 110), new Vector2(1150, 215));
             var hpOutline = handPanel.AddComponent<Outline>();
             hpOutline.effectColor = new Color(0.45f, 0.40f, 0.60f, 0.45f);
             hpOutline.effectDistance = new Vector2(1, 1);
 
-            CreateText(handPanel.transform, "HandLabel", "🎴 كروت يدك (اسحب الكارت وأفلته في خانتك الميدانية لإنزاله):", 13,
-                new Color(0.85f, 0.88f, 0.95f), TextAnchor.UpperCenter, new Vector2(0, 96), new Vector2(650, 20));
+            CreateText(handPanel.transform, "HandLabel", "🎴 يدك (اسحب الوحوش للساحة، واسحب السحر أو البيئة لتفعيلها، أو اسحب للتضحية):", 13,
+                new Color(0.85f, 0.88f, 0.95f), TextAnchor.UpperCenter, new Vector2(0, 96), new Vector2(750, 20));
 
             var handCardsContainer = new GameObject("CardsContainer");
             handCardsContainer.transform.SetParent(handPanel.transform, false);
@@ -337,11 +385,6 @@ namespace MonsterCardGame.UI
         private static void BuildSlotsRow(Transform canvas, BattleUIManager ui, PlayerState player, bool isPlayerSide)
         {
             float posY = isPlayerSide ? -140f : 145f;
-
-            // توزيع الخانات الـ 6 بشكل متناسق ومستوٍ في خط معركة موحد:
-            // 0, 1: أجنحة يسار
-            // 2, 3: قلب الهجوم
-            // 4, 5: أجنحة يمين
             float[] xCoords = { -480f, -288f, -96f, 96f, 288f, 480f };
 
             for (int i = 0; i < 6; i++)
@@ -359,22 +402,20 @@ namespace MonsterCardGame.UI
                     _ => $"خانة {i}"
                 };
 
-                // لون إطار دائرة الاستدعاء الرونية
                 Color runeColor;
                 if (isPlayerSide)
                 {
                     runeColor = (i == 2 || i == 3)
-                        ? new Color(1f, 0.65f, 0.25f, 0.85f) // ذهبي ناري لقلب الهجوم
-                        : new Color(0.25f, 0.80f, 1f, 0.80f); // سماوي كوني للأجنحة
+                        ? new Color(1f, 0.65f, 0.25f, 0.85f)
+                        : new Color(0.25f, 0.80f, 1f, 0.80f);
                 }
                 else
                 {
                     runeColor = (i == 2 || i == 3)
-                        ? new Color(1f, 0.35f, 0.35f, 0.85f) // قرمزي ناري للعدو
-                        : new Color(0.70f, 0.40f, 1f, 0.80f); // أرجواني شبحي للأجنحة
+                        ? new Color(1f, 0.35f, 0.35f, 0.85f)
+                        : new Color(0.70f, 0.40f, 1f, 0.80f);
                 }
 
-                // قاعدة الرون الحجرية الشفافة
                 var slotObj = CreatePanel(canvas, $"{(isPlayerSide ? "P" : "E")}_SlotView_{i}",
                     new Color(0.08f, 0.10f, 0.16f, 0.50f),
                     new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(posX, posY), new Vector2(135, 175));
@@ -386,12 +427,10 @@ namespace MonsterCardGame.UI
                 var slotView = slotObj.AddComponent<SlotView>();
                 slotView.Setup(i, isPlayerSide, player.slots[i]);
 
-                // رمز رون سحري في قلب الخانة الفارغة
                 var runeSymbol = CreateText(slotObj.transform, "RuneGlyph", "✧", 26,
                     new Color(runeColor.r, runeColor.g, runeColor.b, 0.35f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(100, 100));
                 runeSymbol.raycastTarget = false;
 
-                // مسمى الخانة التكتيكي بالأسفل
                 var lbl = CreateText(slotObj.transform, "SlotName", slotLabel, 13,
                     runeColor, TextAnchor.LowerCenter, new Vector2(0, -68), new Vector2(130, 22));
                 lbl.raycastTarget = false;

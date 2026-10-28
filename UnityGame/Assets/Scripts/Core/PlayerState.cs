@@ -20,18 +20,18 @@ namespace MonsterCardGame.Core
         public int fatigueCount = 0;
 
         [Header("Card Collections")]
-        public List<MonsterData> deck = new List<MonsterData>();
-        public List<MonsterData> hand = new List<MonsterData>();
-        public List<MonsterData> graveyard = new List<MonsterData>();
+        public List<CardData> deck = new List<CardData>();
+        public List<CardData> hand = new List<CardData>();
+        public List<CardData> graveyard = new List<CardData>();
 
-        [Header("6 Board Slots (No Backline Guardian)")]
+        [Header("6 Board Slots")]
         public BoardSlot[] slots = new BoardSlot[6];
 
         public bool IsAlive => currentHp > 0;
 
-        public void InitializeDeck(List<MonsterData> initialDeck)
+        public void InitializeDeck(List<CardData> initialDeck)
         {
-            deck = new List<MonsterData>(initialDeck);
+            deck = new List<CardData>(initialDeck);
             ShuffleDeck();
             hand.Clear();
             graveyard.Clear();
@@ -55,11 +55,11 @@ namespace MonsterCardGame.Core
 
         public void StartTurn(int turnNumber)
         {
-            // 1. إعادة شحن الباور ليساوي سعة المانا
+            // 1. إعادة شحن الباور ليساوي سعة المانا الحالية
             currentPower = manaCapacity;
             hasSacrificedThisTurn = false;
 
-            // 2. سحب كارت
+            // 2. سحب كارت من المجموعة
             DrawCard();
 
             // 3. تحديث جاهزية الوحوش بالساحة
@@ -82,13 +82,13 @@ namespace MonsterCardGame.Core
                 if (hand.Count < 10)
                 {
                     hand.Add(card);
-                    Debug.Log($"[{playerName}] سحب الكارت: {card.name}");
+                    Debug.Log($"[{playerName}] سحب البطاقة: {card.name} (نوع: {card.cardType})");
                     return true;
                 }
                 else
                 {
                     graveyard.Add(card);
-                    Debug.Log($"[{playerName}] اليد ممتلئة! احترق الكارت: {card.name}");
+                    Debug.Log($"[{playerName}] اليد ممتلئة! احترقت البطاقة: {card.name}");
                     return false;
                 }
             }
@@ -103,7 +103,7 @@ namespace MonsterCardGame.Core
             }
         }
 
-        public bool SacrificeCard(MonsterData cardToSacrifice)
+        public bool SacrificeCard(CardData cardToSacrifice)
         {
             if (hasSacrificedThisTurn)
             {
@@ -131,7 +131,7 @@ namespace MonsterCardGame.Core
             return true;
         }
 
-        public bool SummonMonster(MonsterData card, int targetSlotIndex, int currentTurn)
+        public bool SummonMonster(CardData card, int targetSlotIndex, int currentTurn)
         {
             if (targetSlotIndex < 0 || targetSlotIndex >= slots.Length)
                 return false;
@@ -162,6 +162,12 @@ namespace MonsterCardGame.Core
         {
             currentHp = Mathf.Max(0, currentHp - damage);
             Debug.Log($"🚨 [{playerName}] تلقى ضرراً مباشراً للقائد: {damage} HP. المتبقي: {currentHp}/{maxHp}");
+        }
+
+        public void HealLeader(int healAmount)
+        {
+            currentHp = Mathf.Min(maxHp, currentHp + healAmount);
+            Debug.Log($"💚 [{playerName}] تم شفاء القائد بـ {healAmount} HP. الصحة الحالية: {currentHp}/{maxHp}");
         }
     }
 }

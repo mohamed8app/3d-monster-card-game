@@ -230,6 +230,171 @@ namespace MonsterCardGame.UI
         }
 
         /// <summary>
+        /// مؤثر إطلاق تعويذة سحرية مع وميض أركيني وشعار التعويذة
+        /// </summary>
+        public static IEnumerator AnimateSpellCast(Canvas canvas, MonsterCardGame.Data.CardData spellCard, string casterName)
+        {
+            if (canvas == null || spellCard == null) yield break;
+
+            Color elemColor = MonsterArtLoader.GetElementColor(spellCard.element);
+            string spellIcon = MonsterArtLoader.GetSpellIcon(spellCard.spellType);
+
+            var bannerObj = GameBootstrapper.CreatePanel(canvas.transform, "SpellCastBanner",
+                new Color(0.06f, 0.05f, 0.12f, 0.96f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 40), new Vector2(620, 85));
+
+            var outline = bannerObj.AddComponent<Outline>();
+            outline.effectColor = elemColor;
+            outline.effectDistance = new Vector2(3, 3);
+
+            string title = $"{spellIcon} {spellCard.name}";
+            var titleTxt = GameBootstrapper.CreateText(bannerObj.transform, "SpellTitle", title, 24,
+                Color.white, TextAnchor.UpperCenter, new Vector2(0, 16), new Vector2(600, 32));
+
+            string sub = $"أطلق {casterName} تعويذة ({spellCard.element}): {spellCard.description}";
+            var subTxt = GameBootstrapper.CreateText(bannerObj.transform, "SpellDesc", sub, 13,
+                elemColor, TextAnchor.LowerCenter, new Vector2(0, -18), new Vector2(600, 26));
+
+            var rect = bannerObj.GetComponent<RectTransform>();
+            var group = bannerObj.AddComponent<CanvasGroup>();
+
+            rect.localScale = Vector3.one * 0.4f;
+            group.alpha = 0f;
+
+            float t = 0;
+            float inDur = 0.22f;
+            while (t < inDur)
+            {
+                t += Time.deltaTime;
+                float p = t / inDur;
+                rect.localScale = Vector3.one * Mathf.Lerp(0.4f, 1.08f, EaseOutBack(p));
+                group.alpha = Mathf.Lerp(0f, 1f, p);
+                yield return null;
+            }
+            rect.localScale = Vector3.one;
+            group.alpha = 1f;
+
+            yield return new WaitForSeconds(0.9f);
+
+            t = 0;
+            float outDur = 0.2f;
+            Vector2 startPos = rect.anchoredPosition;
+            while (t < outDur)
+            {
+                t += Time.deltaTime;
+                float p = t / outDur;
+                rect.anchoredPosition = startPos + new Vector2(0, p * 35f);
+                group.alpha = 1f - p;
+                yield return null;
+            }
+
+            GameObject.Destroy(bannerObj);
+        }
+
+        /// <summary>
+        /// مؤثر تنشيط كارت البيئة والمناخ مع عاصفة رعدية وبانر ملحمي
+        /// </summary>
+        public static IEnumerator AnimateEnvironmentShift(Canvas canvas, MonsterCardGame.Data.EnvironmentCardData envData, string activatorName)
+        {
+            if (canvas == null || envData == null) yield break;
+
+            Color elemColor = MonsterArtLoader.GetElementColor(envData.element);
+            string envEmoji = MonsterArtLoader.GetEnvironmentEmoji(envData.element);
+
+            var bannerObj = GameBootstrapper.CreatePanel(canvas.transform, "EnvShiftBanner",
+                new Color(0.08f, 0.06f, 0.12f, 0.96f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 30), new Vector2(720, 95));
+
+            var outline = bannerObj.AddComponent<Outline>();
+            outline.effectColor = elemColor;
+            outline.effectDistance = new Vector2(3.5f, 3.5f);
+
+            string stars = new string('★', envData.level);
+            string title = $"{envEmoji} تحول المناخ: {envData.name} ({stars} المستوى {envData.level})";
+            var titleTxt = GameBootstrapper.CreateText(bannerObj.transform, "EnvTitle", title, 24,
+                Color.white, TextAnchor.UpperCenter, new Vector2(0, 18), new Vector2(700, 32));
+
+            string sub = $"فعّل {activatorName} مناخ ({envData.element}): {envData.description}";
+            var subTxt = GameBootstrapper.CreateText(bannerObj.transform, "EnvDesc", sub, 13,
+                elemColor, TextAnchor.LowerCenter, new Vector2(0, -18), new Vector2(700, 26));
+
+            var rect = bannerObj.GetComponent<RectTransform>();
+            var group = bannerObj.AddComponent<CanvasGroup>();
+
+            rect.localScale = Vector3.one * 0.4f;
+            group.alpha = 0f;
+
+            float t = 0;
+            float inDur = 0.25f;
+            while (t < inDur)
+            {
+                t += Time.deltaTime;
+                float p = t / inDur;
+                rect.localScale = Vector3.one * Mathf.Lerp(0.4f, 1.05f, EaseOutBack(p));
+                group.alpha = Mathf.Lerp(0f, 1f, p);
+                yield return null;
+            }
+            rect.localScale = Vector3.one;
+
+            yield return new WaitForSeconds(1.1f);
+
+            t = 0;
+            float outDur = 0.22f;
+            Vector2 startPos = rect.anchoredPosition;
+            while (t < outDur)
+            {
+                t += Time.deltaTime;
+                float p = t / outDur;
+                rect.anchoredPosition = startPos + new Vector2(0, p * 40f);
+                group.alpha = 1f - p;
+                yield return null;
+            }
+
+            GameObject.Destroy(bannerObj);
+        }
+
+        public static IEnumerator AnimateFloatingHeal(Transform canvasTransform, Vector3 worldPos, int healAmount)
+        {
+            if (canvasTransform == null) yield break;
+
+            var obj = new GameObject("FloatingHealText");
+            obj.transform.SetParent(canvasTransform, false);
+            obj.transform.position = worldPos + new Vector3(0, 30f, 0);
+
+            var rect = obj.AddComponent<RectTransform>();
+            rect.sizeDelta = new Vector2(180, 50);
+
+            var outline = obj.AddComponent<Outline>();
+            outline.effectColor = new Color(0f, 0.3f, 0.1f);
+            outline.effectDistance = new Vector2(2, 2);
+
+            var txt = obj.AddComponent<Text>();
+            txt.font = GameBootstrapper.GetFont();
+            txt.text = ArabicFixer.Fix($"+{healAmount} HP 💚");
+            txt.fontSize = 26;
+            txt.color = new Color(0.2f, 1f, 0.45f);
+            txt.alignment = TextAnchor.MiddleCenter;
+
+            var group = obj.AddComponent<CanvasGroup>();
+
+            float duration = 0.9f;
+            float t = 0;
+            Vector3 startP = obj.transform.position;
+            Vector3 targetP = startP + new Vector3(0, 60f, 0);
+
+            while (t < duration)
+            {
+                t += Time.deltaTime;
+                float p = t / duration;
+                obj.transform.position = Vector3.Lerp(startP, targetP, EaseOutQuad(p));
+                group.alpha = 1f - (p * p);
+                yield return null;
+            }
+
+            GameObject.Destroy(obj);
+        }
+
+        /// <summary>
         /// اهتزاز الشاشة عند إصابة القائد بضربة مباشرة (Screen Shake)
         /// </summary>
         public static IEnumerator AnimateScreenShake(Transform target, float intensity = 8f, float duration = 0.22f)

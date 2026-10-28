@@ -10,7 +10,7 @@ namespace MonsterCardGame.UI
     public class CardView : MonoBehaviour
     {
         [Header("Data")]
-        public MonsterData monsterData;
+        public CardData monsterData;
         public MonsterInstance monsterInstance;
 
         [Header("UI Elements")]
@@ -27,7 +27,7 @@ namespace MonsterCardGame.UI
         private Vector3 originalPosition;
         private Transform originalParent;
 
-        public void Setup(MonsterData data, MonsterInstance instance = null)
+        public void Setup(CardData data, MonsterInstance instance = null)
         {
             monsterData = data;
             monsterInstance = instance;

@@ -22,18 +22,28 @@ namespace MonsterCardGame.Core
             Debug.Log("🤖 يبدأ ذكاء البوت الاصطناعي بالتفكير التكتيكي...");
             yield return new WaitForSeconds(0.6f);
 
-            // 1. التضحية
+            // 1. التضحية التكتيكية
             DecideSacrifice();
             if (MonsterCardGame.UI.BattleUIManager.Instance != null) MonsterCardGame.UI.BattleUIManager.Instance.UpdateUI();
             yield return new WaitForSeconds(0.4f);
 
-            // 2. الاستدعاء في أفضل الخانات
+            // 2. استخدام بطاقات البيئة إن وجدت وكانت مفيدة
+            DecideEnvironment();
+            if (MonsterCardGame.UI.BattleUIManager.Instance != null) MonsterCardGame.UI.BattleUIManager.Instance.UpdateUI();
+            yield return new WaitForSeconds(0.4f);
+
+            // 3. إلقاء التعاويذ السحرية التكتيكية (شفاء / ضرر / صعق)
+            DecideSpells();
+            if (MonsterCardGame.UI.BattleUIManager.Instance != null) MonsterCardGame.UI.BattleUIManager.Instance.UpdateUI();
+            yield return new WaitForSeconds(0.5f);
+
+            // 4. الاستدعاء الميداني في أفضل الخانات
             DecideSummons(currentTurn);
             if (MonsterCardGame.UI.BattleUIManager.Instance != null) MonsterCardGame.UI.BattleUIManager.Instance.UpdateUI();
             yield return new WaitForSeconds(0.5f);
 
-            // 3. تنفيذ مرحلة الهجوم بالرسوم المتحركة
-            yield return CombatSystem.Instance.ExecuteCombatPhaseAnimated(aiPlayer, humanPlayer, activeEnv, onTurnFinished);
+            // 5. تنفيذ مرحلة الهجوم بالرسوم المتحركة
+            yield return CombatSystem.Instance.ExecuteCombatPhaseAnimated(aiPlayer, humanPlayer, GameManager.Instance.activeEnvironment, onTurnFinished);
         }
 
         private void DecideSacrifice()
@@ -42,7 +52,7 @@ namespace MonsterCardGame.Core
                 return;
 
             // التضحية بأعلى كارت تكلفة لا يمكن لعبه حالياً
-            MonsterData bestSacrifice = null;
+            CardData bestSacrifice = null;
             int highestCost = -1;
 
             foreach (var card in aiPlayer.hand)
@@ -62,12 +72,60 @@ namespace MonsterCardGame.Core
             aiPlayer.SacrificeCard(bestSacrifice);
         }
 
+        private void DecideEnvironment()
+        {
+            if (GameManager.Instance == null) return;
+
+            foreach (var card in new List<CardData>(aiPlayer.hand))
+            {
+                if (card.cardType == CardType.Environment && card.cost <= aiPlayer.currentPower)
+                {
+                    // يفعل البيئة إذا كانت تخدم وحوشه أو تعطل وحوش اللاعب
+                    GameManager.Instance.PlayEnvironmentCard(aiPlayer, card);
+                    break;
+                }
+            }
+        }
+
+        private void DecideSpells()
+        {
+            if (GameManager.Instance == null) return;
+
+            var spellCards = new List<CardData>();
+            foreach (var c in aiPlayer.hand)
+            {
+                if (c.cardType == CardType.Spell && c.cost <= aiPlayer.currentPower)
+                {
+                    spellCards.Add(c);
+                }
+            }
+
+            foreach (var spell in spellCards)
+            {
+                if (spell.cost <= aiPlayer.currentPower)
+                {
+                    // فحص ذكي: لو تعويذة شفاء ونقاط حياة الخصم كاملة، يؤجلها
+                    if (spell.spellType == SpellType.LeaderHeal && aiPlayer.currentHp > 900)
+                    {
+                        continue;
+                    }
+
+                    GameManager.Instance.CastSpell(aiPlayer, humanPlayer, spell);
+                }
+            }
+        }
+
         private void DecideSummons(int currentTurn)
         {
-            var playableCards = new List<MonsterData>(aiPlayer.hand);
-            playableCards.Sort((a, b) => (b.cost + b.atk + b.def).CompareTo(a.cost + a.atk + a.def));
+            var monsterCards = new List<CardData>();
+            foreach (var c in aiPlayer.hand)
+            {
+                if (c.cardType == CardType.Monster) monsterCards.Add(c);
+            }
 
-            foreach (var card in playableCards)
+            monsterCards.Sort((a, b) => (b.cost + b.atk + b.def).CompareTo(a.cost + a.atk + a.def));
+
+            foreach (var card in monsterCards)
             {
                 if (card.cost <= aiPlayer.currentPower)
                 {
@@ -80,7 +138,7 @@ namespace MonsterCardGame.Core
             }
         }
 
-        private int FindBestSlotForCard(MonsterData card)
+        private int FindBestSlotForCard(CardData card)
         {
             if (card.GetRoleEnum() == TacticalRole.PureShield)
             {
@@ -102,14 +160,13 @@ namespace MonsterCardGame.Core
             }
             else
             {
-                // المدافع أو الداعم: ملء الوسط أو الشواغر
-                int[] balancedSlots = { 2, 3, 0, 1, 4, 5 };
+                // مدافع أو داعم: أي خانة شاغرة بتوازن
+                int[] balancedSlots = { 2, 3, 1, 4, 0, 5 };
                 foreach (int s in balancedSlots)
                 {
                     if (!aiPlayer.slots[s].IsOccupied) return s;
                 }
             }
-
             return -1;
         }
     }

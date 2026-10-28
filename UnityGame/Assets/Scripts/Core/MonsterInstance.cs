@@ -6,7 +6,7 @@ namespace MonsterCardGame.Core
 {
     public class MonsterInstance
     {
-        public MonsterData data;
+        public CardData data;
         public int currentDef;
         public int baseAtk;
         public int baseDef;
@@ -16,7 +16,7 @@ namespace MonsterCardGame.Core
 
         public bool IsAlive => currentDef > 0;
 
-        public MonsterInstance(MonsterData monsterData, int currentTurn)
+        public MonsterInstance(CardData monsterData, int currentTurn)
         {
             data = monsterData;
             baseAtk = monsterData.atk;
@@ -35,10 +35,27 @@ namespace MonsterCardGame.Core
             return Mathf.Max(0, Mathf.RoundToInt(baseAtk * mod));
         }
 
+        public float GetEnvironmentModifier(EnvironmentCardData activeEnv)
+        {
+            if (activeEnv == null) return 1.0f;
+            return activeEnv.GetModifier(data.element);
+        }
+
         public void TakeDamage(int damage)
         {
             currentDef = Mathf.Max(0, currentDef - damage);
             Debug.Log($"[{data.name}] تلقى {damage} ضرر. الدفاع المتبقي: {currentDef}");
+        }
+
+        public void HealDefense(int amount)
+        {
+            currentDef = Mathf.Min(baseDef, currentDef + amount);
+        }
+
+        public void AddBonusDef(int amount)
+        {
+            baseDef += amount;
+            currentDef += amount;
         }
 
         public void ResetTurnReadiness(int currentTurn)

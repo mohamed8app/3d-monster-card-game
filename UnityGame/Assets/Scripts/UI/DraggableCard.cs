@@ -9,19 +9,19 @@ using MonsterCardGame.Core;
 namespace MonsterCardGame.UI
 {
     /// <summary>
-    /// يتيح سحب الكارت بالفأرة (Drag & Drop) من يد اللاعب وإفلاته مباشرة في خانات المعركة.
-    /// Provides smooth Drag & Drop for cards from hand to board slots.
+    /// يتيح سحب الكروت بأنواعها (وحوش، سحر، بيئة) بالفأرة من يد اللاعب وإفلاتها مباشرة في ساحة المعركة.
+    /// Provides smooth Drag & Drop for Monsters, Spells and Environment cards.
     /// </summary>
     public class DraggableCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
     {
-        public MonsterData cardData;
+        public CardData cardData;
         private Transform originalParent;
         private int originalSiblingIndex;
         private Canvas rootCanvas;
         private RectTransform rectTransform;
         private CanvasGroup canvasGroup;
 
-        public void Setup(MonsterData data, Canvas canvas)
+        public void Setup(CardData data, Canvas canvas)
         {
             cardData = data;
             rootCanvas = canvas;
@@ -73,7 +73,6 @@ namespace MonsterCardGame.UI
 
             transform.localScale = Vector3.one * 1.15f;
 
-            // رفع الكارت إلى الكانفاس الرئيسي ليظهر فوق كل العناصر أثناء السحب
             if (rootCanvas == null)
             {
                 rootCanvas = GetComponentInParent<Canvas>();
@@ -93,7 +92,6 @@ namespace MonsterCardGame.UI
 
         public void OnDrag(PointerEventData eventData)
         {
-            // تحريك الكارت مع مؤشر الفأرة بسلاسة
             transform.position = eventData.position;
         }
 
@@ -106,9 +104,9 @@ namespace MonsterCardGame.UI
             }
             transform.localScale = Vector3.one;
 
-            bool placed = false;
+            bool handled = false;
 
-            // 1. فحص العناصر الواقعة تحت مؤشر الفأرة عبر Raycast
+            // 1. فحص العناصر الواقعة تحت مؤشر الفأرة
             var results = new List<RaycastResult>();
             if (EventSystem.current != null)
             {
@@ -117,14 +115,6 @@ namespace MonsterCardGame.UI
 
             foreach (var hit in results)
             {
-                // إذا تم إفلات الكارت فوق خانة تكتيكية للاعب
-                var slotView = hit.gameObject.GetComponentInParent<SlotView>();
-                if (slotView != null && slotView.isPlayerSide)
-                {
-                    placed = TrySummonToSlot(slotView.slotIndex);
-                    if (placed) break;
-                }
-
                 // إذا تم إفلات الكارت فوق زر التضحية
                 if (hit.gameObject.name.Contains("Sacrifice") || hit.gameObject.name.Contains("تضحية"))
                 {
@@ -136,10 +126,34 @@ namespace MonsterCardGame.UI
                         return;
                     }
                 }
+
+                // إذا كانت بطاقة وحش وأُفلتت فوق خانة للاعب
+                if (cardData.cardType == CardType.Monster)
+                {
+                    var slotView = hit.gameObject.GetComponentInParent<SlotView>();
+                    if (slotView != null && slotView.isPlayerSide)
+                    {
+                        handled = TrySummonToSlot(slotView.slotIndex);
+                        if (handled) break;
+                    }
+                }
             }
 
-            // 2. إذا لم يتم الالتقاط المباشر، نفحص المسافة الفيزيائية لأقرب خانة للاعب
-            if (!placed && BattleUIManager.Instance != null)
+            // 2. إذا كانت بطاقة سحر أو بيئة وسُحبت لمنتصف الساحة (الأعلى من منطقة اليد)
+            if (!handled)
+            {
+                if (cardData.cardType == CardType.Spell && eventData.position.y > 220f)
+                {
+                    handled = TryCastSpell();
+                }
+                else if (cardData.cardType == CardType.Environment && eventData.position.y > 220f)
+                {
+                    handled = TryActivateEnvironment();
+                }
+            }
+
+            // 3. مسافة امتصاص الأمان للوحوش عند الإفلات قرب الخانات
+            if (!handled && cardData.cardType == CardType.Monster && BattleUIManager.Instance != null)
             {
                 for (int i = 0; i < BattleUIManager.Instance.playerSlotViews.Length; i++)
                 {
@@ -147,17 +161,17 @@ namespace MonsterCardGame.UI
                     if (sv != null)
                     {
                         float dist = Vector2.Distance(eventData.position, sv.transform.position);
-                        if (dist < 160f) // مسافة كافية لامتصاص الإفلات بسلاسة
+                        if (dist < 160f)
                         {
-                            placed = TrySummonToSlot(i);
-                            if (placed) break;
+                            handled = TrySummonToSlot(i);
+                            if (handled) break;
                         }
                     }
                 }
             }
 
-            // 3. إذا لم ينجح الإنزال، إعادة الكارت إلى مكانه الأصلي في اليد
-            if (!placed)
+            // 4. إعادة الكارت لليد إن لم يتم تصريفه
+            if (!handled)
             {
                 if (originalParent != null)
                 {
@@ -178,7 +192,7 @@ namespace MonsterCardGame.UI
 
             if (gm.humanPlayer.SummonMonster(cardData, slotIndex, gm.currentTurn))
             {
-                BattleUIManager.Instance.LogCombatMessage($"✅ تم سحب وإنزال [{cardData.name}] في الخانة {slotIndex}.");
+                BattleUIManager.Instance.LogCombatMessage($"✅ تم استدعاء [{cardData.name}] في الخانة {slotIndex}.");
                 BattleUIManager.Instance.UpdateUI();
                 var sv = BattleUIManager.Instance.GetSlotView(slotIndex, true);
                 if (sv != null)
@@ -189,9 +203,25 @@ namespace MonsterCardGame.UI
             }
             else
             {
-                BattleUIManager.Instance.LogCombatMessage($"❌ لا يمكن إنزال الكارت في الخانة {slotIndex} (تحقق من الباور المتاح).");
+                BattleUIManager.Instance.LogCombatMessage($"❌ تعذر إنزال الوحش في الخانة {slotIndex} (تأكد من الباور والشواغر).");
                 return false;
             }
+        }
+
+        private bool TryCastSpell()
+        {
+            var gm = GameManager.Instance;
+            if (gm == null || !gm.isPlayerTurn) return false;
+
+            return gm.CastSpell(gm.humanPlayer, gm.aiPlayer, cardData);
+        }
+
+        private bool TryActivateEnvironment()
+        {
+            var gm = GameManager.Instance;
+            if (gm == null || !gm.isPlayerTurn) return false;
+
+            return gm.PlayEnvironmentCard(gm.humanPlayer, cardData);
         }
     }
 }
