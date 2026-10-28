@@ -45,6 +45,7 @@ namespace MonsterCardGame.UI
 
         // Lightning Bolt Segments
         private readonly List<Image> lightningSegments = new List<Image>();
+        private readonly List<Image> pedestalRuneRings = new List<Image>(12);
         private float nextLightningTimer = 3.5f;
         private float lightningFade = 0f;
 
@@ -215,16 +216,30 @@ namespace MonsterCardGame.UI
             }
             particles.Clear();
             lightningSegments.Clear();
+            pedestalRuneRings.Clear();
+
+            // 0. حلقات الرون المتوهجة فوق المنصات الحجرية الـ 12 للوحوش (12 Monster Pedestal Runic Auras)
+            float[] slotX = { -426f, -255f, -86f, 86f, 255f, 426f };
+            float[] slotY = { 204f, -198f };
+            for (int r = 0; r < 2; r++)
+            {
+                for (int c = 0; c < 6; c++)
+                {
+                    var pRingRect = CreateLayerImage($"PedestalAura_{r}_{c}", transform, runeWheelSprite, new Vector2(142, 142), new Color(1f, 0.65f, 0.25f, 0.22f), out Image pRingImg);
+                    pRingRect.anchoredPosition = new Vector2(slotX[c], slotY[r]);
+                    pedestalRuneRings.Add(pRingImg);
+                }
+            }
 
             // 1. دوائر الرون القتالية الدوارة في قلب الساحة (Rotating Arcane/War Battle Seals)
-            outerRuneWheel = CreateLayerImage("OuterBattleSeal", transform, runeWheelSprite, new Vector2(460, 460), new Color(1f, 0.55f, 0.2f, 0.18f), out outerRuneImage);
-            innerRuneWheel = CreateLayerImage("InnerBattleSeal", transform, runeWheelSprite, new Vector2(290, 290), new Color(1f, 0.75f, 0.3f, 0.22f), out innerRuneImage);
+            outerRuneWheel = CreateLayerImage("OuterBattleSeal", transform, runeWheelSprite, new Vector2(360, 360), new Color(1f, 0.55f, 0.2f, 0.16f), out outerRuneImage);
+            innerRuneWheel = CreateLayerImage("InnerBattleSeal", transform, runeWheelSprite, new Vector2(220, 220), new Color(1f, 0.75f, 0.3f, 0.20f), out innerRuneImage);
 
-            // 2. صدع الاشتباك الوسطي النابض بين الجيشين (Central Clash Rift Fault-Line)
-            var riftGlowRect = CreateLayerImage("CentralRiftGlow", transform, riftBeamSprite, new Vector2(1920, 125), new Color(1f, 0.4f, 0.1f, 0.45f), out centralRiftGlow);
+            // 2. صدع الاشتباك الوسطي النابض داخل الأخدود البركاني بين الجيشين (Central Chasm Rift)
+            var riftGlowRect = CreateLayerImage("CentralRiftGlow", transform, riftBeamSprite, new Vector2(1140, 115), new Color(1f, 0.4f, 0.1f, 0.45f), out centralRiftGlow);
             riftGlowRect.anchoredPosition = new Vector2(0, 2f);
 
-            var riftCoreRect = CreateLayerImage("CentralRiftCore", transform, riftBeamSprite, new Vector2(1920, 36), new Color(1f, 0.85f, 0.4f, 0.65f), out centralRiftCore);
+            var riftCoreRect = CreateLayerImage("CentralRiftCore", transform, riftBeamSprite, new Vector2(1060, 32), new Color(1f, 0.85f, 0.4f, 0.65f), out centralRiftCore);
             riftCoreRect.anchoredPosition = new Vector2(0, 2f);
 
             // 3. موجة الصدمة التفاعلية عند الضربات والتعاويذ (Combat Shockwave Ring)
@@ -596,8 +611,8 @@ namespace MonsterCardGame.UI
                 c.a = Mathf.Clamp01(targetRiftColor.a * 0.55f * pulse + actionPulseBoost * 0.2f);
                 centralRiftGlow.color = Color.Lerp(centralRiftGlow.color, c, dt * 6f);
 
-                float heightPulse = 110f + Mathf.Sin(time * 3.2f) * 22f + (currentLevel * 18f) + (actionPulseBoost * 35f);
-                centralRiftGlow.rectTransform.sizeDelta = new Vector2(1920f, heightPulse);
+                float heightPulse = 105f + Mathf.Sin(time * 3.2f) * 20f + (currentLevel * 16f) + (actionPulseBoost * 32f);
+                centralRiftGlow.rectTransform.sizeDelta = new Vector2(1140f, heightPulse);
             }
 
             if (centralRiftCore != null)
@@ -605,6 +620,20 @@ namespace MonsterCardGame.UI
                 Color coreColor = Color.Lerp(targetRiftColor, Color.white, 0.55f);
                 coreColor.a = Mathf.Clamp01(0.55f + Mathf.Sin(time * 6.5f) * 0.20f + actionPulseBoost * 0.25f);
                 centralRiftCore.color = coreColor;
+            }
+
+            // تدوير ونبض حلقات المنصات الحجرية الـ 12 تحت أماكن الوحوش
+            for (int i = 0; i < pedestalRuneRings.Count; i++)
+            {
+                var ring = pedestalRuneRings[i];
+                if (ring == null) continue;
+                float dir = (i % 2 == 0) ? 1f : -1f;
+                ring.rectTransform.Rotate(0f, 0f, dir * 12f * speedScale * dt);
+
+                bool isCoreSlot = (i % 6 == 2 || i % 6 == 3);
+                Color ringCol = isCoreSlot ? Color.Lerp(targetRiftColor, Color.white, 0.28f) : targetRiftColor;
+                ringCol.a = Mathf.Clamp01((isCoreSlot ? 0.30f : 0.20f) + Mathf.Sin(time * 2.6f + i * 0.5f) * 0.06f + (currentLevel * 0.05f));
+                ring.color = Color.Lerp(ring.color, ringCol, dt * 4f);
             }
         }
 

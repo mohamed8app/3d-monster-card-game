@@ -469,8 +469,9 @@ namespace MonsterCardGame.UI
 
         private static void BuildSlotsRow(Transform canvas, BattleUIManager ui, PlayerState player, bool isPlayerSide)
         {
-            float posY = isPlayerSide ? -140f : 145f;
-            float[] xCoords = { -480f, -288f, -96f, 96f, 288f, 480f };
+            // إحداثيات متطابقة بدقة مع الدوائر الحجرية الـ 12 المنحوتة في خلفية أرض المعركة الجديدة
+            float posY = isPlayerSide ? -198f : 204f;
+            float[] xCoords = { -426f, -255f, -86f, 86f, 255f, 426f };
 
             for (int i = 0; i < 6; i++)
             {
@@ -491,19 +492,19 @@ namespace MonsterCardGame.UI
                 if (isPlayerSide)
                 {
                     runeColor = (i == 2 || i == 3)
-                        ? new Color(1f, 0.65f, 0.25f, 0.85f)
-                        : new Color(0.25f, 0.80f, 1f, 0.80f);
+                        ? new Color(1f, 0.72f, 0.25f, 0.85f)
+                        : new Color(0.30f, 0.85f, 1f, 0.80f);
                 }
                 else
                 {
                     runeColor = (i == 2 || i == 3)
-                        ? new Color(1f, 0.35f, 0.35f, 0.85f)
-                        : new Color(0.70f, 0.40f, 1f, 0.80f);
+                        ? new Color(1f, 0.38f, 0.35f, 0.85f)
+                        : new Color(0.75f, 0.45f, 1f, 0.80f);
                 }
 
                 var slotObj = CreatePanel(canvas, $"{(isPlayerSide ? "P" : "E")}_SlotView_{i}",
-                    new Color(0.08f, 0.10f, 0.16f, 0.50f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(posX, posY), new Vector2(135, 175));
+                    new Color(0.06f, 0.08f, 0.14f, 0.20f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(posX, posY), new Vector2(135, 168));
 
                 var outline = slotObj.AddComponent<Outline>();
                 outline.effectColor = runeColor;
