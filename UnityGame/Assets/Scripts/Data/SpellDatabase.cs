@@ -182,3 +182,4 @@ namespace MonsterCardGame.Data
         }
     }
 }
+

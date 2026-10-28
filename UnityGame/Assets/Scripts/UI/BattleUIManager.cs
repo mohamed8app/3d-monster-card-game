@@ -401,9 +401,6 @@ namespace MonsterCardGame.UI
                 : elemColor;
             outline.effectDistance = new Vector2(2, 2);
 
-            var btn = cardObj.AddComponent<Button>();
-            btn.targetGraphic = cardObj.GetComponent<Image>();
-
             // 1. شارة الباور / المانا (أعلى اليسار)
             var manaBadge = GameBootstrapper.CreatePanel(cardObj.transform, "ManaBadge", new Color(0.85f, 0.65f, 0.15f, 0.95f),
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-40, 80), new Vector2(40, 22));
@@ -537,7 +534,28 @@ namespace MonsterCardGame.UI
 
         public void OnCardSelectedInHand(CardData card)
         {
+            // إذا ضغط اللاعب على نفس الكارت المحدد حالياً، يتم إلغاء التحديد بسلاسة
+            if (selectedCardForAction == card)
+            {
+                DeselectHandCards();
+                LogCombatMessage("تم إلغاء تحديد البطاقة.");
+                return;
+            }
+
             selectedCardForAction = card;
+
+            // تحديث حالة التحديد البصرية لكافة البطاقات في اليد فوراً وبدون أي وميض أو إعادة ترتيب
+            if (playerHandContainer != null)
+            {
+                foreach (Transform child in playerHandContainer)
+                {
+                    var drag = child.GetComponent<DraggableCard>();
+                    if (drag != null)
+                    {
+                        drag.SetSelected(drag.cardData == card);
+                    }
+                }
+            }
 
             if (card.cardType == CardType.Monster)
             {
@@ -576,6 +594,35 @@ namespace MonsterCardGame.UI
             }
         }
 
+        public void DeselectHandCards()
+        {
+            selectedCardForAction = null;
+
+            if (playerHandContainer != null)
+            {
+                foreach (Transform child in playerHandContainer)
+                {
+                    var drag = child.GetComponent<DraggableCard>();
+                    if (drag != null)
+                    {
+                        drag.SetSelected(false);
+                    }
+                }
+            }
+
+            if (playCardButton != null)
+            {
+                playCardButton.interactable = false;
+                var txt = playCardButton.GetComponentInChildren<Text>();
+                if (txt != null) txt.text = ArabicFixer.Fix("✨ تفعيل البطاقة");
+            }
+
+            if (sacrificeButton != null)
+            {
+                sacrificeButton.interactable = false;
+            }
+        }
+
         public void OnSlotClicked(int slotIndex, bool isPlayerSide)
         {
             if (!isPlayerSide || selectedCardForAction == null) return;
@@ -589,10 +636,11 @@ namespace MonsterCardGame.UI
                 return;
             }
 
-            if (gm.humanPlayer.SummonMonster(selectedCardForAction, slotIndex, gm.currentTurn))
+            var chosenCard = selectedCardForAction;
+            if (gm.humanPlayer.SummonMonster(chosenCard, slotIndex, gm.currentTurn))
             {
-                LogCombatMessage($"✅ تم إنزال [{selectedCardForAction.name}] في الخانة {slotIndex}.");
-                selectedCardForAction = null;
+                LogCombatMessage($"✅ تم إنزال [{chosenCard.name}] في الخانة {slotIndex}.");
+                DeselectHandCards();
                 UpdateUI();
                 if (slotIndex >= 0 && slotIndex < playerSlotViews.Length && playerSlotViews[slotIndex] != null)
                 {
@@ -611,19 +659,20 @@ namespace MonsterCardGame.UI
             var gm = GameManager.Instance;
             if (gm == null || !gm.isPlayerTurn) return;
 
-            if (selectedCardForAction.cardType == CardType.Spell)
+            var chosenCard = selectedCardForAction;
+            if (chosenCard.cardType == CardType.Spell)
             {
-                if (gm.CastSpell(gm.humanPlayer, gm.aiPlayer, selectedCardForAction))
+                if (gm.CastSpell(gm.humanPlayer, gm.aiPlayer, chosenCard))
                 {
-                    selectedCardForAction = null;
+                    DeselectHandCards();
                     UpdateUI();
                 }
             }
-            else if (selectedCardForAction.cardType == CardType.Environment)
+            else if (chosenCard.cardType == CardType.Environment)
             {
-                if (gm.PlayEnvironmentCard(gm.humanPlayer, selectedCardForAction))
+                if (gm.PlayEnvironmentCard(gm.humanPlayer, chosenCard))
                 {
-                    selectedCardForAction = null;
+                    DeselectHandCards();
                     UpdateUI();
                 }
             }
@@ -638,10 +687,11 @@ namespace MonsterCardGame.UI
             }
 
             var gm = GameManager.Instance;
-            if (gm.humanPlayer.SacrificeCard(selectedCardForAction))
+            var chosenCard = selectedCardForAction;
+            if (gm.humanPlayer.SacrificeCard(chosenCard))
             {
-                LogCombatMessage($"🔥 تمت التضحية بـ [{selectedCardForAction.name}]! كسبت +1 سقف مانا و +1 باور.");
-                selectedCardForAction = null;
+                LogCombatMessage($"🔥 تمت التضحية بـ [{chosenCard.name}]! كسبت +1 سقف مانا و +1 باور.");
+                DeselectHandCards();
                 UpdateUI();
             }
         }
@@ -651,6 +701,7 @@ namespace MonsterCardGame.UI
             var gm = GameManager.Instance;
             if (gm == null) return;
 
+            DeselectHandCards();
             LogCombatMessage("⚔️ إطلاق مرحلة الهجوم! تندفع وحوشك نحو خطوط العدو...");
             gm.OnPlayerExecuteAttackButton();
             UpdateUI();
@@ -661,7 +712,7 @@ namespace MonsterCardGame.UI
             var gm = GameManager.Instance;
             if (gm == null || !gm.isPlayerTurn) return;
 
-            selectedCardForAction = null;
+            DeselectHandCards();
             gm.OnPlayerEndTurn();
             UpdateUI();
         }
