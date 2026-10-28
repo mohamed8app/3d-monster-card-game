@@ -46,6 +46,14 @@ namespace MonsterCardGame.UI
         public Text envBuffText;
         public Text envDebuffText;
         public Image envAtmosphereOverlay;
+        public Button testCycleEnvButton;
+        public Button testCycleLevelButton;
+
+        private static readonly string[] AllTestElements = {
+            "نار", "مياه", "جليد", "أرض", "كهرباء", "رياح",
+            "غابة", "ضياء", "ظلام", "ميكا", "أشباح", "سحر"
+        };
+        private int currentTestEnvIndex = -1;
 
         [Header("Combat Log")]
         public Text combatLogText;
@@ -74,6 +82,28 @@ namespace MonsterCardGame.UI
             if (endTurnButton != null) endTurnButton.onClick.AddListener(OnEndTurnClicked);
             if (sacrificeButton != null) sacrificeButton.onClick.AddListener(OnSacrificeClicked);
             if (playCardButton != null) playCardButton.onClick.AddListener(OnPlayCardClicked);
+
+            if (testCycleEnvButton == null)
+            {
+                var teb = GameObject.Find("TestCycleEnvBtn");
+                if (teb != null) testCycleEnvButton = teb.GetComponent<Button>();
+            }
+            if (testCycleEnvButton != null)
+            {
+                testCycleEnvButton.onClick.RemoveAllListeners();
+                testCycleEnvButton.onClick.AddListener(OnTestCycleEnvironmentClicked);
+            }
+
+            if (testCycleLevelButton == null)
+            {
+                var tlb = GameObject.Find("TestCycleLevelBtn");
+                if (tlb != null) testCycleLevelButton = tlb.GetComponent<Button>();
+            }
+            if (testCycleLevelButton != null)
+            {
+                testCycleLevelButton.onClick.RemoveAllListeners();
+                testCycleLevelButton.onClick.AddListener(OnTestCycleEnvLevelClicked);
+            }
 
             if (quitButton == null)
             {
@@ -115,6 +145,14 @@ namespace MonsterCardGame.UI
             {
                 OnQuitClicked();
             }
+            else if (Input.GetKeyDown(KeyCode.E))
+            {
+                OnTestCycleEnvironmentClicked();
+            }
+            else if (Input.GetKeyDown(KeyCode.L))
+            {
+                OnTestCycleEnvLevelClicked();
+            }
 
             // فحص أمان تلقائي: لو يد اللاعب بها كروت ولكن لم ترسم بعد، يتم التحديث فوراً
             var gm = GameManager.Instance;
@@ -125,6 +163,70 @@ namespace MonsterCardGame.UI
                     UpdateUI();
                 }
             }
+        }
+
+        /// <summary>
+        /// زر تجربة وتبديل البيئات الـ 12 + الوضع الحربي الافتراضي فورياً بدون استهلاك مانا
+        /// </summary>
+        public void OnTestCycleEnvironmentClicked()
+        {
+            var gm = GameManager.Instance;
+            if (gm == null) return;
+
+            currentTestEnvIndex++;
+            if (currentTestEnvIndex >= AllTestElements.Length)
+            {
+                // العودة إلى الوضع الحربي الافتراضي (بدون بيئة عنصرية)
+                currentTestEnvIndex = -1;
+                gm.activeEnvironment = null;
+                LogCombatMessage("⚔️ [تجربة المناخ]: العودة إلى طقس المعركة الحربي الافتراضي (متكافئ).");
+            }
+            else
+            {
+                string elem = AllTestElements[currentTestEnvIndex];
+                int currentLvl = (gm.activeEnvironment != null) ? gm.activeEnvironment.level : 1;
+                gm.activeEnvironment = new EnvironmentCardData(elem, currentLvl);
+                if (BattlefieldAtmosphereEngine.Instance != null)
+                {
+                    Color c = MonsterArtLoader.GetElementColor(elem);
+                    BattlefieldAtmosphereEngine.Instance.TriggerActionPulse(c, 1.4f);
+                }
+                LogCombatMessage($"🌍 [تجربة المناخ {currentTestEnvIndex + 1}/12]: تم تفعيل [{gm.activeEnvironment.name}] ({elem} - المستوى {currentLvl})!");
+            }
+
+            UpdateEnvironmentVisuals();
+            UpdateUI();
+        }
+
+        /// <summary>
+        /// زر تجربة ترقية مستوى البيئة الحالية (المستوى 1 ★ -> 2 ★★ -> 3 ★★★)
+        /// </summary>
+        public void OnTestCycleEnvLevelClicked()
+        {
+            var gm = GameManager.Instance;
+            if (gm == null) return;
+
+            if (gm.activeEnvironment == null)
+            {
+                // إذا لم تكن هناك بيئة نشطة، نفعل أول بيئة (بركان الحمم) في المستوى 1
+                currentTestEnvIndex = 0;
+                gm.activeEnvironment = new EnvironmentCardData(AllTestElements[0], 1);
+            }
+            else
+            {
+                int nextLevel = (gm.activeEnvironment.level % 3) + 1;
+                gm.activeEnvironment.SetLevelStats(nextLevel);
+            }
+
+            if (BattlefieldAtmosphereEngine.Instance != null)
+            {
+                Color c = MonsterArtLoader.GetElementColor(gm.activeEnvironment.element);
+                BattlefieldAtmosphereEngine.Instance.TriggerActionPulse(c, 1.5f);
+            }
+            LogCombatMessage($"⭐ [تجربة المستوى]: بيئة [{gm.activeEnvironment.name}] الآن في المستوى {gm.activeEnvironment.level} (تعزيز +{Mathf.RoundToInt(gm.activeEnvironment.buffPct * 100)}%)!");
+
+            UpdateEnvironmentVisuals();
+            UpdateUI();
         }
 
         public void OnQuitClicked()

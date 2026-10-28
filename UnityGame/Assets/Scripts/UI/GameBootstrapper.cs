@@ -242,32 +242,51 @@ namespace MonsterCardGame.UI
 
             // 4. محراب المناخ والبيئة العالمي في منتصف يسار الشاشة (Left-Center Environment Altar)
             var envAltar = CreatePanel(canvas, "EnvironmentAltarPanel", new Color(0.08f, 0.09f, 0.15f, 0.92f),
-                new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(105, 5), new Vector2(175, 230));
+                new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(108, 25), new Vector2(182, 310));
             var eaOutline = envAltar.AddComponent<Outline>();
             eaOutline.effectColor = new Color(0.35f, 0.75f, 1f, 0.85f);
             eaOutline.effectDistance = new Vector2(2, 2);
             ui.envAltarPanel = envAltar;
 
             CreateText(envAltar.transform, "AltarTitle", "🏛️ محراب المناخ", 14,
-                new Color(0.85f, 0.92f, 1f), TextAnchor.UpperCenter, new Vector2(0, 95), new Vector2(165, 22));
+                new Color(0.85f, 0.92f, 1f), TextAnchor.UpperCenter, new Vector2(0, 134), new Vector2(170, 22));
 
             ui.envIconText = CreateText(envAltar.transform, "EnvIcon", "☀️", 34,
-                Color.white, TextAnchor.MiddleCenter, new Vector2(0, 50), new Vector2(160, 48));
+                Color.white, TextAnchor.MiddleCenter, new Vector2(0, 92), new Vector2(160, 46));
 
             ui.envNameText = CreateText(envAltar.transform, "EnvName", "المناخ: مستقر", 14,
-                new Color(1f, 0.9f, 0.45f), TextAnchor.MiddleCenter, new Vector2(0, 16), new Vector2(165, 22));
+                new Color(1f, 0.9f, 0.45f), TextAnchor.MiddleCenter, new Vector2(0, 54), new Vector2(170, 22));
 
             ui.envLevelText = CreateText(envAltar.transform, "EnvLevel", "طبيعي (محايد)", 12,
-                new Color(0.7f, 0.8f, 0.9f), TextAnchor.MiddleCenter, new Vector2(0, -6), new Vector2(165, 18));
+                new Color(0.7f, 0.8f, 0.9f), TextAnchor.MiddleCenter, new Vector2(0, 32), new Vector2(170, 18));
 
             ui.envDurationText = CreateText(envAltar.transform, "EnvDuration", "⏳ دائم", 12,
-                new Color(0.9f, 0.9f, 0.95f), TextAnchor.MiddleCenter, new Vector2(0, -28), new Vector2(165, 18));
+                new Color(0.9f, 0.9f, 0.95f), TextAnchor.MiddleCenter, new Vector2(0, 12), new Vector2(170, 18));
 
             ui.envBuffText = CreateText(envAltar.transform, "EnvBuff", "• لا توجد تعزيزات", 11,
-                new Color(0.2f, 0.95f, 0.45f), TextAnchor.MiddleCenter, new Vector2(0, -52), new Vector2(165, 18));
+                new Color(0.2f, 0.95f, 0.45f), TextAnchor.MiddleCenter, new Vector2(0, -10), new Vector2(170, 18));
 
             ui.envDebuffText = CreateText(envAltar.transform, "EnvDebuff", "• كافة العناصر متكافئة", 11,
-                new Color(1f, 0.45f, 0.45f), TextAnchor.MiddleCenter, new Vector2(0, -74), new Vector2(165, 18));
+                new Color(1f, 0.45f, 0.45f), TextAnchor.MiddleCenter, new Vector2(0, -30), new Vector2(170, 18));
+
+            // أزرار تجربة واستعراض البيئات الـ 12 ومستوياتها الـ 3 مباشرة داخل المحراب
+            ui.testCycleEnvButton = CreateButton(envAltar.transform, "TestCycleEnvBtn", "🔄 تجربة المناخ (12)",
+                new Color(0.16f, 0.45f, 0.68f, 0.95f), Color.white, new Vector2(0, -76), new Vector2(164, 34),
+                () => { if (BattleUIManager.Instance != null) BattleUIManager.Instance.OnTestCycleEnvironmentClicked(); });
+            var tceOutline = ui.testCycleEnvButton.gameObject.AddComponent<Outline>();
+            tceOutline.effectColor = new Color(0.45f, 0.85f, 1f, 0.85f);
+            tceOutline.effectDistance = new Vector2(1.5f, 1.5f);
+            var tceTxt = ui.testCycleEnvButton.GetComponentInChildren<Text>();
+            if (tceTxt != null) tceTxt.fontSize = 13;
+
+            ui.testCycleLevelButton = CreateButton(envAltar.transform, "TestCycleLevelBtn", "⭐ ترقية المستوى (1-3)",
+                new Color(0.55f, 0.36f, 0.14f, 0.95f), new Color(1f, 0.95f, 0.65f), new Vector2(0, -118), new Vector2(164, 32),
+                () => { if (BattleUIManager.Instance != null) BattleUIManager.Instance.OnTestCycleEnvLevelClicked(); });
+            var tclOutline = ui.testCycleLevelButton.gameObject.AddComponent<Outline>();
+            tclOutline.effectColor = new Color(1f, 0.80f, 0.30f, 0.85f);
+            tclOutline.effectDistance = new Vector2(1.5f, 1.5f);
+            var tclTxt = ui.testCycleLevelButton.GetComponentInChildren<Text>();
+            if (tclTxt != null) tclTxt.fontSize = 13;
 
             // 5. مؤشر الدور العائم في منتصف الساحة (Central Floating Status Pill)
             var statusPill = CreatePanel(canvas, "StatusPill", new Color(0.08f, 0.10f, 0.16f, 0.75f),
