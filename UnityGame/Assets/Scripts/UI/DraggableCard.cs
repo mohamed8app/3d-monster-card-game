@@ -37,7 +37,8 @@ namespace MonsterCardGame.UI
         {
             if (transform.parent == originalParent || originalParent == null)
             {
-                transform.localScale = Vector3.one * 1.06f;
+                transform.localScale = Vector3.one * 1.15f;
+                transform.SetAsLastSibling();
             }
         }
 
@@ -146,7 +147,7 @@ namespace MonsterCardGame.UI
                     if (sv != null)
                     {
                         float dist = Vector2.Distance(eventData.position, sv.transform.position);
-                        if (dist < 130f) // مسافة كافية لامتصاص الإفلات
+                        if (dist < 160f) // مسافة كافية لامتصاص الإفلات بسلاسة
                         {
                             placed = TrySummonToSlot(i);
                             if (placed) break;

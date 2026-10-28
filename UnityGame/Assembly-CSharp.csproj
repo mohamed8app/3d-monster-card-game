@@ -53,7 +53,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Assets\Scripts\Data\MonsterData.cs" />
+    <Compile Include="Assets\Scripts\Utils\MonsterArtLoader.cs" />
     <Compile Include="Assets\Scripts\UI\GameBootstrapper.cs" />
+    <Compile Include="Assets\Scripts\Utils\ArabicFixer.cs" />
+    <Compile Include="Assets\Scripts\UI\DraggableCard.cs" />
+    <Compile Include="Assets\Scripts\UI\CardPulseEffect.cs" />
     <Compile Include="Assets\Scripts\UI\CardView.cs" />
     <Compile Include="Assets\Scripts\Core\AIOpponent.cs" />
     <Compile Include="Assets\Scripts\UI\BattleUIManager.cs" />
@@ -62,6 +66,7 @@
     <Compile Include="Assets\Scripts\Core\PlayerState.cs" />
     <Compile Include="Assets\Scripts\Data\EnvironmentData.cs" />
     <Compile Include="Assets\Scripts\Core\MonsterInstance.cs" />
+    <Compile Include="Assets\Scripts\UI\BattleAnimations.cs" />
     <Compile Include="Assets\Scripts\Core\BoardSlot.cs" />
     <Compile Include="Assets\Scripts\Core\CombatSystem.cs" />
   </ItemGroup>

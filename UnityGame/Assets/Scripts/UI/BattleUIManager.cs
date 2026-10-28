@@ -118,22 +118,22 @@ namespace MonsterCardGame.UI
             if (gm == null) return;
 
             // 1. تحديث صحة القائدين
-            if (playerHpText != null) playerHpText.text = ArabicFixer.Fix($"قائدك: {gm.humanPlayer.currentHp} / 1000 HP");
+            if (playerHpText != null) playerHpText.text = ArabicFixer.Fix($"{gm.humanPlayer.currentHp} / 1000 HP");
             if (playerHpSlider != null) playerHpSlider.value = gm.humanPlayer.currentHp / 1000f;
 
-            if (enemyHpText != null) enemyHpText.text = ArabicFixer.Fix($"قائد الخصم: {gm.aiPlayer.currentHp} / 1000 HP");
+            if (enemyHpText != null) enemyHpText.text = ArabicFixer.Fix($"{gm.aiPlayer.currentHp} / 1000 HP");
             if (enemyHpSlider != null) enemyHpSlider.value = gm.aiPlayer.currentHp / 1000f;
 
             // 2. تحديث المانا والباور
             if (playerPowerText != null)
             {
-                playerPowerText.text = ArabicFixer.Fix($"⚡ الباور: {gm.humanPlayer.currentPower} / المانا: {gm.humanPlayer.manaCapacity}");
+                playerPowerText.text = ArabicFixer.Fix($"💎 الباور: {gm.humanPlayer.currentPower}  |  المانا: {gm.humanPlayer.manaCapacity}");
             }
 
             // 3. مؤشر الدور
             if (turnInfoText != null)
             {
-                turnInfoText.text = ArabicFixer.Fix(gm.isPlayerTurn ? "🟢 دورك الآن (اختر كارت أو هاجم)" : "🔴 دور الخصم (يفكر...)");
+                turnInfoText.text = ArabicFixer.Fix(gm.isPlayerTurn ? "⚔️ دورك الآن (انشر أو هاجم)" : "⏳ دور الخصم (يفكر...)");
             }
 
             // 4. أزرار التحكم
@@ -218,7 +218,7 @@ namespace MonsterCardGame.UI
             int handCount = gm.aiPlayer.hand.Count;
             if (enemyHandCountText != null)
             {
-                enemyHandCountText.text = ArabicFixer.Fix($"🎴 كروت يد الخصم: {handCount} بطاقات مستترة");
+                enemyHandCountText.text = ArabicFixer.Fix($"🎴 يد الخصم: {handCount} بطاقات مستترة");
             }
 
             // رسم كل بطاقة من ظهرها فقط بأناقة وفخامة
@@ -230,23 +230,23 @@ namespace MonsterCardGame.UI
 
         private GameObject CreateFaceDownCardUI(Transform parent, int index)
         {
-            // الغلاف الخارجي لظهر البطاقة
-            var cardObj = GameBootstrapper.CreatePanel(parent, $"EnemyCardBack_{index}", new Color(0.12f, 0.09f, 0.20f, 0.98f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(58, 52));
+            // الغلاف الخارجي لظهر البطاقة العمودية (Portrait 52x72)
+            var cardObj = GameBootstrapper.CreatePanel(parent, $"EnemyCardBack_{index}", new Color(0.11f, 0.08f, 0.18f, 0.98f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(52, 72));
 
             var layoutElem = cardObj.AddComponent<LayoutElement>();
-            layoutElem.preferredWidth = 58;
-            layoutElem.preferredHeight = 52;
-            layoutElem.minWidth = 58;
-            layoutElem.minHeight = 52;
+            layoutElem.preferredWidth = 52;
+            layoutElem.preferredHeight = 72;
+            layoutElem.minWidth = 52;
+            layoutElem.minHeight = 72;
 
             var outline = cardObj.AddComponent<Outline>();
             outline.effectColor = new Color(0.92f, 0.76f, 0.28f, 0.95f); // إطار ذهبي ملكي متوهج
-            outline.effectDistance = new Vector2(2, 2);
+            outline.effectDistance = new Vector2(1.5f, 1.5f);
 
             // بطانة داخلية مزخرفة
-            var innerPanel = GameBootstrapper.CreatePanel(cardObj.transform, "InnerRuneBorder", new Color(0.08f, 0.06f, 0.14f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(46, 40));
+            var innerPanel = GameBootstrapper.CreatePanel(cardObj.transform, "InnerRuneBorder", new Color(0.07f, 0.05f, 0.12f, 0.95f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(42, 60));
 
             var innerOutline = innerPanel.AddComponent<Outline>();
             innerOutline.effectColor = new Color(0.55f, 0.35f, 0.8f, 0.7f); // وهج أرجواني سحري
@@ -254,7 +254,7 @@ namespace MonsterCardGame.UI
 
             // الرمز السحري لظهر البطاقة في المنتصف
             GameBootstrapper.CreateText(innerPanel.transform, "RuneSymbol", "🔮", 16,
-                new Color(1f, 0.85f, 0.35f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(42, 36));
+                new Color(1f, 0.85f, 0.35f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(38, 48));
 
             return cardObj;
         }
@@ -264,14 +264,15 @@ namespace MonsterCardGame.UI
             Color elemColor = MonsterArtLoader.GetElementColor(card.element);
             string elemEmoji = MonsterArtLoader.GetElementEmoji(card.element);
 
-            var cardObj = GameBootstrapper.CreatePanel(parent, $"Card_{card.name}", new Color(0.09f, 0.10f, 0.15f, 0.98f),
-                new Vector2(0, 0.5f), new Vector2(0, 0.5f), Vector2.zero, new Vector2(170, 102));
+            // بطاقة رأسية فاخرة (Portrait 135x195)
+            var cardObj = GameBootstrapper.CreatePanel(parent, $"Card_{card.name}", new Color(0.08f, 0.09f, 0.14f, 0.98f),
+                new Vector2(0, 0.5f), new Vector2(0, 0.5f), Vector2.zero, new Vector2(135, 195));
 
             var layoutElem = cardObj.AddComponent<LayoutElement>();
-            layoutElem.preferredWidth = 170;
-            layoutElem.preferredHeight = 102;
-            layoutElem.minWidth = 170;
-            layoutElem.minHeight = 102;
+            layoutElem.preferredWidth = 135;
+            layoutElem.preferredHeight = 195;
+            layoutElem.minWidth = 135;
+            layoutElem.minHeight = 195;
 
             var outline = cardObj.AddComponent<Outline>();
             outline.effectColor = elemColor;
@@ -280,43 +281,63 @@ namespace MonsterCardGame.UI
             var btn = cardObj.AddComponent<Button>();
             btn.targetGraphic = cardObj.GetComponent<Image>();
 
-            // 1. صورة الوحش الفنية في الكارت
+            // 1. سطر علوي: تكلفة المانا (يسار) والعنصر (يمين)
+            // جوهرة المانا (يسار)
+            var manaBadge = GameBootstrapper.CreatePanel(cardObj.transform, "ManaBadge", new Color(0.85f, 0.65f, 0.15f, 0.95f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-40, 80), new Vector2(40, 22));
+            var manaOutline = manaBadge.AddComponent<Outline>();
+            manaOutline.effectColor = new Color(1f, 0.9f, 0.4f, 0.8f);
+            manaOutline.effectDistance = new Vector2(1, 1);
+            var txtMana = GameBootstrapper.CreateText(manaBadge.transform, "ManaText", $"{card.cost}⚡", 12,
+                new Color(0.1f, 0.08f, 0.05f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(38, 20));
+            txtMana.raycastTarget = false;
+
+            // شارة العنصر (يمين)
+            var elemBadge = GameBootstrapper.CreatePanel(cardObj.transform, "ElemBadge", new Color(0.06f, 0.07f, 0.10f, 0.90f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(28, 80), new Vector2(66, 22));
+            var elemBadgeOutline = elemBadge.AddComponent<Outline>();
+            elemBadgeOutline.effectColor = elemColor;
+            elemBadgeOutline.effectDistance = new Vector2(1, 1);
+            var txtElem = GameBootstrapper.CreateText(elemBadge.transform, "ElemText", $"{elemEmoji} {card.element}", 11,
+                elemColor, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(64, 20));
+            txtElem.raycastTarget = false;
+
+            // 2. صورة الوحش الفنية الملحمية
             var artObj = new GameObject("CardArt");
             artObj.transform.SetParent(cardObj.transform, false);
             var rectArt = artObj.AddComponent<RectTransform>();
-            rectArt.anchoredPosition = new Vector2(0, 14);
-            rectArt.sizeDelta = new Vector2(160, 52);
+            rectArt.anchoredPosition = new Vector2(0, 24);
+            rectArt.sizeDelta = new Vector2(125, 82);
             var artImg = artObj.AddComponent<Image>();
             var sprite = MonsterArtLoader.GetMonsterSprite(card);
             if (sprite != null) artImg.sprite = sprite;
             artImg.raycastTarget = false;
 
-            // 2. سطر علوي: العنصر والتكلفة
-            var topPanel = GameBootstrapper.CreatePanel(cardObj.transform, "TopInfo", new Color(0.06f, 0.07f, 0.10f, 0.85f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 42), new Vector2(160, 16));
-            var txtTop = GameBootstrapper.CreateText(topPanel.transform, "TopText", $"{elemEmoji} {card.element} | {card.cost}⚡", 11,
-                elemColor, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(155, 16));
-            txtTop.raycastTarget = false;
-
-            // 3. اسم الوحش في الوسط بشريط زجاجي أنيق
+            // 3. اسم الوحش في شريط زجاجي أنيق
             var namePanel = GameBootstrapper.CreatePanel(cardObj.transform, "NamePlate", new Color(0.05f, 0.06f, 0.09f, 0.92f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -16), new Vector2(160, 18));
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -28), new Vector2(125, 20));
             var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", card.name, 12,
-                Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(155, 18));
+                Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(120, 20));
             txtName.raycastTarget = false;
 
             // 4. شارة الهجوم (يسار)
-            var atkBadge = GameBootstrapper.CreatePanel(cardObj.transform, "AtkBadge", new Color(0.6f, 0.15f, 0.15f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-42, -39), new Vector2(70, 18));
-            var txtAtk = GameBootstrapper.CreateText(atkBadge.transform, "AtkText", $"⚔️ {card.atk}", 11,
-                new Color(1f, 0.95f, 0.4f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(68, 18));
+            var atkBadge = GameBootstrapper.CreatePanel(cardObj.transform, "AtkBadge", new Color(0.65f, 0.16f, 0.16f, 0.95f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-34, -68), new Vector2(54, 24));
+            var atkOutline = atkBadge.AddComponent<Outline>();
+            atkOutline.effectColor = new Color(1f, 0.4f, 0.4f, 0.8f);
+            atkOutline.effectDistance = new Vector2(1, 1);
+            var txtAtk = GameBootstrapper.CreateText(atkBadge.transform, "AtkText", $"⚔️ {card.atk}", 12,
+                new Color(1f, 0.95f, 0.45f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(52, 22));
             txtAtk.raycastTarget = false;
 
             // 5. شارة الدفاع (يمين)
-            var defBadge = GameBootstrapper.CreatePanel(cardObj.transform, "DefBadge", new Color(0.12f, 0.32f, 0.65f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(42, -39), new Vector2(70, 18));
-            var txtDef = GameBootstrapper.CreateText(defBadge.transform, "DefText", $"🛡️ {card.def}", 11,
-                new Color(0.4f, 0.95f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(68, 18));
+            var defBadge = GameBootstrapper.CreatePanel(cardObj.transform, "DefBadge", new Color(0.14f, 0.34f, 0.70f, 0.95f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(34, -68), new Vector2(54, 24));
+            var defOutline = defBadge.AddComponent<Outline>();
+            defOutline.effectColor = new Color(0.35f, 0.75f, 1f, 0.8f);
+            defOutline.effectDistance = new Vector2(1, 1);
+            var txtDef = GameBootstrapper.CreateText(defBadge.transform, "DefText", $"🛡️ {card.def}", 12,
+                new Color(0.45f, 0.95f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(52, 22));
             txtDef.raycastTarget = false;
 
             return cardObj;
