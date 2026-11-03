@@ -57,8 +57,10 @@
     <Compile Include="Assets\Scripts\UI\GameBootstrapper.cs" />
     <Compile Include="Assets\Scripts\Utils\ArabicFixer.cs" />
     <Compile Include="Assets\Scripts\UI\DraggableCard.cs" />
+    <Compile Include="Assets\Scripts\Data\SpellDatabase.cs" />
     <Compile Include="Assets\Scripts\UI\CardPulseEffect.cs" />
     <Compile Include="Assets\Scripts\UI\CardView.cs" />
+    <Compile Include="Assets\Scripts\UI\BattlefieldAtmosphereEngine.cs" />
     <Compile Include="Assets\Scripts\Core\AIOpponent.cs" />
     <Compile Include="Assets\Scripts\UI\BattleUIManager.cs" />
     <Compile Include="Assets\Scripts\UI\SlotView.cs" />
@@ -67,8 +69,12 @@
     <Compile Include="Assets\Scripts\Data\EnvironmentData.cs" />
     <Compile Include="Assets\Scripts\Core\MonsterInstance.cs" />
     <Compile Include="Assets\Scripts\UI\BattleAnimations.cs" />
+    <Compile Include="Assets\Scripts\Data\CardData.cs" />
     <Compile Include="Assets\Scripts\Core\BoardSlot.cs" />
     <Compile Include="Assets\Scripts\Core\CombatSystem.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\StreamingAssets\Environments\README_VIDEOS.txt" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">

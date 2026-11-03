@@ -23,7 +23,7 @@ namespace MonsterCardGame.Core
             baseDef = monsterData.def;
             currentDef = monsterData.def;
             summonedTurn = currentTurn;
-            canAttack = true; // جاهز للهجوم فور نزوله للساحة
+            canAttack = false; // الوحوش في أول دور يتم استدعاؤها لا تهاجم حتى يمر عليها دور كامل
         }
 
         public int GetEffectiveAtk(EnvironmentCardData activeEnv)
@@ -62,7 +62,11 @@ namespace MonsterCardGame.Core
         {
             if (IsAlive)
             {
-                canAttack = true;
+                // لا يهاجم إلا بعد ما يمر عليه دور كامل على الأقل من استدعائه
+                if (currentTurn > summonedTurn)
+                {
+                    canAttack = true;
+                }
             }
         }
     }

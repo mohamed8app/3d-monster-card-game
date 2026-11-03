@@ -1,9 +1,7 @@
 using System;
-using System.IO;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.Video;
 using MonsterCardGame.Core;
 using MonsterCardGame.Data;
 using MonsterCardGame.Utils;
@@ -12,7 +10,7 @@ namespace MonsterCardGame.UI
 {
     /// <summary>
     /// محرك الخلفية الحية والطقس التفاعلي لساحة المعركة (Living War & Weather Battlefield Engine).
-    /// يدعم الانتقال التدريجي الناعم (Crossfade) بين 12 أرضية بيئية مخصصة + تشغيل فيديوهات الطقس الشفافة (Loop Video Overlay).
+    /// يحول أرض المعركة إلى مشهد سينمائي نابض بالحياة يتفاعل مع الحرب والـ 12 بيئة ومستوياتها الـ 3.
     /// </summary>
     public class BattlefieldAtmosphereEngine : MonoBehaviour
     {
@@ -20,9 +18,6 @@ namespace MonsterCardGame.UI
 
         [Header("Layer References")]
         public Image arenaGroundImage;
-        public Image transitionGroundImage;
-        public RawImage weatherVideoRawImage;
-        public VideoPlayer weatherVideoPlayer;
         public Image ambientTintOverlay;
         public Image vignetteOverlay;
         public Image centralRiftGlow;
@@ -33,14 +28,6 @@ namespace MonsterCardGame.UI
         public Image innerRuneImage;
         public Image shockwaveRing;
         public Image lightningFlashOverlay;
-
-        // Ground Sprites & Video Cache
-        private static readonly Dictionary<string, Sprite> groundSpriteCache = new Dictionary<string, Sprite>();
-        private RenderTexture videoRenderTexture;
-        private Material screenBlendMaterial;
-        private float groundCrossfadeProgress = 1f;
-        private float targetVideoAlpha = 0f;
-        private bool isCustomVideoPlaying = false;
 
         // Procedural Sprites Cache
         private static Sprite softOrbSprite;
@@ -197,30 +184,12 @@ namespace MonsterCardGame.UI
             GenerateProceduralSprites();
 
             arenaGroundImage = groundImg;
-            if (arenaGroundImage != null)
+            if (arenaGroundImage != null && arenaGroundImage.sprite == null)
             {
-                if (arenaGroundImage.sprite == null)
+                var arenaTex = Resources.Load<Texture2D>("arena_ground");
+                if (arenaTex != null)
                 {
-                    arenaGroundImage.sprite = GetOrLoadGroundSprite("");
-                }
-
-                // إنشاء طبقة الانتقال التدريجي الناعم للأرضية (Ground Crossfade Layer)
-                var transTr = arenaGroundImage.transform.Find("GroundCrossfadeOverlay");
-                if (transTr == null)
-                {
-                    var transObj = new GameObject("GroundCrossfadeOverlay");
-                    transObj.transform.SetParent(arenaGroundImage.transform, false);
-                    var rt = transObj.AddComponent<RectTransform>();
-                    rt.anchorMin = Vector2.zero;
-                    rt.anchorMax = Vector2.one;
-                    rt.sizeDelta = Vector2.zero;
-                    transitionGroundImage = transObj.AddComponent<Image>();
-                    transitionGroundImage.raycastTarget = false;
-                    transitionGroundImage.color = new Color(1f, 1f, 1f, 0f);
-                }
-                else
-                {
-                    transitionGroundImage = transTr.GetComponent<Image>();
+                    arenaGroundImage.sprite = Sprite.Create(arenaTex, new Rect(0, 0, arenaTex.width, arenaTex.height), new Vector2(0.5f, 0.5f));
                 }
             }
             ambientTintOverlay = overlayImg;
@@ -228,7 +197,7 @@ namespace MonsterCardGame.UI
             if (ambientTintOverlay != null)
             {
                 ambientTintOverlay.raycastTarget = false;
-                ambientTintOverlay.color = new Color(0.10f, 0.07f, 0.05f, 0.10f);
+                ambientTintOverlay.color = new Color(0.10f, 0.07f, 0.05f, 0.25f);
             }
 
             // ضمان عدم اعتراض أي نقرات ماوس نهائياً
@@ -248,24 +217,6 @@ namespace MonsterCardGame.UI
             particles.Clear();
             lightningSegments.Clear();
             pedestalRuneRings.Clear();
-
-            // -1. طبقة مشغل الفيديو الشفاف للبيئة (Seamless Loop Weather Video Overlay)
-            var vidObj = new GameObject("WeatherVideoOverlay");
-            vidObj.transform.SetParent(transform, false);
-            var vidRect = vidObj.AddComponent<RectTransform>();
-            vidRect.anchorMin = Vector2.zero;
-            vidRect.anchorMax = Vector2.one;
-            vidRect.sizeDelta = Vector2.zero;
-            weatherVideoRawImage = vidObj.AddComponent<RawImage>();
-            weatherVideoRawImage.raycastTarget = false;
-            weatherVideoRawImage.color = new Color(1f, 1f, 1f, 0f);
-
-            weatherVideoPlayer = vidObj.AddComponent<VideoPlayer>();
-            weatherVideoPlayer.playOnAwake = false;
-            weatherVideoPlayer.isLooping = true;
-            weatherVideoPlayer.renderMode = VideoRenderMode.RenderTexture;
-            weatherVideoPlayer.audioOutputMode = VideoAudioOutputMode.None;
-            weatherVideoPlayer.skipOnDrop = true;
 
             // 0. حلقات الرون المتوهجة فوق المنصات الحجرية الـ 12 للوحوش (12 Monster Pedestal Runic Auras)
             float[] slotX = { -426f, -255f, -86f, 86f, 255f, 426f };
@@ -514,186 +465,11 @@ namespace MonsterCardGame.UI
 
             if (changedElement)
             {
-                // 1. بدء الانتقال التدريجي الناعم (Crossfade) لصورة أرض الملعب الخاصة بالبيئة الجديدة
-                StartGroundCrossfade(elem);
-
-                // 2. فحص وتشغيل الفيديو الشفاف المخصص للبيئة (إن وجد في StreamingAssets أو Resources)
-                TryPlayEnvironmentVideo(elem);
-
                 for (int i = 0; i < particles.Count; i++)
                 {
                     ResetParticle(particles[i], true);
                 }
                 TriggerActionPulse(targetRiftColor, 1.2f);
-            }
-        }
-
-        private static string GetElementKey(string arabicElem)
-        {
-            return arabicElem switch
-            {
-                "نار" => "fire",
-                "مياه" => "water",
-                "جليد" => "ice",
-                "أرض" => "earth",
-                "كهرباء" => "electric",
-                "رياح" => "wind",
-                "غابة" => "forest",
-                "ضياء" => "light",
-                "ظلام" => "dark",
-                "ميكا" => "mecha",
-                "أشباح" => "ghost",
-                "سحر" => "magic",
-                _ => "default"
-            };
-        }
-
-        private static Sprite GetOrLoadGroundSprite(string arabicElem)
-        {
-            string key = GetElementKey(arabicElem);
-            if (groundSpriteCache.TryGetValue(key, out Sprite cached) && cached != null)
-            {
-                return cached;
-            }
-
-            string resPath = (key == "default") ? "arena_ground" : $"Environments/env_{key}";
-            var tex = Resources.Load<Texture2D>(resPath);
-            if (tex == null && key != "default")
-            {
-                tex = Resources.Load<Texture2D>("arena_ground");
-            }
-
-            if (tex != null)
-            {
-                var sp = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
-                groundSpriteCache[key] = sp;
-                return sp;
-            }
-            return null;
-        }
-
-        private void StartGroundCrossfade(string arabicElem)
-        {
-            if (arenaGroundImage == null) return;
-
-            var newSprite = GetOrLoadGroundSprite(arabicElem);
-            if (newSprite == null) return;
-
-            // بما أن كل أرضية بيئية مصممة بألوانها وتفاصيلها الكاملة، نضبط الـ Tint على الأبيض الصافي لإبراز تفاصيلها
-            targetGroundTint = Color.white;
-            targetAmbientColor.a *= 0.45f;
-
-            if (transitionGroundImage != null && Application.isPlaying)
-            {
-                // إذا كان هناك انتقال سابق قيد التنفيذ، نثبته أولاً
-                if (groundCrossfadeProgress < 1f && transitionGroundImage.sprite != null)
-                {
-                    arenaGroundImage.sprite = transitionGroundImage.sprite;
-                }
-
-                transitionGroundImage.sprite = newSprite;
-                transitionGroundImage.color = new Color(1f, 1f, 1f, 0f);
-                groundCrossfadeProgress = 0f;
-            }
-            else
-            {
-                arenaGroundImage.sprite = newSprite;
-                groundCrossfadeProgress = 1f;
-            }
-        }
-
-        private void TryPlayEnvironmentVideo(string arabicElem)
-        {
-            if (!Application.isPlaying || weatherVideoPlayer == null || weatherVideoRawImage == null)
-            {
-                targetVideoAlpha = 0f;
-                isCustomVideoPlaying = false;
-                return;
-            }
-
-            string key = GetElementKey(arabicElem);
-            if (key == "default")
-            {
-                targetVideoAlpha = 0f;
-                isCustomVideoPlaying = false;
-                weatherVideoPlayer.Stop();
-                return;
-            }
-
-            // البحث عن فيديو البيئة في مجلد StreamingAssets/Environments أولاً (يدعم .webm الشفاف أو .mp4 بخلفية سوداء)
-            string streamingDir = Path.Combine(Application.streamingAssetsPath, "Environments");
-            string webmPath = Path.Combine(streamingDir, $"env_{key}.webm");
-            string mp4Path = Path.Combine(streamingDir, $"env_{key}.mp4");
-
-            bool foundFile = false;
-            bool isBlackScreenMp4 = false;
-
-            if (File.Exists(webmPath))
-            {
-                weatherVideoPlayer.source = VideoSource.Url;
-                weatherVideoPlayer.url = webmPath;
-                foundFile = true;
-                isBlackScreenMp4 = false;
-            }
-            else if (File.Exists(mp4Path))
-            {
-                weatherVideoPlayer.source = VideoSource.Url;
-                weatherVideoPlayer.url = mp4Path;
-                foundFile = true;
-                isBlackScreenMp4 = true;
-            }
-            else
-            {
-                // أو البحث داخل Resources/Environments/env_{key}
-                var clip = Resources.Load<VideoClip>($"Environments/env_{key}");
-                if (clip != null)
-                {
-                    weatherVideoPlayer.source = VideoSource.VideoClip;
-                    weatherVideoPlayer.clip = clip;
-                    foundFile = true;
-                    isBlackScreenMp4 = true;
-                }
-            }
-
-            if (foundFile)
-            {
-                if (videoRenderTexture == null)
-                {
-                    videoRenderTexture = new RenderTexture(1920, 1080, 0, RenderTextureFormat.ARGB32);
-                    videoRenderTexture.Create();
-                }
-
-                weatherVideoPlayer.targetTexture = videoRenderTexture;
-                weatherVideoRawImage.texture = videoRenderTexture;
-
-                // لو كان الفيديو بصيغة MP4 بخلفية سوداء، نطبق شيدر Screen/Additive ليحذف اللون الأسود تلقائياً ويظهر الثلج/النار بشفافية طبيعية!
-                if (isBlackScreenMp4)
-                {
-                    if (screenBlendMaterial == null)
-                    {
-                        var addShader = Shader.Find("Legacy Shaders/Particles/Additive")
-                                     ?? Shader.Find("Particles/Standard Unlit")
-                                     ?? Shader.Find("UI/Default");
-                        if (addShader != null) screenBlendMaterial = new Material(addShader);
-                    }
-                    weatherVideoRawImage.material = screenBlendMaterial;
-                }
-                else
-                {
-                    weatherVideoRawImage.material = null; // شفافية Alpha أصلية لملفات WebM
-                }
-
-                weatherVideoRawImage.color = new Color(1f, 1f, 1f, 0f);
-                weatherVideoPlayer.isLooping = true;
-                weatherVideoPlayer.Play();
-                targetVideoAlpha = 0.92f;
-                isCustomVideoPlaying = true;
-            }
-            else
-            {
-                weatherVideoPlayer.Stop();
-                targetVideoAlpha = 0f;
-                isCustomVideoPlaying = false;
             }
         }
 
@@ -728,30 +504,16 @@ namespace MonsterCardGame.UI
 
             float totalSpeedScale = warMultiplier + actionPulseBoost * 0.8f;
 
-            // 2. التدرج اللوني والانتقال الناعم للأرضية (Smooth Ground Crossfade & Tremor)
+            // 2. التدرج اللوني الناعم للأرضية والغلاف الجوي (Smooth Crossfade)
             if (arenaGroundImage != null)
             {
-                float groundPulse = 1f + Mathf.Sin(time * 2.2f) * 0.03f * warMultiplier;
+                float groundPulse = 1f + Mathf.Sin(time * 2.2f) * 0.04f * warMultiplier;
                 Color desiredGround = new Color(
                     Mathf.Clamp01(targetGroundTint.r * groundPulse),
                     Mathf.Clamp01(targetGroundTint.g * groundPulse),
                     Mathf.Clamp01(targetGroundTint.b * groundPulse),
                     1f);
                 arenaGroundImage.color = Color.Lerp(arenaGroundImage.color, desiredGround, dt * 3.5f);
-
-                // تنفيذ الـ Fade الناعم عند تغير صورة الأرضية من بيئة لأخرى
-                if (transitionGroundImage != null && groundCrossfadeProgress < 1f)
-                {
-                    groundCrossfadeProgress = Mathf.Min(1f, groundCrossfadeProgress + dt * 1.15f);
-                    float smoothAlpha = Mathf.SmoothStep(0f, 1f, groundCrossfadeProgress);
-                    transitionGroundImage.color = new Color(desiredGround.r, desiredGround.g, desiredGround.b, smoothAlpha);
-
-                    if (groundCrossfadeProgress >= 1f && transitionGroundImage.sprite != null)
-                    {
-                        arenaGroundImage.sprite = transitionGroundImage.sprite;
-                        transitionGroundImage.color = new Color(1f, 1f, 1f, 0f);
-                    }
-                }
 
                 // اهتزاز أرضي خفيف في بيئة الزلزال أو المستوى 3 (كارثة عظمى)
                 if (activeBehavior == ParticleBehavior.Earthquake || currentLevel == 3)
@@ -764,17 +526,6 @@ namespace MonsterCardGame.UI
                 else
                 {
                     arenaGroundImage.rectTransform.anchoredPosition = Vector2.Lerp(arenaGroundImage.rectTransform.anchoredPosition, baseGroundPos, dt * 8f);
-                }
-            }
-
-            // 2.5 التدرج الناعم لطبقة الفيديو الشفاف (Smooth Video Fade-In / Fade-Out)
-            if (weatherVideoRawImage != null)
-            {
-                float curAlpha = weatherVideoRawImage.color.a;
-                if (Mathf.Abs(curAlpha - targetVideoAlpha) > 0.005f)
-                {
-                    float nextAlpha = Mathf.MoveTowards(curAlpha, targetVideoAlpha, dt * 1.1f);
-                    weatherVideoRawImage.color = new Color(1f, 1f, 1f, nextAlpha);
                 }
             }
 
@@ -816,8 +567,8 @@ namespace MonsterCardGame.UI
             if (gm != null && gm.humanPlayer != null && gm.aiPlayer != null)
             {
                 int minHp = Mathf.Min(gm.humanPlayer.currentHp, gm.aiPlayer.currentHp);
-                if (minHp < 300) intensity += 0.65f;
-                else if (minHp < 600) intensity += 0.30f;
+                if (minHp < 60) intensity += 0.65f;
+                else if (minHp < 120) intensity += 0.30f;
             }
 
             return intensity;
@@ -972,12 +723,12 @@ namespace MonsterCardGame.UI
 
             Color desiredVig = targetVignetteColor;
 
-            // نبض أحمر حربي عند انخفاض صحة أحد القادة عن 350 HP
+            // نبض أحمر حربي عند انخفاض صحة أحد القادة عن 70 HP
             var gm = GameManager.Instance;
             if (gm != null && gm.humanPlayer != null && gm.aiPlayer != null)
             {
                 int minHp = Mathf.Min(gm.humanPlayer.currentHp, gm.aiPlayer.currentHp);
-                if (minHp < 350)
+                if (minHp < 70)
                 {
                     float dangerPulse = 0.5f + 0.5f * Mathf.Sin(time * 6.0f);
                     desiredVig = Color.Lerp(desiredVig, new Color(0.75f, 0.05f, 0.05f, 0.78f), dangerPulse * 0.6f);

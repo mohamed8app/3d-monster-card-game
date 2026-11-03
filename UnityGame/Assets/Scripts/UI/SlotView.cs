@@ -1,13 +1,14 @@
 using System;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using MonsterCardGame.Core;
 using MonsterCardGame.Data;
 using MonsterCardGame.Utils;
 
 namespace MonsterCardGame.UI
 {
-    public class SlotView : MonoBehaviour
+    public class SlotView : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
     {
         public int slotIndex;
         public bool isPlayerSide = true;
@@ -20,16 +21,51 @@ namespace MonsterCardGame.UI
         public CardView placedCardView;
 
         // كائنات بطاقة الوحش الميدانية العمودية (Portrait Field Card Token Standee)
+        public CardData currentCardData;
+        public MonsterInstance currentMonsterInstance;
         private GameObject fieldCardToken;
         private Image tokenArtImage;
         private Outline tokenOutline;
         private Text tokenNameText;
-        private Text tokenTopText;
+        private Text tokenCostText;
         private Text tokenAtkText;
         private Text tokenDefText;
         private RectTransform hpBarFillRect;
         private Image hpBarFillImage;
         private CardPulseEffect pulseEffect;
+        private bool isHovered = false;
+
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (BattleUIManager.Instance != null)
+            {
+                BattleUIManager.Instance.OnSlotClicked(slotIndex, isPlayerSide);
+            }
+        }
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            isHovered = true;
+            if (currentCardData != null && BattleUIManager.Instance != null)
+            {
+                BattleUIManager.Instance.ShowMonsterDetails(currentCardData, currentMonsterInstance, isPlayerSide);
+            }
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            isHovered = false;
+        }
+
+        private void Update()
+        {
+            float targetScale = isHovered ? 1.07f : 1.0f;
+            Vector3 curScale = transform.localScale;
+            if (Mathf.Abs(curScale.x - targetScale) > 0.001f)
+            {
+                transform.localScale = Vector3.Lerp(curScale, Vector3.one * targetScale, Time.deltaTime * 15f);
+            }
+        }
 
         public void Setup(int index, bool playerSide, BoardSlot slot)
         {
@@ -65,6 +101,9 @@ namespace MonsterCardGame.UI
                 return;
             }
 
+            currentCardData = data;
+            currentMonsterInstance = instance;
+
             EnsureFieldTokenCreated();
 
             if (slotNameText != null)
@@ -76,7 +115,7 @@ namespace MonsterCardGame.UI
 
             fieldCardToken.SetActive(true);
 
-            // 1. صورة الوحش الفنية الملحمية
+            // 1. رسمة الوحش الفنية الملحمية تملأ كامل الكارت بنسبة 100%
             if (tokenArtImage != null)
             {
                 var sprite = MonsterArtLoader.GetMonsterSprite(data);
@@ -87,24 +126,16 @@ namespace MonsterCardGame.UI
                 }
             }
 
-            // 2. لون العنصر والإطار
+            // 2. لون العنصر والإطار الخارجي النحيف
             Color elemColor = MonsterArtLoader.GetElementColor(data.element);
-            string elemEmoji = MonsterArtLoader.GetElementEmoji(data.element);
 
-            // 3. السطر العلوي: العنصر والتكلفة
-            if (tokenTopText != null)
+            // 3. دائرة نقاط الاستدعاء أعلى اليمين (Astral Masters: Top-Right Blue Circle)
+            if (tokenCostText != null)
             {
-                tokenTopText.text = ArabicFixer.Fix($"{elemEmoji} {data.element} | {data.cost}⚡");
-                tokenTopText.color = elemColor;
+                tokenCostText.text = data.cost.ToString();
             }
 
-            // 4. اسم الوحش
-            if (tokenNameText != null)
-            {
-                tokenNameText.text = ArabicFixer.Fix(data.name);
-            }
-
-            // 5. أرقام الهجوم والدفاع مع تأثير البيئة والمناخ الحية
+            // 4. أرقام الهجوم والدفاع في الركنين السفليين (Astral Masters: Bottom-Left ATK, Bottom-Right DEF)
             var gm = GameManager.Instance;
             var activeEnv = gm != null ? gm.activeEnvironment : null;
             int effectiveAtk = instance.GetEffectiveAtk(activeEnv);
@@ -112,42 +143,35 @@ namespace MonsterCardGame.UI
 
             if (tokenAtkText != null)
             {
+                tokenAtkText.text = effectiveAtk.ToString();
                 if (envMod > 1.01f)
                 {
-                    tokenAtkText.text = ArabicFixer.Fix($"⚔️ {effectiveAtk} ⬆️");
-                    tokenAtkText.color = new Color(0.2f, 1f, 0.4f);
+                    tokenAtkText.color = new Color(0.40f, 1f, 0.55f);
                 }
                 else if (envMod < 0.99f)
                 {
-                    tokenAtkText.text = ArabicFixer.Fix($"⚔️ {effectiveAtk} ⬇️");
-                    tokenAtkText.color = new Color(1f, 0.4f, 0.35f);
+                    tokenAtkText.color = new Color(1f, 0.45f, 0.45f);
                 }
                 else
                 {
-                    tokenAtkText.text = ArabicFixer.Fix($"⚔️ {effectiveAtk}");
-                    tokenAtkText.color = new Color(1f, 0.92f, 0.45f);
+                    tokenAtkText.color = Color.white;
                 }
             }
+
             if (tokenDefText != null)
             {
-                tokenDefText.text = ArabicFixer.Fix($"🛡️ {instance.currentDef}");
-            }
-
-            // 6. شريط الصحة والدفاع الحي (Dynamic Defense / HP Bar)
-            if (hpBarFillRect != null && hpBarFillImage != null)
-            {
-                float ratio = instance.baseDef > 0 ? Mathf.Clamp01((float)instance.currentDef / instance.baseDef) : 0f;
-                hpBarFillRect.anchorMax = new Vector2(ratio, 1f);
-
-                if (ratio > 0.6f)
-                    hpBarFillImage.color = new Color(0.2f, 0.9f, 0.35f); // أخضر صحي
-                else if (ratio > 0.3f)
-                    hpBarFillImage.color = new Color(1.0f, 0.75f, 0.2f); // برتقالي متضرر
+                tokenDefText.text = instance.currentDef.ToString();
+                if (instance.baseDef > 0 && instance.currentDef < instance.baseDef)
+                {
+                    tokenDefText.color = new Color(1f, 0.45f, 0.45f); // تلوين بالأحمر عند تلقي ضرر
+                }
                 else
-                    hpBarFillImage.color = new Color(0.95f, 0.25f, 0.25f); // أحمر حرج
+                {
+                    tokenDefText.color = Color.white;
+                }
             }
 
-            // 7. توهج ونبض الجاهزية (Breathing Pulse for Ready Attackers)
+            // 5. توهج ونبض الجاهزية للوحش (Breathing Pulse for Ready Attackers)
             bool isReadyToStrike = instance.canAttack && isPlayerSide;
             if (pulseEffect != null)
             {
@@ -164,76 +188,69 @@ namespace MonsterCardGame.UI
         {
             if (fieldCardToken != null) return;
 
-            // الحاوية الكلية لبطاقة الوحش العمودية داخل الخانة (Portrait Standee 125x165)
-            fieldCardToken = GameBootstrapper.CreatePanel(transform, "FieldCardToken", new Color(0.08f, 0.09f, 0.13f, 0.98f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(125, 165));
+            // كارت الوحش الميداني بدون فريم بنمط Astral Masters (Full-Art 154x196)
+            fieldCardToken = GameBootstrapper.CreatePanel(transform, "FieldCardToken", new Color(0.04f, 0.05f, 0.08f, 1f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(154, 196));
 
             tokenOutline = fieldCardToken.AddComponent<Outline>();
             tokenOutline.effectColor = new Color(0.95f, 0.85f, 0.3f, 0.95f);
-            tokenOutline.effectDistance = new Vector2(2, 2);
+            tokenOutline.effectDistance = new Vector2(2f, 2f);
 
             pulseEffect = fieldCardToken.AddComponent<CardPulseEffect>();
 
-            // 1. شريط علوي للعنصر والتكلفة
-            var topBar = GameBootstrapper.CreatePanel(fieldCardToken.transform, "TopBar", new Color(0.06f, 0.07f, 0.10f, 0.90f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 66), new Vector2(118, 20));
-            tokenTopText = GameBootstrapper.CreateText(topBar.transform, "TopText", "", 11,
-                Color.yellow, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(115, 20));
-            tokenTopText.raycastTarget = false;
-
-            // 2. إطار وصورة الوحش
+            // 1. رسمة الوحش الفنية تمتد على 100% من مساحة الكارت بدون أي فريم يضيقها
             var artObj = new GameObject("MonsterArt");
             artObj.transform.SetParent(fieldCardToken.transform, false);
             var rectArt = artObj.AddComponent<RectTransform>();
-            rectArt.anchoredPosition = new Vector2(0, 16);
-            rectArt.sizeDelta = new Vector2(118, 74);
+            rectArt.anchorMin = Vector2.zero;
+            rectArt.anchorMax = Vector2.one;
+            rectArt.sizeDelta = Vector2.zero;
+            rectArt.anchoredPosition = Vector2.zero;
             tokenArtImage = artObj.AddComponent<Image>();
             tokenArtImage.preserveAspect = false;
+            tokenArtImage.raycastTarget = false;
 
-            // 3. شريط الدفاع والصحة الحي (Dynamic Defense Bar)
-            var hpBg = GameBootstrapper.CreatePanel(fieldCardToken.transform, "HpBg", new Color(0.12f, 0.12f, 0.15f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -26), new Vector2(116, 7));
+            // 2. دائرة نقاط الاستدعاء أعلى اليمين (Top-Right Blue Circle - Astral Masters Style)
+            var costCircle = GameBootstrapper.CreateCirclePanel(fieldCardToken.transform, "CostCircle",
+                new Color(0.10f, 0.28f, 0.65f, 0.96f),
+                new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-20, -20), new Vector2(34, 34));
+            var costOutline = costCircle.AddComponent<Outline>();
+            costOutline.effectColor = new Color(0.40f, 0.90f, 1f, 1f);
+            costOutline.effectDistance = new Vector2(1.5f, 1.5f);
+            tokenCostText = GameBootstrapper.CreateText(costCircle.transform, "CostText", "", 17,
+                new Color(1f, 0.95f, 0.70f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(34, 34));
+            tokenCostText.fontStyle = FontStyle.Bold;
+            tokenCostText.raycastTarget = false;
 
-            var hpFill = new GameObject("HpFill");
-            hpFill.transform.SetParent(hpBg.transform, false);
-            hpBarFillRect = hpFill.AddComponent<RectTransform>();
-            hpBarFillRect.anchorMin = Vector2.zero;
-            hpBarFillRect.anchorMax = Vector2.one;
-            hpBarFillRect.sizeDelta = Vector2.zero;
-            hpBarFillImage = hpFill.AddComponent<Image>();
-            hpBarFillImage.color = new Color(0.2f, 0.9f, 0.35f);
-
-            // 4. شريط اسم الوحش
-            var nameBar = GameBootstrapper.CreatePanel(fieldCardToken.transform, "NameBar", new Color(0.05f, 0.06f, 0.09f, 0.92f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -40), new Vector2(118, 18));
-            tokenNameText = GameBootstrapper.CreateText(nameBar.transform, "NameText", "", 11,
-                Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(115, 18));
-            tokenNameText.raycastTarget = false;
-
-            // 5. شارات الهجوم والدفاع القتالية السفلية
-            // شارة الهجوم (يسار)
-            var atkBadge = GameBootstrapper.CreatePanel(fieldCardToken.transform, "AtkBadge", new Color(0.65f, 0.16f, 0.16f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-30, -63), new Vector2(52, 22));
-            var atkOutline = atkBadge.AddComponent<Outline>();
-            atkOutline.effectColor = new Color(1f, 0.4f, 0.4f, 0.8f);
-            atkOutline.effectDistance = new Vector2(1, 1);
-            tokenAtkText = GameBootstrapper.CreateText(atkBadge.transform, "AtkText", "⚔️ 0", 11,
-                new Color(1f, 0.95f, 0.45f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(50, 22));
+            // 3. دائرة الهجوم أسفل اليسار (Bottom-Left Red Circle - Astral Masters Style)
+            var atkCircle = GameBootstrapper.CreateCirclePanel(fieldCardToken.transform, "AtkCircle",
+                new Color(0.70f, 0.12f, 0.16f, 0.96f),
+                new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(20, 20), new Vector2(34, 34));
+            var atkOutline = atkCircle.AddComponent<Outline>();
+            atkOutline.effectColor = new Color(1f, 0.45f, 0.35f, 1f);
+            atkOutline.effectDistance = new Vector2(1.5f, 1.5f);
+            tokenAtkText = GameBootstrapper.CreateText(atkCircle.transform, "AtkText", "0", 17,
+                Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(34, 34));
+            tokenAtkText.fontStyle = FontStyle.Bold;
             tokenAtkText.raycastTarget = false;
 
-            // شارة الدفاع (يمين)
-            var defBadge = GameBootstrapper.CreatePanel(fieldCardToken.transform, "DefBadge", new Color(0.14f, 0.34f, 0.70f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(30, -63), new Vector2(52, 22));
-            var defOutline = defBadge.AddComponent<Outline>();
-            defOutline.effectColor = new Color(0.35f, 0.75f, 1f, 0.8f);
-            defOutline.effectDistance = new Vector2(1, 1);
-            tokenDefText = GameBootstrapper.CreateText(defBadge.transform, "DefText", "🛡️ 0", 11,
-                new Color(0.45f, 0.95f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(50, 22));
+            // 4. دائرة الدفاع / الصحة أسفل اليمين (Bottom-Right Green Circle - Astral Masters Style)
+            var defCircle = GameBootstrapper.CreateCirclePanel(fieldCardToken.transform, "DefCircle",
+                new Color(0.10f, 0.52f, 0.22f, 0.96f),
+                new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-20, 20), new Vector2(34, 34));
+            var defOutline = defCircle.AddComponent<Outline>();
+            defOutline.effectColor = new Color(0.35f, 1f, 0.45f, 1f);
+            defOutline.effectDistance = new Vector2(1.5f, 1.5f);
+            tokenDefText = GameBootstrapper.CreateText(defCircle.transform, "DefText", "0", 17,
+                Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(34, 34));
+            tokenDefText.fontStyle = FontStyle.Bold;
             tokenDefText.raycastTarget = false;
         }
 
         public void ClearDisplay()
         {
+            currentCardData = null;
+            currentMonsterInstance = null;
             if (fieldCardToken != null)
             {
                 fieldCardToken.SetActive(false);

@@ -9,8 +9,8 @@ namespace MonsterCardGame.Core
     {
         [Header("Leader Stats")]
         public string playerName = "اللاعب";
-        public int currentHp = 1000;
-        public int maxHp = 1000;
+        public int currentHp = 200;
+        public int maxHp = 200;
 
         [Header("Resources")]
         public int manaCapacity = 1;

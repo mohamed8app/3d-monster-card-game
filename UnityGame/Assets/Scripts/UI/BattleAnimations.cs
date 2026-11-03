@@ -107,7 +107,7 @@ namespace MonsterCardGame.UI
 
             Vector3 startPos = attacker.position;
             Vector3 dir = (targetPos - startPos).normalized;
-            Vector3 strikePos = startPos + dir * 85f; // اندفاع سريع نحو الهدف
+            Vector3 strikePos = startPos + dir * 115f; // اندفاع قتالي عميق وسريع نحو الهدف
 
             // 1. استعداد للخلف (Anticipation)
             float t = 0;
@@ -116,7 +116,7 @@ namespace MonsterCardGame.UI
             {
                 t += Time.deltaTime;
                 float p = t / pullDuration;
-                attacker.position = Vector3.Lerp(startPos, startPos - dir * 18f, p);
+                attacker.position = Vector3.Lerp(startPos, startPos - dir * 22f, p);
                 yield return null;
             }
 

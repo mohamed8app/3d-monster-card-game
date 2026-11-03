@@ -104,8 +104,8 @@ namespace MonsterCardGame.Core
             {
                 if (spell.cost <= aiPlayer.currentPower)
                 {
-                    // فحص ذكي: لو تعويذة شفاء ونقاط حياة الخصم كاملة، يؤجلها
-                    if (spell.spellType == SpellType.LeaderHeal && aiPlayer.currentHp > 900)
+                    // فحص ذكي: لو تعويذة شفاء ونقاط حياة الخصم شبه كاملة، يؤجلها
+                    if (spell.spellType == SpellType.LeaderHeal && aiPlayer.currentHp > (aiPlayer.maxHp * 0.8f))
                     {
                         continue;
                     }

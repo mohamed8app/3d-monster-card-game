@@ -71,16 +71,16 @@ namespace MonsterCardGame.UI
         {
             if (isDragging) return;
 
-            // تحديد الارتفاع والتكبير المستهدف بسلاسة
+            // تحديد الارتفاع والتكبير المستهدف بسلاسة وبقاء الكارت دائماً في نطاق اليد بدون حجب الساحة
             if (isSelected)
             {
-                targetY = 28f;
-                targetScale = 1.08f;
+                targetY = 40f;
+                targetScale = 1.28f;
             }
             else if (isHovered)
             {
-                targetY = 16f;
-                targetScale = 1.05f;
+                targetY = 32f;
+                targetScale = 1.22f;
             }
             else
             {
@@ -103,6 +103,10 @@ namespace MonsterCardGame.UI
             if (isDragging) return;
             isHovered = true;
             UpdateVisualState();
+            if (BattleUIManager.Instance != null && cardData != null)
+            {
+                BattleUIManager.Instance.ShowCardDetails(cardData);
+            }
         }
 
         public void OnPointerExit(PointerEventData eventData)
@@ -116,6 +120,17 @@ namespace MonsterCardGame.UI
         {
             if (isDragging) return;
 
+            // نقرة زر الفأرة الأيمن: تضحية مباشرة بالكارت للحصول على +1 سقف مانا و +1 باور
+            if (eventData.button == PointerEventData.InputButton.Right)
+            {
+                if (BattleUIManager.Instance != null && cardData != null)
+                {
+                    BattleUIManager.Instance.SacrificeCardDirectly(cardData);
+                }
+                return;
+            }
+
+            // نقرة زر الفأرة الأيسر: تحديد الكارت وعرض بياناته في لوحة التفاصيل
             if (BattleUIManager.Instance != null && cardData != null)
             {
                 BattleUIManager.Instance.OnCardSelectedInHand(cardData);
@@ -185,10 +200,10 @@ namespace MonsterCardGame.UI
             if (canvasGroup != null)
             {
                 canvasGroup.blocksRaycasts = false;
-                canvasGroup.alpha = 0.88f;
+                canvasGroup.alpha = 0.60f; // شفافية مريحة تتيح رؤية الخانات والبطاقات أسفل مؤشر الفأرة تماماً
             }
 
-            transform.localScale = Vector3.one * 1.12f;
+            transform.localScale = Vector3.one * 0.85f; // حجم مصغر أثناء السحب لعدم حجب بطاقات وخانات الساحة
 
             if (rootCanvas == null)
             {

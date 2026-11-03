@@ -25,10 +25,17 @@ namespace MonsterCardGame.Utils
                 return cachedSprite;
             }
 
-            // 2. البحث عن صورة خاصة برقم البطاقة في Resources
-            if (Resources.Load<Texture2D>(key) != null)
+            // 2. البحث عن صورة خاصة برقم البطاقة أو اسمها في مجلد Monsters أو Resources
+            Texture2D customTex = Resources.Load<Texture2D>("Monsters/" + key);
+            if (customTex == null) customTex = Resources.Load<Texture2D>(key);
+            if (customTex == null && !string.IsNullOrEmpty(data.name))
             {
-                var customTex = Resources.Load<Texture2D>(key);
+                customTex = Resources.Load<Texture2D>("Monsters/" + data.name);
+                if (customTex == null) customTex = Resources.Load<Texture2D>(data.name);
+            }
+
+            if (customTex != null)
+            {
                 var customSprite = CreateSpriteFromTexture(customTex);
                 spriteCache[key] = customSprite;
                 return customSprite;
