@@ -1,7 +1,7 @@
-window.MONSTERS_DB = [
+const MONSTERS_DATA = [
   {
     "id": 1,
-    "name": "تنين الـنار",
+    "name": "1",
     "element": "نار",
     "element_en": "Fire",
     "element_icon": "🔥",
@@ -16,7 +16,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 2,
-    "name": "شعلة الـنار",
+    "name": "2",
     "element": "نار",
     "element_en": "Fire",
     "element_icon": "🔥",
@@ -31,7 +31,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 3,
-    "name": "جمر الـنار",
+    "name": "3",
     "element": "نار",
     "element_en": "Fire",
     "element_icon": "🔥",
@@ -46,7 +46,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 4,
-    "name": "عنقاء الـنار",
+    "name": "4",
     "element": "نار",
     "element_en": "Fire",
     "element_icon": "🔥",
@@ -61,7 +61,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 5,
-    "name": "حمم الـنار",
+    "name": "5",
     "element": "نار",
     "element_en": "Fire",
     "element_icon": "🔥",
@@ -76,7 +76,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 6,
-    "name": "بركان الـنار",
+    "name": "6",
     "element": "نار",
     "element_en": "Fire",
     "element_icon": "🔥",
@@ -91,7 +91,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 7,
-    "name": "لهب نار المعظم",
+    "name": "7",
     "element": "نار",
     "element_en": "Fire",
     "element_icon": "🔥",
@@ -106,7 +106,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 8,
-    "name": "صقر نار المعظم",
+    "name": "8",
     "element": "نار",
     "element_en": "Fire",
     "element_icon": "🔥",
@@ -121,7 +121,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 9,
-    "name": "كاسر نار المعظم",
+    "name": "9",
     "element": "نار",
     "element_en": "Fire",
     "element_icon": "🔥",
@@ -136,7 +136,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 10,
-    "name": "فارس نار المعظم",
+    "name": "10",
     "element": "نار",
     "element_en": "Fire",
     "element_icon": "🔥",
@@ -151,7 +151,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 11,
-    "name": "غول نار المعظم",
+    "name": "11",
     "element": "نار",
     "element_en": "Fire",
     "element_icon": "🔥",
@@ -166,7 +166,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 12,
-    "name": "مارد نار المعظم",
+    "name": "12",
     "element": "نار",
     "element_en": "Fire",
     "element_icon": "🔥",
@@ -181,7 +181,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 13,
-    "name": "تيتان نار الأسطوري (عملاق)",
+    "name": "13",
     "element": "نار",
     "element_en": "Fire",
     "element_icon": "🔥",
@@ -196,7 +196,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 14,
-    "name": "تريتون الـمياه",
+    "name": "14",
     "element": "مياه",
     "element_en": "Water",
     "element_icon": "💧",
@@ -211,7 +211,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 15,
-    "name": "حوت الـمياه",
+    "name": "15",
     "element": "مياه",
     "element_en": "Water",
     "element_icon": "💧",
@@ -226,7 +226,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 16,
-    "name": "طوفان الـمياه",
+    "name": "16",
     "element": "مياه",
     "element_en": "Water",
     "element_icon": "💧",
@@ -241,7 +241,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 17,
-    "name": "سيران الـمياه",
+    "name": "17",
     "element": "مياه",
     "element_en": "Water",
     "element_icon": "💧",
@@ -256,7 +256,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 18,
-    "name": "موجة الـمياه",
+    "name": "18",
     "element": "مياه",
     "element_en": "Water",
     "element_icon": "💧",
@@ -271,7 +271,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 19,
-    "name": "شلال الـمياه",
+    "name": "19",
     "element": "مياه",
     "element_en": "Water",
     "element_icon": "💧",
@@ -286,7 +286,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 20,
-    "name": "قنديل مياه المعظم",
+    "name": "20",
     "element": "مياه",
     "element_en": "Water",
     "element_icon": "💧",
@@ -301,7 +301,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 21,
-    "name": "تمساح مياه المعظم",
+    "name": "21",
     "element": "مياه",
     "element_en": "Water",
     "element_icon": "💧",
@@ -316,7 +316,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 22,
-    "name": "سلحفاة مياه المعظم",
+    "name": "22",
     "element": "مياه",
     "element_en": "Water",
     "element_icon": "💧",
@@ -331,7 +331,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 23,
-    "name": "حارس مياه المعظم",
+    "name": "23",
     "element": "مياه",
     "element_en": "Water",
     "element_icon": "💧",
@@ -346,7 +346,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 24,
-    "name": "أخطبوط مياه المعظم",
+    "name": "24",
     "element": "مياه",
     "element_en": "Water",
     "element_icon": "💧",
@@ -361,7 +361,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 25,
-    "name": "نديم مياه المعظم",
+    "name": "25",
     "element": "مياه",
     "element_en": "Water",
     "element_icon": "💧",
@@ -376,7 +376,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 26,
-    "name": "تيتان مياه الأسطوري (ليفيثان)",
+    "name": "26",
     "element": "مياه",
     "element_en": "Water",
     "element_icon": "💧",
@@ -391,7 +391,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 27,
-    "name": "ذئب الـجليد",
+    "name": "27",
     "element": "جليد",
     "element_en": "Ice",
     "element_icon": "❄️",
@@ -406,7 +406,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 28,
-    "name": "جليد الـجليد",
+    "name": "28",
     "element": "جليد",
     "element_en": "Ice",
     "element_icon": "❄️",
@@ -421,7 +421,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 29,
-    "name": "صقيع الـجليد",
+    "name": "29",
     "element": "جليد",
     "element_en": "Ice",
     "element_icon": "❄️",
@@ -436,7 +436,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 30,
-    "name": "بلورة الـجليد",
+    "name": "30",
     "element": "جليد",
     "element_en": "Ice",
     "element_icon": "❄️",
@@ -451,7 +451,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 31,
-    "name": "ماموث الـجليد",
+    "name": "31",
     "element": "جليد",
     "element_en": "Ice",
     "element_icon": "❄️",
@@ -466,7 +466,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 32,
-    "name": "ساحرة الـجليد",
+    "name": "32",
     "element": "جليد",
     "element_en": "Ice",
     "element_icon": "❄️",
@@ -481,7 +481,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 33,
-    "name": "شبح الصقيع جليد المعظم",
+    "name": "33",
     "element": "جليد",
     "element_en": "Ice",
     "element_icon": "❄️",
@@ -496,7 +496,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 34,
-    "name": "غول الثلج جليد المعظم",
+    "name": "34",
     "element": "جليد",
     "element_en": "Ice",
     "element_icon": "❄️",
@@ -511,7 +511,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 35,
-    "name": "حارس القطب جليد المعظم",
+    "name": "35",
     "element": "جليد",
     "element_en": "Ice",
     "element_icon": "❄️",
@@ -526,7 +526,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 36,
-    "name": "رمح جليد المعظم",
+    "name": "36",
     "element": "جليد",
     "element_en": "Ice",
     "element_icon": "❄️",
@@ -541,7 +541,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 37,
-    "name": "تنين الجليد جليد المعظم",
+    "name": "37",
     "element": "جليد",
     "element_en": "Ice",
     "element_icon": "❄️",
@@ -556,7 +556,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 38,
-    "name": "بلور جليد المعظم",
+    "name": "38",
     "element": "جليد",
     "element_en": "Ice",
     "element_icon": "❄️",
@@ -571,7 +571,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 39,
-    "name": "تيتان جليد الأسطوري (عاصفة)",
+    "name": "39",
     "element": "جليد",
     "element_en": "Ice",
     "element_icon": "❄️",
@@ -586,7 +586,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 40,
-    "name": "صقر الـكهرباء",
+    "name": "40",
     "element": "كهرباء",
     "element_en": "Electric",
     "element_icon": "⚡",
@@ -601,7 +601,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 41,
-    "name": "برق الـكهرباء",
+    "name": "41",
     "element": "كهرباء",
     "element_en": "Electric",
     "element_icon": "⚡",
@@ -616,7 +616,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 42,
-    "name": "صاعقة الـكهرباء",
+    "name": "42",
     "element": "كهرباء",
     "element_en": "Electric",
     "element_icon": "⚡",
@@ -631,7 +631,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 43,
-    "name": "فهد الـكهرباء",
+    "name": "43",
     "element": "كهرباء",
     "element_en": "Electric",
     "element_icon": "⚡",
@@ -646,7 +646,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 44,
-    "name": "شرارة الـكهرباء",
+    "name": "44",
     "element": "كهرباء",
     "element_en": "Electric",
     "element_icon": "⚡",
@@ -661,7 +661,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 45,
-    "name": "سحلية الـكهرباء",
+    "name": "45",
     "element": "كهرباء",
     "element_en": "Electric",
     "element_icon": "⚡",
@@ -676,7 +676,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 46,
-    "name": "عاصف كهرباء المعظم",
+    "name": "46",
     "element": "كهرباء",
     "element_en": "Electric",
     "element_icon": "⚡",
@@ -691,7 +691,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 47,
-    "name": "مدمر كهرباء المعظم",
+    "name": "47",
     "element": "كهرباء",
     "element_en": "Electric",
     "element_icon": "⚡",
@@ -706,7 +706,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 48,
-    "name": "فارس البرق كهرباء المعظم",
+    "name": "48",
     "element": "كهرباء",
     "element_en": "Electric",
     "element_icon": "⚡",
@@ -721,7 +721,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 49,
-    "name": "مكثف كهرباء المعظم",
+    "name": "49",
     "element": "كهرباء",
     "element_en": "Electric",
     "element_icon": "⚡",
@@ -736,7 +736,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 50,
-    "name": "تنين الرعد كهرباء المعظم",
+    "name": "50",
     "element": "كهرباء",
     "element_en": "Electric",
     "element_icon": "⚡",
@@ -751,7 +751,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 51,
-    "name": "شاحن كهرباء المعظم",
+    "name": "51",
     "element": "كهرباء",
     "element_en": "Electric",
     "element_icon": "⚡",
@@ -766,7 +766,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 52,
-    "name": "تيتان كهرباء الأسطوري (طائر الرعد)",
+    "name": "52",
     "element": "كهرباء",
     "element_en": "Electric",
     "element_icon": "⚡",
@@ -781,7 +781,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 53,
-    "name": "نسر الـرياح",
+    "name": "53",
     "element": "رياح",
     "element_en": "Air",
     "element_icon": "🌪️",
@@ -796,7 +796,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 54,
-    "name": "عاصفة الـرياح",
+    "name": "54",
     "element": "رياح",
     "element_en": "Air",
     "element_icon": "🌪️",
@@ -811,7 +811,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 55,
-    "name": "أعصار الـرياح",
+    "name": "55",
     "element": "رياح",
     "element_en": "Air",
     "element_icon": "🌪️",
@@ -826,7 +826,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 56,
-    "name": "شبح الرياح الـرياح",
+    "name": "56",
     "element": "رياح",
     "element_en": "Air",
     "element_icon": "🌪️",
@@ -841,7 +841,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 57,
-    "name": "فارس الجو الـرياح",
+    "name": "57",
     "element": "رياح",
     "element_en": "Air",
     "element_icon": "🌪️",
@@ -856,7 +856,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 58,
-    "name": "صقر الـرياح",
+    "name": "58",
     "element": "رياح",
     "element_en": "Air",
     "element_icon": "🌪️",
@@ -871,7 +871,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 59,
-    "name": "ريشة رياح المعظم",
+    "name": "59",
     "element": "رياح",
     "element_en": "Air",
     "element_icon": "🌪️",
@@ -886,7 +886,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 60,
-    "name": "طيف الهواء رياح المعظم",
+    "name": "60",
     "element": "رياح",
     "element_en": "Air",
     "element_icon": "🌪️",
@@ -901,7 +901,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 61,
-    "name": "مهاجم رياح المعظم",
+    "name": "61",
     "element": "رياح",
     "element_en": "Air",
     "element_icon": "🌪️",
@@ -916,7 +916,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 62,
-    "name": "سهم رياح المعظم",
+    "name": "62",
     "element": "رياح",
     "element_en": "Air",
     "element_icon": "🌪️",
@@ -931,7 +931,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 63,
-    "name": "تنين السماء رياح المعظم",
+    "name": "63",
     "element": "رياح",
     "element_en": "Air",
     "element_icon": "🌪️",
@@ -946,7 +946,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 64,
-    "name": "نسيم رياح المعظم",
+    "name": "64",
     "element": "رياح",
     "element_en": "Air",
     "element_icon": "🌪️",
@@ -961,7 +961,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 65,
-    "name": "تيتان رياح الأسطوري (سيد الرياح)",
+    "name": "65",
     "element": "رياح",
     "element_en": "Air",
     "element_icon": "🌪️",
@@ -976,7 +976,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 66,
-    "name": "غولم الـأرض",
+    "name": "66",
     "element": "أرض",
     "element_en": "Earth",
     "element_icon": "🪨",
@@ -991,7 +991,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 67,
-    "name": "صخرة الـأرض",
+    "name": "67",
     "element": "أرض",
     "element_en": "Earth",
     "element_icon": "🪨",
@@ -1006,7 +1006,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 68,
-    "name": "سلحفاة الحجر الـأرض",
+    "name": "68",
     "element": "أرض",
     "element_en": "Earth",
     "element_icon": "🪨",
@@ -1021,7 +1021,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 69,
-    "name": "حارس الجبل الـأرض",
+    "name": "69",
     "element": "أرض",
     "element_en": "Earth",
     "element_icon": "🪨",
@@ -1036,7 +1036,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 70,
-    "name": "دب الصخر الـأرض",
+    "name": "70",
     "element": "أرض",
     "element_en": "Earth",
     "element_icon": "🪨",
@@ -1051,7 +1051,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 71,
-    "name": "مدرع الـأرض",
+    "name": "71",
     "element": "أرض",
     "element_en": "Earth",
     "element_icon": "🪨",
@@ -1066,7 +1066,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 72,
-    "name": "طمي أرض المعظم",
+    "name": "72",
     "element": "أرض",
     "element_en": "Earth",
     "element_icon": "🪨",
@@ -1081,7 +1081,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 73,
-    "name": "عملاق أرض المعظم",
+    "name": "73",
     "element": "أرض",
     "element_en": "Earth",
     "element_icon": "🪨",
@@ -1096,7 +1096,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 74,
-    "name": "كاسر الحجر أرض المعظم",
+    "name": "74",
     "element": "أرض",
     "element_en": "Earth",
     "element_icon": "🪨",
@@ -1111,7 +1111,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 75,
-    "name": "قبضة أرض المعظم",
+    "name": "75",
     "element": "أرض",
     "element_en": "Earth",
     "element_icon": "🪨",
@@ -1126,7 +1126,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 76,
-    "name": "تيتان الأرض أرض المعظم",
+    "name": "76",
     "element": "أرض",
     "element_en": "Earth",
     "element_icon": "🪨",
@@ -1141,7 +1141,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 77,
-    "name": "صلصال أرض المعظم",
+    "name": "77",
     "element": "أرض",
     "element_en": "Earth",
     "element_icon": "🪨",
@@ -1156,7 +1156,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 78,
-    "name": "تيتان أرض الأسطوري (قاهر الجبال)",
+    "name": "78",
     "element": "أرض",
     "element_en": "Earth",
     "element_icon": "🪨",
@@ -1171,7 +1171,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 79,
-    "name": "ذئب الشوك الـغابة",
+    "name": "79",
     "element": "غابة",
     "element_en": "Forest",
     "element_icon": "🌿",
@@ -1186,7 +1186,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 80,
-    "name": "نبات مفترس الـغابة",
+    "name": "80",
     "element": "غابة",
     "element_en": "Forest",
     "element_icon": "🌿",
@@ -1201,7 +1201,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 81,
-    "name": "شجرة معمرة الـغابة",
+    "name": "81",
     "element": "غابة",
     "element_en": "Forest",
     "element_icon": "🌿",
@@ -1216,7 +1216,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 82,
-    "name": "عنكبوت الـغابة",
+    "name": "82",
     "element": "غابة",
     "element_en": "Forest",
     "element_icon": "🌿",
@@ -1231,7 +1231,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 83,
-    "name": "أفعى الغاب الـغابة",
+    "name": "83",
     "element": "غابة",
     "element_en": "Forest",
     "element_icon": "🌿",
@@ -1246,7 +1246,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 84,
-    "name": "ساحر الأوراق الـغابة",
+    "name": "84",
     "element": "غابة",
     "element_en": "Forest",
     "element_icon": "🌿",
@@ -1261,7 +1261,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 85,
-    "name": "ظبي غابة المعظم",
+    "name": "85",
     "element": "غابة",
     "element_en": "Forest",
     "element_icon": "🌿",
@@ -1276,7 +1276,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 86,
-    "name": "حارس الأحراش غابة المعظم",
+    "name": "86",
     "element": "غابة",
     "element_en": "Forest",
     "element_icon": "🌿",
@@ -1291,7 +1291,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 87,
-    "name": "زهرة السم غابة المعظم",
+    "name": "87",
     "element": "غابة",
     "element_en": "Forest",
     "element_icon": "🌿",
@@ -1306,7 +1306,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 88,
-    "name": "دب غابة المعظم",
+    "name": "88",
     "element": "غابة",
     "element_en": "Forest",
     "element_icon": "🌿",
@@ -1321,7 +1321,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 89,
-    "name": "تنين الخشب غابة المعظم",
+    "name": "89",
     "element": "غابة",
     "element_en": "Forest",
     "element_icon": "🌿",
@@ -1336,7 +1336,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 90,
-    "name": "عشبة غابة المعظم",
+    "name": "90",
     "element": "غابة",
     "element_en": "Forest",
     "element_icon": "🌿",
@@ -1351,7 +1351,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 91,
-    "name": "ملاك الـضياء",
+    "name": "91",
     "element": "ضياء",
     "element_en": "Light",
     "element_icon": "✨",
@@ -1366,7 +1366,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 92,
-    "name": "فارس النور الـضياء",
+    "name": "92",
     "element": "ضياء",
     "element_en": "Light",
     "element_icon": "✨",
@@ -1381,7 +1381,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 93,
-    "name": "شفق الـضياء",
+    "name": "93",
     "element": "ضياء",
     "element_en": "Light",
     "element_icon": "✨",
@@ -1396,7 +1396,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 94,
-    "name": "راهب الـضياء",
+    "name": "94",
     "element": "ضياء",
     "element_en": "Light",
     "element_icon": "✨",
@@ -1411,7 +1411,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 95,
-    "name": "شعاع الـضياء",
+    "name": "95",
     "element": "ضياء",
     "element_en": "Light",
     "element_icon": "✨",
@@ -1426,7 +1426,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 96,
-    "name": "حارس الفجر الـضياء",
+    "name": "96",
     "element": "ضياء",
     "element_en": "Light",
     "element_icon": "✨",
@@ -1441,7 +1441,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 97,
-    "name": "براق ضياء المعظم",
+    "name": "97",
     "element": "ضياء",
     "element_en": "Light",
     "element_icon": "✨",
@@ -1456,7 +1456,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 98,
-    "name": "مقدس ضياء المعظم",
+    "name": "98",
     "element": "ضياء",
     "element_en": "Light",
     "element_icon": "✨",
@@ -1471,7 +1471,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 99,
-    "name": "صقر الشمس ضياء المعظم",
+    "name": "99",
     "element": "ضياء",
     "element_en": "Light",
     "element_icon": "✨",
@@ -1486,7 +1486,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 100,
-    "name": "درع النور ضياء المعظم",
+    "name": "100",
     "element": "ضياء",
     "element_en": "Light",
     "element_icon": "✨",
@@ -1501,7 +1501,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 101,
-    "name": "سيرافيم ضياء المعظم",
+    "name": "101",
     "element": "ضياء",
     "element_en": "Light",
     "element_icon": "✨",
@@ -1516,7 +1516,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 102,
-    "name": "تاج ضياء المعظم",
+    "name": "102",
     "element": "ضياء",
     "element_en": "Light",
     "element_icon": "✨",
@@ -1531,7 +1531,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 103,
-    "name": "ظل الـظلام",
+    "name": "103",
     "element": "ظلام",
     "element_en": "Dark",
     "element_icon": "🌑",
@@ -1546,7 +1546,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 104,
-    "name": "شيطان الـظلام",
+    "name": "104",
     "element": "ظلام",
     "element_en": "Dark",
     "element_icon": "🌑",
@@ -1561,7 +1561,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 105,
-    "name": "غراب الـظلام",
+    "name": "105",
     "element": "ظلام",
     "element_en": "Dark",
     "element_icon": "🌑",
@@ -1576,7 +1576,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 106,
-    "name": "كابوس الـظلام",
+    "name": "106",
     "element": "ظلام",
     "element_en": "Dark",
     "element_icon": "🌑",
@@ -1591,7 +1591,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 107,
-    "name": "سفاح الـظلام",
+    "name": "107",
     "element": "ظلام",
     "element_en": "Dark",
     "element_icon": "🌑",
@@ -1606,7 +1606,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 108,
-    "name": "فارس العتمة الـظلام",
+    "name": "108",
     "element": "ظلام",
     "element_en": "Dark",
     "element_icon": "🌑",
@@ -1621,7 +1621,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 109,
-    "name": "مصاص دماء ظلام المعظم",
+    "name": "109",
     "element": "ظلام",
     "element_en": "Dark",
     "element_icon": "🌑",
@@ -1636,7 +1636,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 110,
-    "name": "وحش الأعماق ظلام المعظم",
+    "name": "110",
     "element": "ظلام",
     "element_en": "Dark",
     "element_icon": "🌑",
@@ -1651,7 +1651,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 111,
-    "name": "منجل ظلام المعظم",
+    "name": "111",
     "element": "ظلام",
     "element_en": "Dark",
     "element_icon": "🌑",
@@ -1666,7 +1666,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 112,
-    "name": "حاصد ظلام المعظم",
+    "name": "112",
     "element": "ظلام",
     "element_en": "Dark",
     "element_icon": "🌑",
@@ -1681,7 +1681,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 113,
-    "name": "أمير الظلال ظلام المعظم",
+    "name": "113",
     "element": "ظلام",
     "element_en": "Dark",
     "element_icon": "🌑",
@@ -1696,7 +1696,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 114,
-    "name": "غسق ظلام المعظم",
+    "name": "114",
     "element": "ظلام",
     "element_en": "Dark",
     "element_icon": "🌑",
@@ -1711,7 +1711,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 115,
-    "name": "دبابة الـميكا",
+    "name": "115",
     "element": "ميكا",
     "element_en": "Mecha",
     "element_icon": "⚙️",
@@ -1726,7 +1726,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 116,
-    "name": "قناص آلي الـميكا",
+    "name": "116",
     "element": "ميكا",
     "element_en": "Mecha",
     "element_icon": "⚙️",
@@ -1741,7 +1741,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 117,
-    "name": "مدرعة الـميكا",
+    "name": "117",
     "element": "ميكا",
     "element_en": "Mecha",
     "element_icon": "⚙️",
@@ -1756,7 +1756,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 118,
-    "name": "روبوت حربي الـميكا",
+    "name": "118",
     "element": "ميكا",
     "element_en": "Mecha",
     "element_icon": "⚙️",
@@ -1771,7 +1771,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 119,
-    "name": "مدفع الـميكا",
+    "name": "119",
     "element": "ميكا",
     "element_en": "Mecha",
     "element_icon": "⚙️",
@@ -1786,7 +1786,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 120,
-    "name": "حفار الـميكا",
+    "name": "120",
     "element": "ميكا",
     "element_en": "Mecha",
     "element_icon": "⚙️",
@@ -1801,7 +1801,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 121,
-    "name": "حارس حديدي ميكا المعظم",
+    "name": "121",
     "element": "ميكا",
     "element_en": "Mecha",
     "element_icon": "⚙️",
@@ -1816,7 +1816,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 122,
-    "name": "طائرة مسيرة ميكا المعظم",
+    "name": "122",
     "element": "ميكا",
     "element_en": "Mecha",
     "element_icon": "⚙️",
@@ -1831,7 +1831,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 123,
-    "name": "محارب تيتانيوم ميكا المعظم",
+    "name": "123",
     "element": "ميكا",
     "element_en": "Mecha",
     "element_icon": "⚙️",
@@ -1846,7 +1846,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 124,
-    "name": "قاذف ميكا المعظم",
+    "name": "124",
     "element": "ميكا",
     "element_en": "Mecha",
     "element_icon": "⚙️",
@@ -1861,7 +1861,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 125,
-    "name": "تيتان الميكا ميكا المعظم",
+    "name": "125",
     "element": "ميكا",
     "element_en": "Mecha",
     "element_icon": "⚙️",
@@ -1876,7 +1876,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 126,
-    "name": "درع آلي ميكا المعظم",
+    "name": "126",
     "element": "ميكا",
     "element_en": "Mecha",
     "element_icon": "⚙️",
@@ -1891,7 +1891,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 127,
-    "name": "طيف الـأشباح",
+    "name": "127",
     "element": "أشباح",
     "element_en": "Ghosts",
     "element_icon": "👻",
@@ -1906,7 +1906,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 128,
-    "name": "شبح الـأشباح",
+    "name": "128",
     "element": "أشباح",
     "element_en": "Ghosts",
     "element_icon": "👻",
@@ -1921,7 +1921,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 129,
-    "name": "روح تائهة الـأشباح",
+    "name": "129",
     "element": "أشباح",
     "element_en": "Ghosts",
     "element_icon": "👻",
@@ -1936,7 +1936,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 130,
-    "name": "قرين الـأشباح",
+    "name": "130",
     "element": "أشباح",
     "element_en": "Ghosts",
     "element_icon": "👻",
@@ -1951,7 +1951,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 131,
-    "name": "خيال الـأشباح",
+    "name": "131",
     "element": "أشباح",
     "element_en": "Ghosts",
     "element_icon": "👻",
@@ -1966,7 +1966,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 132,
-    "name": "شبح الأطلال الـأشباح",
+    "name": "132",
     "element": "أشباح",
     "element_en": "Ghosts",
     "element_icon": "👻",
@@ -1981,7 +1981,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 133,
-    "name": "طيف الموت أشباح المعظم",
+    "name": "133",
     "element": "أشباح",
     "element_en": "Ghosts",
     "element_icon": "👻",
@@ -1996,7 +1996,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 134,
-    "name": "طائف أشباح المعظم",
+    "name": "134",
     "element": "أشباح",
     "element_en": "Ghosts",
     "element_icon": "👻",
@@ -2011,7 +2011,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 135,
-    "name": "نسمة روحية أشباح المعظم",
+    "name": "135",
     "element": "أشباح",
     "element_en": "Ghosts",
     "element_icon": "👻",
@@ -2026,7 +2026,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 136,
-    "name": "طيف الليل أشباح المعظم",
+    "name": "136",
     "element": "أشباح",
     "element_en": "Ghosts",
     "element_icon": "👻",
@@ -2041,7 +2041,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 137,
-    "name": "سيد الأرواح أشباح المعظم",
+    "name": "137",
     "element": "أشباح",
     "element_en": "Ghosts",
     "element_icon": "👻",
@@ -2056,7 +2056,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 138,
-    "name": "كفن أشباح المعظم",
+    "name": "138",
     "element": "أشباح",
     "element_en": "Ghosts",
     "element_icon": "👻",
@@ -2071,7 +2071,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 139,
-    "name": "ساحر الـسحر",
+    "name": "139",
     "element": "سحر",
     "element_en": "Arcane",
     "element_icon": "🔮",
@@ -2086,7 +2086,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 140,
-    "name": "حكيم الـسحر",
+    "name": "140",
     "element": "سحر",
     "element_en": "Arcane",
     "element_icon": "🔮",
@@ -2101,7 +2101,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 141,
-    "name": "عراف الـسحر",
+    "name": "141",
     "element": "سحر",
     "element_en": "Arcane",
     "element_icon": "🔮",
@@ -2116,7 +2116,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 142,
-    "name": "متصوف الـسحر",
+    "name": "142",
     "element": "سحر",
     "element_en": "Arcane",
     "element_icon": "🔮",
@@ -2131,7 +2131,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 143,
-    "name": "طالب سحر الـسحر",
+    "name": "143",
     "element": "سحر",
     "element_en": "Arcane",
     "element_icon": "🔮",
@@ -2146,7 +2146,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 144,
-    "name": "كاهن غامض الـسحر",
+    "name": "144",
     "element": "سحر",
     "element_en": "Arcane",
     "element_icon": "🔮",
@@ -2161,7 +2161,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 145,
-    "name": "خيميائي سحر المعظم",
+    "name": "145",
     "element": "سحر",
     "element_en": "Arcane",
     "element_icon": "🔮",
@@ -2176,7 +2176,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 146,
-    "name": "حارس الأسرار سحر المعظم",
+    "name": "146",
     "element": "سحر",
     "element_en": "Arcane",
     "element_icon": "🔮",
@@ -2191,7 +2191,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 147,
-    "name": "عين الحكمة سحر المعظم",
+    "name": "147",
     "element": "سحر",
     "element_en": "Arcane",
     "element_icon": "🔮",
@@ -2206,7 +2206,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 148,
-    "name": "ناسخ الطلاسم سحر المعظم",
+    "name": "148",
     "element": "سحر",
     "element_en": "Arcane",
     "element_icon": "🔮",
@@ -2221,7 +2221,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 149,
-    "name": "لورد الأركين سحر المعظم",
+    "name": "149",
     "element": "سحر",
     "element_en": "Arcane",
     "element_icon": "🔮",
@@ -2236,7 +2236,7 @@ window.MONSTERS_DB = [
   },
   {
     "id": 150,
-    "name": "طيف الطلاسم سحر المعظم",
+    "name": "150",
     "element": "سحر",
     "element_en": "Arcane",
     "element_icon": "🔮",

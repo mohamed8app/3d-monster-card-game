@@ -68,6 +68,7 @@
     <Compile Include="Assets\Scripts\Core\PlayerState.cs" />
     <Compile Include="Assets\Scripts\Data\EnvironmentData.cs" />
     <Compile Include="Assets\Scripts\Core\MonsterInstance.cs" />
+    <Compile Include="Assets\Scripts\Audio\SoundManager.cs" />
     <Compile Include="Assets\Scripts\UI\BattleAnimations.cs" />
     <Compile Include="Assets\Scripts\Data\CardData.cs" />
     <Compile Include="Assets\Scripts\Core\BoardSlot.cs" />

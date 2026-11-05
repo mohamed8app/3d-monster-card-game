@@ -63,6 +63,13 @@ namespace MonsterCardGame.Core
                 string wrappedJson = "{\"monsters\":" + json + "}";
                 var wrapper = JsonUtility.FromJson<MonsterDatabaseWrapper>(wrappedJson);
                 allMonsters = wrapper.monsters;
+                if (allMonsters != null)
+                {
+                    foreach (var m in allMonsters)
+                    {
+                        if (m != null) m.name = m.id.ToString();
+                    }
+                }
                 Debug.Log($"✅ تم تحميل {allMonsters.Count} وحشاً من قاعدة البيانات بنجاح!");
             }
         }

@@ -985,6 +985,7 @@ namespace MonsterCardGame.UI
             var chosenCard = selectedCardForAction;
             if (gm.humanPlayer.SummonMonster(chosenCard, slotIndex, gm.currentTurn))
             {
+                MonsterCardGame.Audio.SoundManager.Instance.PlayCardPlay();
                 LogCombatMessage($"✅ تم إنزال [{chosenCard.name}] في الخانة {slotIndex}.");
                 DeselectHandCards();
                 UpdateUI();
@@ -1053,6 +1054,7 @@ namespace MonsterCardGame.UI
 
             if (gm.humanPlayer.SacrificeCard(card))
             {
+                MonsterCardGame.Audio.SoundManager.Instance.PlayCardSacrifice();
                 LogCombatMessage($"🔥 تمت التضحية بـ [{card.name}] بنقرة زر الفأرة الأيمن! كسبت +1 سقف مانا و +1 باور.");
                 DeselectHandCards();
                 UpdateUI();
@@ -1087,6 +1089,7 @@ namespace MonsterCardGame.UI
             var gm = GameManager.Instance;
             if (gm == null || !gm.isPlayerTurn) return;
 
+            MonsterCardGame.Audio.SoundManager.Instance.PlayTurnEnd();
             DeselectHandCards();
             gm.OnPlayerEndTurn();
             UpdateUI();
@@ -1236,8 +1239,8 @@ namespace MonsterCardGame.UI
             {
                 string stats = 
                     $"⏱️ الجولات المستغرقة: {turns} جولات تكتيكية\n" +
-                    $"❤️ صحة بطلك المتبقية: {playerHp} / 200 HP\n" +
-                    $"💀 صحة قائد الخصم: {enemyHp} / 200 HP\n" +
+                    $"❤️ صحة بطلك المتبقية: {playerHp} / 500 HP\n" +
+                    $"💀 صحة قائد الخصم: {enemyHp} / 500 HP\n" +
                     $"⚔️ الوحوش التي استدعيتها: {monstersSummoned} وحشاً\n" +
                     $"🔮 التعاويذ التي أطلقتها: {spellsCast} تعويذة\n" +
                     $"🌍 مناخ نهاية المعركة: {envName}\n" +

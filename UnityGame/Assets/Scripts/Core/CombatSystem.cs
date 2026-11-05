@@ -81,6 +81,7 @@ namespace MonsterCardGame.Core
             {
                 var enemyMonster = defenderSlot.currentMonster;
                 enemyMonster.TakeDamage(atkPower);
+                MonsterCardGame.Audio.SoundManager.Instance.PlayCardHit();
 
                 if (defenderSlotView != null && BattleUIManager.Instance != null)
                 {
@@ -90,6 +91,7 @@ namespace MonsterCardGame.Core
 
                 if (!enemyMonster.IsAlive)
                 {
+                    MonsterCardGame.Audio.SoundManager.Instance.PlayCardDeath();
                     defender.graveyard.Add(enemyMonster.data);
                     defenderSlot.ClearSlot();
                 }
@@ -97,6 +99,7 @@ namespace MonsterCardGame.Core
             else
             {
                 defender.TakeLeaderDamage(atkPower);
+                MonsterCardGame.Audio.SoundManager.Instance.PlayHpDamage();
 
                 if (BattleUIManager.Instance != null)
                 {

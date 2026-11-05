@@ -339,6 +339,11 @@ namespace MonsterCardGame.UI
             currentElement = elem;
             currentLevel = lvl;
 
+            if (changedElement && !string.IsNullOrEmpty(elem))
+            {
+                MonsterCardGame.Audio.SoundManager.Instance.SetEnvironmentAmbience(elem);
+            }
+
             float lvlAlphaBoost = (lvl == 2) ? 0.08f : (lvl == 3 ? 0.18f : 0f);
 
             switch (elem)
@@ -562,13 +567,13 @@ namespace MonsterCardGame.UI
             else if (currentLevel == 2) intensity = 1.65f;
             else if (currentLevel == 3) intensity = 2.35f;
 
-            // تأثير خطر نقاط حياة القادة (احتدام الحرب عند انخفاض الـ HP)
+            // تأثير خطر نقاط حياة القادة (احتدام الحرب عند انخفاض الـ HP من أصل 500)
             var gm = GameManager.Instance;
             if (gm != null && gm.humanPlayer != null && gm.aiPlayer != null)
             {
                 int minHp = Mathf.Min(gm.humanPlayer.currentHp, gm.aiPlayer.currentHp);
-                if (minHp < 60) intensity += 0.65f;
-                else if (minHp < 120) intensity += 0.30f;
+                if (minHp < 150) intensity += 0.65f;
+                else if (minHp < 300) intensity += 0.30f;
             }
 
             return intensity;
@@ -723,12 +728,12 @@ namespace MonsterCardGame.UI
 
             Color desiredVig = targetVignetteColor;
 
-            // نبض أحمر حربي عند انخفاض صحة أحد القادة عن 70 HP
+            // نبض أحمر حربي عند انخفاض صحة أحد القادة عن 175 HP (من أصل 500 HP)
             var gm = GameManager.Instance;
             if (gm != null && gm.humanPlayer != null && gm.aiPlayer != null)
             {
                 int minHp = Mathf.Min(gm.humanPlayer.currentHp, gm.aiPlayer.currentHp);
-                if (minHp < 70)
+                if (minHp < 175)
                 {
                     float dangerPulse = 0.5f + 0.5f * Mathf.Sin(time * 6.0f);
                     desiredVig = Color.Lerp(desiredVig, new Color(0.75f, 0.05f, 0.05f, 0.78f), dangerPulse * 0.6f);

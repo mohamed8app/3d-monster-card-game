@@ -55,8 +55,9 @@ namespace MonsterCardGame.UI
 
             Debug.Log("🚀 جاري بناء ساحة المعركة التكتيكية 3D المحدثة بالكامل مع محراب البيئة وبطاقات السحر...");
 
-            // 1. الكاميرا
+            // 1. الكاميرا والصوت
             EnsureCamera();
+            EnsureSoundManager();
 
             // 2. نظام الإدخال والماوس
             EnsureEventSystem();
@@ -118,14 +119,31 @@ namespace MonsterCardGame.UI
 
         private static void EnsureCamera()
         {
-            if (Camera.main == null)
+            Camera cam = Camera.main;
+            if (cam == null)
             {
                 var camObj = new GameObject("Main Camera");
-                var cam = camObj.AddComponent<Camera>();
+                cam = camObj.AddComponent<Camera>();
                 camObj.tag = "MainCamera";
                 camObj.transform.position = new Vector3(0, 0, -10);
                 cam.clearFlags = CameraClearFlags.SolidColor;
                 cam.backgroundColor = new Color(0.06f, 0.07f, 0.11f);
+            }
+
+            if (cam.GetComponent<AudioListener>() == null)
+            {
+                cam.gameObject.AddComponent<AudioListener>();
+                Debug.Log("🔊 [GameBootstrapper] تم إضافة AudioListener إلى كاميرا اللعبة بنجاح.");
+            }
+        }
+
+        private static void EnsureSoundManager()
+        {
+            if (UnityEngine.Object.FindAnyObjectByType<MonsterCardGame.Audio.SoundManager>() == null)
+            {
+                var smObj = new GameObject("SoundManager");
+                smObj.AddComponent<MonsterCardGame.Audio.SoundManager>();
+                Debug.Log("🔊 [GameBootstrapper] تم إنشاء نظام SoundManager في مشهد المعركة بنجاح.");
             }
         }
 
@@ -209,7 +227,7 @@ namespace MonsterCardGame.UI
                 new Color(0.18f, 0.14f, 0.2f, 0.95f), new Color(0.9f, 0.2f, 0.25f),
                 new Vector2(0, -10), new Vector2(290, 16));
 
-            ui.enemyHpText = CreateText(enemyCrest.transform, "EnemyHpText", "200 / 200 HP", 15,
+            ui.enemyHpText = CreateText(enemyCrest.transform, "EnemyHpText", "500 / 500 HP", 15,
                 Color.white, TextAnchor.MiddleCenter, new Vector2(0, -10), new Vector2(290, 20));
 
             // 2. يد الخصم المستترة (Top-Center Enemy Hand Panel)
@@ -322,7 +340,7 @@ namespace MonsterCardGame.UI
                 new Color(0.12f, 0.18f, 0.14f, 0.95f), new Color(0.2f, 0.9f, 0.35f),
                 new Vector2(0, 6), new Vector2(290, 16));
 
-            ui.playerHpText = CreateText(playerCrest.transform, "PlayerHpText", "200 / 200 HP", 15,
+            ui.playerHpText = CreateText(playerCrest.transform, "PlayerHpText", "500 / 500 HP", 15,
                 Color.white, TextAnchor.MiddleCenter, new Vector2(0, 6), new Vector2(290, 20));
 
             ui.playerPowerText = CreateText(playerCrest.transform, "PlayerPowerText", "[ 💎 ]  الباور: 1/1  |  المانا: 1/8", 17,

@@ -242,11 +242,8 @@ for elem_idx, (elem_ar, elem_en, elem_icon) in enumerate(ELEMENTS):
             a2 = theme["titan_act"][1]
             active_str = f"1. {a1} | 2. {a2}"
 
-        # تسمية الوحش
-        noun = theme["nouns"][i % len(theme["nouns"])]
-        monster_name = f"{noun} الـ{elem_ar}" if i < 6 else f"{noun} {elem_ar} المعظم"
-        if tier_num == 7:
-            monster_name = f"تيتان {elem_ar} الأسطوري ({noun})"
+        # تسمية الوحش بالرقم فقط بناءً على طلب المصمم
+        monster_name = str(card_id)
 
         monster_obj = {
             "id": card_id,
@@ -266,10 +263,19 @@ for elem_idx, (elem_ar, elem_en, elem_icon) in enumerate(ELEMENTS):
         monsters.append(monster_obj)
         card_id += 1
 
-# حفظ بصيغة JSON نظيفة للبرمجة والمحاكاة
+# حفظ بصيغة JSON نظيفة للبرمجة والمحاكاة وفي مجلد Resources الخاص بـ Unity
 json_path = r"d:\deck game\monsters_150.json"
+unity_json_path = r"d:\deck game\UnityGame\Assets\Resources\monsters_150.json"
+js_path = r"d:\deck game\monsters_data.js"
+
 with open(json_path, "w", encoding="utf-8") as f:
     json.dump(monsters, f, ensure_ascii=False, indent=2)
+
+with open(unity_json_path, "w", encoding="utf-8") as f:
+    json.dump(monsters, f, ensure_ascii=False, indent=2)
+
+with open(js_path, "w", encoding="utf-8") as f:
+    f.write("const MONSTERS_DATA = " + json.dumps(monsters, ensure_ascii=False, indent=2) + ";\n")
 
 # حفظ ككتالوج ماركداون كامل ومنظم في MONSTERS_DATABASE_150.md
 md_path = r"d:\deck game\MONSTERS_DATABASE_150.md"

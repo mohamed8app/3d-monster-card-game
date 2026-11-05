@@ -9,8 +9,8 @@ namespace MonsterCardGame.Core
     {
         [Header("Leader Stats")]
         public string playerName = "اللاعب";
-        public int currentHp = 200;
-        public int maxHp = 200;
+        public int currentHp = 500;
+        public int maxHp = 500;
 
         [Header("Resources")]
         public int manaCapacity = 1;
@@ -84,6 +84,10 @@ namespace MonsterCardGame.Core
                 if (hand.Count < 10)
                 {
                     hand.Add(card);
+                    if (MonsterCardGame.Audio.SoundManager.Instance != null)
+                    {
+                        MonsterCardGame.Audio.SoundManager.Instance.PlayCardDraw();
+                    }
                     Debug.Log($"[{playerName}] سحب البطاقة: {card.name} (نوع: {card.cardType})");
                     return true;
                 }
