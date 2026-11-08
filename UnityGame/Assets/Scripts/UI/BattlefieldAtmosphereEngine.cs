@@ -22,6 +22,7 @@ namespace MonsterCardGame.UI
         public Image transitionGroundImage;
         public Image ambientTintOverlay;
         public RectTransform battleBoardRect;
+        public RectTransform wholeScreenRect;
 
         private bool isInitialized = false;
         private static readonly Dictionary<string, Sprite> envSpriteCache = new Dictionary<string, Sprite>();
@@ -167,11 +168,18 @@ namespace MonsterCardGame.UI
             isInitialized = true;
             arenaGroundImage = groundImg;
 
-            // Locate CenterBattleBoard for continuous Level 3 Screen Shake
+            // Locate ScreenRootContainer (whole screen) and CenterBattleBoard for continuous Level 3 Screen Shake
             var canvas = GetComponentInParent<Canvas>();
             if (canvas != null)
             {
-                var bbTr = canvas.transform.Find("CenterBattleBoard");
+                var srTr = canvas.transform.Find("ScreenRootContainer");
+                if (srTr != null)
+                {
+                    wholeScreenRect = srTr.GetComponent<RectTransform>();
+                }
+
+                var bbTr = canvas.transform.Find("ScreenRootContainer/CenterBattleBoard");
+                if (bbTr == null) bbTr = canvas.transform.Find("CenterBattleBoard");
                 if (bbTr != null)
                 {
                     battleBoardRect = bbTr.GetComponent<RectTransform>();
@@ -331,11 +339,6 @@ namespace MonsterCardGame.UI
             bool changed = (elem != currentElement) || (lvl != currentLevel);
             currentElement = elem;
             currentLevel = lvl;
-
-            if (changed && !string.IsNullOrEmpty(elem) && MonsterCardGame.Audio.SoundManager.Instance != null)
-            {
-                MonsterCardGame.Audio.SoundManager.Instance.SetEnvironmentAmbience(elem);
-            }
 
             if (changed)
             {
@@ -674,19 +677,10 @@ namespace MonsterCardGame.UI
             UpdateChannelFade(channelA, dt);
             UpdateChannelFade(channelB, dt);
 
-            // 2. Duck SoundManager generic ambience while custom video audio is active
-            bool hasVideoAudio = (channelA != null && channelA.audio.isPlaying && channelA.currentAlpha > 0.1f) ||
-                                 (channelB != null && channelB.audio.isPlaying && channelB.currentAlpha > 0.1f);
-
-            if (MonsterCardGame.Audio.SoundManager.Instance != null)
-            {
-                MonsterCardGame.Audio.SoundManager.Instance.ambienceVolume = hasVideoAudio ? 0.05f : 0.40f;
-            }
-
-            // 3. Level 3 Cataclysm Continuous Screen Tremor (المستوي التالت في اي بيئه لازم تفضل تهز الشاشه)
+            // 2. Level 3 Cataclysm Continuous Screen Tremor (Whole Screen Shake, Reduced Intensity)
             if (currentLevel == 3)
             {
-                shakeIntensity = Mathf.MoveTowards(shakeIntensity, 1f, dt * 2.5f);
+                shakeIntensity = Mathf.MoveTowards(shakeIntensity, 1f, dt * 2.2f);
             }
             else
             {
@@ -696,17 +690,22 @@ namespace MonsterCardGame.UI
             if (shakeIntensity > 0.001f)
             {
                 float t = Time.time;
-                // High-frequency volcanic rumble + deep seismic oscillation + organic Perlin jitter
-                float rumbleX = (Mathf.Sin(t * 31f) * 0.55f + Mathf.Sin(t * 16.3f) * 0.45f);
-                float rumbleY = (Mathf.Cos(t * 26f) * 0.55f + Mathf.Cos(t * 12.7f) * 0.45f);
-                float perlinX = (Mathf.PerlinNoise(t * 22f, 0f) - 0.5f) * 2f;
-                float perlinY = (Mathf.PerlinNoise(0f, t * 22f) - 0.5f) * 2f;
+                // High-frequency volcanic rumble + deep seismic oscillation (calibrated to be pleasant)
+                float rumbleX = (Mathf.Sin(t * 26f) * 0.55f + Mathf.Sin(t * 13.5f) * 0.45f);
+                float rumbleY = (Mathf.Cos(t * 22f) * 0.55f + Mathf.Cos(t * 11.2f) * 0.45f);
+                float perlinX = (Mathf.PerlinNoise(t * 18f, 0f) - 0.5f) * 2f;
+                float perlinY = (Mathf.PerlinNoise(0f, t * 18f) - 0.5f) * 2f;
 
-                float shakeOffsetX = (rumbleX * 3.4f + perlinX * 2.6f) * shakeIntensity;
-                float shakeOffsetY = (rumbleY * 2.8f + perlinY * 2.2f) * shakeIntensity;
-                float shakeRot = (Mathf.Sin(t * 18f) * 0.35f + (Mathf.PerlinNoise(t * 15f, t * 15f) - 0.5f) * 0.4f) * shakeIntensity;
+                float shakeOffsetX = (rumbleX * 1.9f + perlinX * 1.4f) * shakeIntensity;
+                float shakeOffsetY = (rumbleY * 1.6f + perlinY * 1.2f) * shakeIntensity;
+                float shakeRot = (Mathf.Sin(t * 15f) * 0.10f + (Mathf.PerlinNoise(t * 13f, t * 13f) - 0.5f) * 0.12f) * shakeIntensity;
 
-                if (battleBoardRect != null)
+                if (wholeScreenRect != null)
+                {
+                    wholeScreenRect.anchoredPosition = new Vector2(shakeOffsetX, shakeOffsetY);
+                    wholeScreenRect.localRotation = Quaternion.Euler(0f, 0f, shakeRot);
+                }
+                else if (battleBoardRect != null)
                 {
                     battleBoardRect.anchoredPosition = baseBoardPos + new Vector2(shakeOffsetX, shakeOffsetY);
                     battleBoardRect.localRotation = Quaternion.Euler(0f, 0f, shakeRot);
@@ -714,11 +713,16 @@ namespace MonsterCardGame.UI
 
                 if (arenaGroundImage != null)
                 {
-                    arenaGroundImage.rectTransform.anchoredPosition = baseGroundPos + new Vector2(shakeOffsetX * 0.35f, shakeOffsetY * 0.35f);
+                    arenaGroundImage.rectTransform.anchoredPosition = baseGroundPos + new Vector2(shakeOffsetX * 0.25f, shakeOffsetY * 0.25f);
                 }
             }
             else
             {
+                if (wholeScreenRect != null)
+                {
+                    wholeScreenRect.anchoredPosition = Vector2.zero;
+                    wholeScreenRect.localRotation = Quaternion.identity;
+                }
                 if (battleBoardRect != null)
                 {
                     battleBoardRect.anchoredPosition = baseBoardPos;
