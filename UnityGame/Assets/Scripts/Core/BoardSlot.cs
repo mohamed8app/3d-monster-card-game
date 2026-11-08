@@ -6,10 +6,10 @@ namespace MonsterCardGame.Core
 {
     public enum SlotType
     {
-        LeftWing,           // الخانات 0، 1: جناح أيسر
-        CenterFront,        // الخانات 2، 3: وسط أمامي
-        RightWing,          // الخانات 4، 5: جناح أيمن
-        BacklineGuardian    // الخانة 6: مدافع خلفي بالوسط
+        LeftWing,           // Slots 0, 1: Left Flank
+        CenterFront,        // Slots 2, 3: Vanguard Center
+        RightWing,          // Slots 4, 5: Right Flank
+        BacklineGuardian    // Slot 6: Backline Guardian
     }
 
     public class BoardSlot : MonoBehaviour

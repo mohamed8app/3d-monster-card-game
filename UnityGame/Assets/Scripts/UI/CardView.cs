@@ -32,12 +32,12 @@ namespace MonsterCardGame.UI
             monsterData = data;
             monsterInstance = instance;
 
-            if (nameText != null) nameText.text = ArabicFixer.Fix(data.name);
+            if (nameText != null) nameText.text = data.name;
             if (costText != null) costText.text = $"{data.cost}";
             if (atkText != null) atkText.text = $"{data.atk}";
             if (defText != null) defText.text = $"{data.def}";
-            if (elementText != null) elementText.text = ArabicFixer.Fix(data.element);
-            if (roleText != null) roleText.text = ArabicFixer.Fix(data.role);
+            if (elementText != null) elementText.text = data.element;
+            if (roleText != null) roleText.text = data.role;
 
             ApplyElementColor(data.element);
         }
@@ -58,18 +58,18 @@ namespace MonsterCardGame.UI
             Color elemColor = Color.gray;
             switch (element)
             {
-                case "نار": elemColor = new Color(0.9f, 0.25f, 0.2f); break;
-                case "مياه": elemColor = new Color(0.2f, 0.5f, 0.95f); break;
-                case "جليد": elemColor = new Color(0.4f, 0.85f, 0.95f); break;
-                case "أرض": elemColor = new Color(0.6f, 0.45f, 0.25f); break;
-                case "كهرباء": elemColor = new Color(0.95f, 0.85f, 0.15f); break;
-                case "رياح": elemColor = new Color(0.4f, 0.9f, 0.7f); break;
-                case "غابة": elemColor = new Color(0.25f, 0.75f, 0.3f); break;
-                case "ضياء": elemColor = new Color(1.0f, 0.95f, 0.6f); break;
-                case "ظلام": elemColor = new Color(0.35f, 0.15f, 0.5f); break;
-                case "ميكا": elemColor = new Color(0.7f, 0.75f, 0.8f); break;
-                case "أشباح": elemColor = new Color(0.65f, 0.5f, 0.85f); break;
-                case "سحر": elemColor = new Color(0.85f, 0.35f, 0.85f); break;
+                case "Fire": elemColor = new Color(0.9f, 0.25f, 0.2f); break;
+                case "Water": elemColor = new Color(0.2f, 0.5f, 0.95f); break;
+                case "Ice": elemColor = new Color(0.4f, 0.85f, 0.95f); break;
+                case "Earth": elemColor = new Color(0.6f, 0.45f, 0.25f); break;
+                case "Electric": elemColor = new Color(0.95f, 0.85f, 0.15f); break;
+                case "Air": elemColor = new Color(0.4f, 0.9f, 0.7f); break;
+                case "Forest": elemColor = new Color(0.25f, 0.75f, 0.3f); break;
+                case "Light": elemColor = new Color(1.0f, 0.95f, 0.6f); break;
+                case "Dark": elemColor = new Color(0.35f, 0.15f, 0.5f); break;
+                case "Mecha": elemColor = new Color(0.7f, 0.75f, 0.8f); break;
+                case "Ghosts": elemColor = new Color(0.65f, 0.5f, 0.85f); break;
+                case "Arcane": elemColor = new Color(0.85f, 0.35f, 0.85f); break;
             }
             cardFrame.color = elemColor;
         }

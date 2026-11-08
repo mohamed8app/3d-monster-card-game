@@ -20,7 +20,7 @@ namespace MonsterCardGame.UI
         public Transform cardHolder;
         public CardView placedCardView;
 
-        // كائنات بطاقة الوحش الميدانية العمودية (Portrait Field Card Token Standee)
+        // Portrait Field Card Token Standee
         public CardData currentCardData;
         public MonsterInstance currentMonsterInstance;
         private GameObject fieldCardToken;
@@ -45,6 +45,7 @@ namespace MonsterCardGame.UI
 
         public void OnPointerEnter(PointerEventData eventData)
         {
+            if (isHovered) return;
             isHovered = true;
             if (currentCardData != null && BattleUIManager.Instance != null)
             {
@@ -54,16 +55,25 @@ namespace MonsterCardGame.UI
 
         public void OnPointerExit(PointerEventData eventData)
         {
+            if (!isHovered) return;
             isHovered = false;
         }
 
         private void Update()
         {
-            float targetScale = isHovered ? 1.07f : 1.0f;
-            Vector3 curScale = transform.localScale;
-            if (Mathf.Abs(curScale.x - targetScale) > 0.001f)
+            if (fieldCardToken != null && fieldCardToken.activeSelf)
             {
-                transform.localScale = Vector3.Lerp(curScale, Vector3.one * targetScale, Time.deltaTime * 15f);
+                if (pulseEffect != null && pulseEffect.isPulsing && !isHovered)
+                {
+                    return;
+                }
+                float targetScale = isHovered ? 1.05f : 1.0f;
+                Vector3 curScale = fieldCardToken.transform.localScale;
+                if (Mathf.Abs(curScale.x - targetScale) > 0.001f)
+                {
+                    float s = Mathf.Lerp(curScale.x, targetScale, Time.unscaledDeltaTime * 16f);
+                    fieldCardToken.transform.localScale = new Vector3(s, s, 1f);
+                }
             }
         }
 
@@ -75,21 +85,21 @@ namespace MonsterCardGame.UI
 
             if (slotNameText != null)
             {
-                slotNameText.text = ArabicFixer.Fix(GetArabicSlotName(index));
+                slotNameText.text = GetSlotName(index);
             }
         }
 
-        private string GetArabicSlotName(int idx)
+        private string GetSlotName(int idx)
         {
             switch (idx)
             {
-                case 0: return "جناح أيسر 1";
-                case 1: return "جناح أيسر 2";
-                case 2: return "قلب الهجوم 1";
-                case 3: return "قلب الهجوم 2";
-                case 4: return "جناح أيمن 1";
-                case 5: return "جناح أيمن 2";
-                default: return $"خانة {idx}";
+                case 0: return "Left Flank 1";
+                case 1: return "Left Flank 2";
+                case 2: return "Vanguard 1";
+                case 3: return "Vanguard 2";
+                case 4: return "Right Flank 1";
+                case 5: return "Right Flank 2";
+                default: return $"Slot {idx}";
             }
         }
 
@@ -115,27 +125,41 @@ namespace MonsterCardGame.UI
 
             fieldCardToken.SetActive(true);
 
-            // 1. رسمة الوحش الفنية الملحمية تملأ كامل الكارت بنسبة 100%
+            // 1. Load custom monster art by ID if available, otherwise display clean element backdrop
+            Color elemColor = MonsterArtLoader.GetElementColor(data.element);
+            Color bgCol = MonsterArtLoader.GetEnvironmentAtmosphereColor(data.element);
+            Sprite customArt = MonsterArtLoader.GetCardSprite(data);
+
             if (tokenArtImage != null)
             {
-                var sprite = MonsterArtLoader.GetMonsterSprite(data);
-                if (sprite != null)
+                if (customArt != null)
                 {
-                    tokenArtImage.sprite = sprite;
+                    tokenArtImage.sprite = customArt;
                     tokenArtImage.color = Color.white;
+                    tokenArtImage.preserveAspect = false;
+                }
+                else
+                {
+                    tokenArtImage.sprite = null;
+                    tokenArtImage.color = bgCol;
                 }
             }
 
-            // 2. لون العنصر والإطار الخارجي النحيف
-            Color elemColor = MonsterArtLoader.GetElementColor(data.element);
+            // 2. Central Monster ID label (only shown when custom art is not present)
+            if (tokenNameText != null)
+            {
+                tokenNameText.gameObject.SetActive(customArt == null);
+                tokenNameText.text = data.name;
+                tokenNameText.color = elemColor;
+            }
 
-            // 3. دائرة نقاط الاستدعاء أعلى اليمين (Astral Masters: Top-Right Blue Circle)
+            // 3. Top-Right Summon Cost Circle
             if (tokenCostText != null)
             {
                 tokenCostText.text = data.cost.ToString();
             }
 
-            // 4. أرقام الهجوم والدفاع في الركنين السفليين (Astral Masters: Bottom-Left ATK, Bottom-Right DEF)
+            // 4. Bottom-Left ATK & Bottom-Right DEF Badges (Astral Masters Style)
             var gm = GameManager.Instance;
             var activeEnv = gm != null ? gm.activeEnvironment : null;
             int effectiveAtk = instance.GetEffectiveAtk(activeEnv);
@@ -163,7 +187,7 @@ namespace MonsterCardGame.UI
                 tokenDefText.text = instance.currentDef.ToString();
                 if (instance.baseDef > 0 && instance.currentDef < instance.baseDef)
                 {
-                    tokenDefText.color = new Color(1f, 0.45f, 0.45f); // تلوين بالأحمر عند تلقي ضرر
+                    tokenDefText.color = new Color(1f, 0.45f, 0.45f);
                 }
                 else
                 {
@@ -171,7 +195,7 @@ namespace MonsterCardGame.UI
                 }
             }
 
-            // 5. توهج ونبض الجاهزية للوحش (Breathing Pulse for Ready Attackers)
+            // 5. Breathing Pulse for Ready Attackers
             bool isReadyToStrike = instance.canAttack && isPlayerSide;
             if (pulseEffect != null)
             {
@@ -188,9 +212,9 @@ namespace MonsterCardGame.UI
         {
             if (fieldCardToken != null) return;
 
-            // كارت الوحش الميداني بدون فريم بنمط Astral Masters (Full-Art 154x196)
+            // Astral Masters Style Full-Art Field Token (148x184)
             fieldCardToken = GameBootstrapper.CreatePanel(transform, "FieldCardToken", new Color(0.04f, 0.05f, 0.08f, 1f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(154, 196));
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(148, 184));
 
             tokenOutline = fieldCardToken.AddComponent<Outline>();
             tokenOutline.effectColor = new Color(0.95f, 0.85f, 0.3f, 0.95f);
@@ -198,7 +222,7 @@ namespace MonsterCardGame.UI
 
             pulseEffect = fieldCardToken.AddComponent<CardPulseEffect>();
 
-            // 1. رسمة الوحش الفنية تمتد على 100% من مساحة الكارت بدون أي فريم يضيقها
+            // 1. Card Art Image Layer
             var artObj = new GameObject("MonsterArt");
             artObj.transform.SetParent(fieldCardToken.transform, false);
             var rectArt = artObj.AddComponent<RectTransform>();
@@ -207,10 +231,16 @@ namespace MonsterCardGame.UI
             rectArt.sizeDelta = Vector2.zero;
             rectArt.anchoredPosition = Vector2.zero;
             tokenArtImage = artObj.AddComponent<Image>();
-            tokenArtImage.preserveAspect = false;
+            tokenArtImage.color = new Color(0.08f, 0.10f, 0.16f, 0.96f);
             tokenArtImage.raycastTarget = false;
 
-            // 2. دائرة نقاط الاستدعاء أعلى اليمين (Top-Right Blue Circle - Astral Masters Style)
+            // Central Monster ID Text (shown when no art image exists)
+            tokenNameText = GameBootstrapper.CreateText(fieldCardToken.transform, "MonsterIdText", "0", 34,
+                Color.white, TextAnchor.MiddleCenter, new Vector2(0, 6), new Vector2(140, 80));
+            tokenNameText.fontStyle = FontStyle.Bold;
+            tokenNameText.raycastTarget = false;
+
+            // 2. Top-Right Blue Cost Circle (Astral Masters Style)
             var costCircle = GameBootstrapper.CreateCirclePanel(fieldCardToken.transform, "CostCircle",
                 new Color(0.10f, 0.28f, 0.65f, 0.96f),
                 new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-20, -20), new Vector2(34, 34));
@@ -222,7 +252,7 @@ namespace MonsterCardGame.UI
             tokenCostText.fontStyle = FontStyle.Bold;
             tokenCostText.raycastTarget = false;
 
-            // 3. دائرة الهجوم أسفل اليسار (Bottom-Left Red Circle - Astral Masters Style)
+            // 3. Bottom-Left Red ATK Circle (Astral Masters Style)
             var atkCircle = GameBootstrapper.CreateCirclePanel(fieldCardToken.transform, "AtkCircle",
                 new Color(0.70f, 0.12f, 0.16f, 0.96f),
                 new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(20, 20), new Vector2(34, 34));
@@ -234,7 +264,7 @@ namespace MonsterCardGame.UI
             tokenAtkText.fontStyle = FontStyle.Bold;
             tokenAtkText.raycastTarget = false;
 
-            // 4. دائرة الدفاع / الصحة أسفل اليمين (Bottom-Right Green Circle - Astral Masters Style)
+            // 4. Bottom-Right Green DEF Circle (Astral Masters Style)
             var defCircle = GameBootstrapper.CreateCirclePanel(fieldCardToken.transform, "DefCircle",
                 new Color(0.10f, 0.52f, 0.22f, 0.96f),
                 new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-20, 20), new Vector2(34, 34));
@@ -245,6 +275,12 @@ namespace MonsterCardGame.UI
                 Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(34, 34));
             tokenDefText.fontStyle = FontStyle.Bold;
             tokenDefText.raycastTarget = false;
+
+            // Ensure all child graphics inside fieldCardToken never block or split pointer raycasts on the slot
+            foreach (var g in fieldCardToken.GetComponentsInChildren<Graphic>(true))
+            {
+                if (g != null) g.raycastTarget = false;
+            }
         }
 
         public void ClearDisplay()

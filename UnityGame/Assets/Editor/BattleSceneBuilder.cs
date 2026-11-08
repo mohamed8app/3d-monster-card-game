@@ -10,17 +10,17 @@ namespace MonsterCardGame.Editor
 {
     public class BattleSceneBuilder
     {
-        [MenuItem("Monster Game/🚀 بناء ساحة المعركة التلقائية (Setup Scene)")]
+        [MenuItem("Monster Game/🚀 Setup Battle Scene")]
         public static void BuildScene()
         {
             var newScene = UnityEditor.SceneManagement.EditorSceneManager.NewScene(
-                UnityEditor.SceneManagement.NewSceneSetup.EmptyScene, 
+                UnityEditor.SceneManagement.NewSceneSetup.EmptyScene,
                 UnityEditor.SceneManagement.NewSceneMode.Single);
 
-            // بناء ساحة المعركة التفاعلية كاملة
+            // Build the interactive battlefield scene
             GameBootstrapper.AutoInitializeGame();
 
-            // حفظ المشهد في Assets/Scenes/MainBattleScene.unity
+            // Save scene to Assets/Scenes/MainBattleScene.unity
             if (!AssetDatabase.IsValidFolder("Assets/Scenes"))
             {
                 AssetDatabase.CreateFolder("Assets", "Scenes");
@@ -29,18 +29,18 @@ namespace MonsterCardGame.Editor
             string scenePath = "Assets/Scenes/MainBattleScene.unity";
             UnityEditor.SceneManagement.EditorSceneManager.SaveScene(newScene, scenePath);
 
-            Debug.Log($"🎉 تم بناء وحفظ مشهد اللعبة في: {scenePath}");
+            Debug.Log($"🎉 Built and saved game scene at: {scenePath}");
 
             if (!Application.isBatchMode)
             {
-                EditorUtility.DisplayDialog("نجاح ساحة المعركة", "تم بناء ساحة الـ 7 خانات ولوحة القائد واليد والأزرار بنجاح!\n\nاضغط الآن على زر (▶️ Play) لتلعب مباشرة!", "ممتاز");
+                EditorUtility.DisplayDialog("Battlefield Setup Complete", "The tactical battlefield, leader panels, hand dock, and command controls have been built!\n\nPress Play (▶️) to start!", "OK");
             }
         }
 
-        [MenuItem("Monster Game/📦 بناء اللعبة كملف تنفيذي للويندوز (Build Windows Game .EXE)")]
+        [MenuItem("Monster Game/📦 Build Windows Game .EXE")]
         public static void BuildWindowsExe()
         {
-            Debug.Log("🚀 بدء بناء ملف اللعبة التنفيذي للويندوز (MonsterCardGame.exe)...");
+            Debug.Log("🚀 Building Windows Executable (MonsterCardGame.exe)...");
 
             BuildScene();
 
@@ -64,11 +64,11 @@ namespace MonsterCardGame.Editor
 
             if (summary.result == BuildResult.Succeeded)
             {
-                Debug.Log($"🎉 تم بناء اللعبة بنجاح تام! الحجم: {summary.totalSize} بايت. المسار: {exePath}");
+                Debug.Log($"🎉 Build Succeeded! Size: {summary.totalSize} bytes. Path: {exePath}");
             }
             else
             {
-                Debug.LogError($"❌ فشل بناء اللعبة: {summary.result}");
+                Debug.LogError($"❌ Build Failed: {summary.result}");
             }
         }
     }

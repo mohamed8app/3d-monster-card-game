@@ -9,8 +9,8 @@ using MonsterCardGame.Core;
 namespace MonsterCardGame.UI
 {
     /// <summary>
-    /// يتيح سحب واختيار الكروت بأنواعها (وحوش، سحر، بيئة) بسلاسة فائقة وانسيابية تامة دون أي رمش أو اهتزاز.
-    /// Provides ultra-smooth Hover, Selection, and Drag & Drop without any layout flickering or sibling jumping.
+    /// Provides flicker-free Hover, Selection, and Drag & Drop by keeping the root raycast/layout RectTransform
+    /// completely stationary inside the HorizontalLayoutGroup while animating only the non-raycast child VisualRoot.
     /// </summary>
     public class DraggableCard : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
     {
@@ -19,9 +19,8 @@ namespace MonsterCardGame.UI
         private int originalSiblingIndex;
         private Canvas rootCanvas;
         private RectTransform rectTransform;
+        private RectTransform visualRoot;
         private CanvasGroup canvasGroup;
-        private Canvas localCanvas;
-        private GraphicRaycaster localRaycaster;
         private Outline cardOutline;
         private Color defaultOutlineColor = Color.gray;
 
@@ -29,8 +28,8 @@ namespace MonsterCardGame.UI
         private bool isSelected = false;
         private bool isDragging = false;
 
-        private float targetY = 0f;
-        private float targetScale = 1.0f;
+        private float targetVisualY = 0f;
+        private float targetVisualScale = 1.0f;
 
         public void Setup(CardData data, Canvas canvas)
         {
@@ -38,69 +37,89 @@ namespace MonsterCardGame.UI
             rootCanvas = canvas;
             rectTransform = GetComponent<RectTransform>();
 
+            Transform visTr = transform.Find("VisualRoot");
+            if (visTr != null)
+            {
+                visualRoot = visTr.GetComponent<RectTransform>();
+                cardOutline = visTr.GetComponent<Outline>();
+            }
+            else
+            {
+                visualRoot = rectTransform;
+                cardOutline = GetComponent<Outline>();
+            }
+
+            if (cardOutline != null)
+            {
+                defaultOutlineColor = cardOutline.effectColor;
+            }
+
             canvasGroup = gameObject.GetComponent<CanvasGroup>();
             if (canvasGroup == null)
             {
                 canvasGroup = gameObject.AddComponent<CanvasGroup>();
             }
 
-            // كانفاس فرعي محلي لرفع ترتيب الرسم (Z-Order / Sorting Order) فوق البطاقات المجاورة
-            // دون الحاجة لتغيير ترتيب الأبناء (Sibling Index) الذي كان يسبب قفز ورمش الكروت في الـ LayoutGroup!
-            localCanvas = gameObject.GetComponent<Canvas>();
-            if (localCanvas == null)
-            {
-                localCanvas = gameObject.AddComponent<Canvas>();
-            }
-            localRaycaster = gameObject.GetComponent<GraphicRaycaster>();
-            if (localRaycaster == null)
-            {
-                localRaycaster = gameObject.AddComponent<GraphicRaycaster>();
-            }
+            // Ensure all child graphics inside VisualRoot do not intercept pointer raycasts
+            DisableChildRaycasts();
+            UpdateVisualState();
+        }
 
-            cardOutline = GetComponent<Outline>();
-            if (cardOutline != null)
+        private void DisableChildRaycasts()
+        {
+            var rootImg = GetComponent<Image>();
+            var allGraphics = GetComponentsInChildren<Graphic>(true);
+            foreach (var g in allGraphics)
             {
-                defaultOutlineColor = cardOutline.effectColor;
+                if (g != null && g != rootImg)
+                {
+                    g.raycastTarget = false;
+                }
             }
-
-            localCanvas.overrideSorting = false;
-            localCanvas.sortingOrder = 1;
+            if (rootImg != null)
+            {
+                rootImg.raycastTarget = true;
+            }
         }
 
         private void Update()
         {
-            if (isDragging) return;
+            if (isDragging || visualRoot == null || visualRoot == rectTransform) return;
 
-            // تحديد الارتفاع والتكبير المستهدف بسلاسة وبقاء الكارت دائماً في نطاق اليد بدون حجب الساحة
             if (isSelected)
             {
-                targetY = 40f;
-                targetScale = 1.28f;
+                targetVisualY = 16f;
+                targetVisualScale = 1.06f;
             }
             else if (isHovered)
             {
-                targetY = 32f;
-                targetScale = 1.22f;
+                targetVisualY = 10f;
+                targetVisualScale = 1.035f;
             }
             else
             {
-                targetY = 0f;
-                targetScale = 1.0f;
+                targetVisualY = 0f;
+                targetVisualScale = 1.0f;
             }
 
-            // حركة تنعيم انسيابية مستمرة (Smooth Lerp)
-            Vector3 curScale = transform.localScale;
-            float newScale = Mathf.Lerp(curScale.x, targetScale, Time.deltaTime * 20f);
-            transform.localScale = new Vector3(newScale, newScale, 1f);
+            Vector3 curScale = visualRoot.localScale;
+            if (Mathf.Abs(curScale.x - targetVisualScale) > 0.001f)
+            {
+                float newScale = Mathf.Lerp(curScale.x, targetVisualScale, Time.unscaledDeltaTime * 18f);
+                visualRoot.localScale = new Vector3(newScale, newScale, 1f);
+            }
 
-            Vector2 curPos = rectTransform.anchoredPosition;
-            float newY = Mathf.Lerp(curPos.y, targetY, Time.deltaTime * 20f);
-            rectTransform.anchoredPosition = new Vector2(curPos.x, newY);
+            Vector2 curPos = visualRoot.anchoredPosition;
+            if (Mathf.Abs(curPos.y - targetVisualY) > 0.05f)
+            {
+                float newY = Mathf.Lerp(curPos.y, targetVisualY, Time.unscaledDeltaTime * 18f);
+                visualRoot.anchoredPosition = new Vector2(0f, newY);
+            }
         }
 
         public void OnPointerEnter(PointerEventData eventData)
         {
-            if (isDragging) return;
+            if (isDragging || isHovered) return;
             isHovered = true;
             UpdateVisualState();
             if (BattleUIManager.Instance != null && cardData != null)
@@ -111,7 +130,7 @@ namespace MonsterCardGame.UI
 
         public void OnPointerExit(PointerEventData eventData)
         {
-            if (isDragging) return;
+            if (isDragging || !isHovered) return;
             isHovered = false;
             UpdateVisualState();
         }
@@ -120,7 +139,7 @@ namespace MonsterCardGame.UI
         {
             if (isDragging) return;
 
-            // نقرة زر الفأرة الأيمن: تضحية مباشرة بالكارت للحصول على +1 سقف مانا و +1 باور
+            // Right Click: Direct card sacrifice for +1 Max Mana & +1 Power
             if (eventData.button == PointerEventData.InputButton.Right)
             {
                 if (BattleUIManager.Instance != null && cardData != null)
@@ -130,7 +149,7 @@ namespace MonsterCardGame.UI
                 return;
             }
 
-            // نقرة زر الفأرة الأيسر: تحديد الكارت وعرض بياناته في لوحة التفاصيل
+            // Left Click: Select card in hand and display details in Inspector
             if (BattleUIManager.Instance != null && cardData != null)
             {
                 BattleUIManager.Instance.OnCardSelectedInHand(cardData);
@@ -139,52 +158,26 @@ namespace MonsterCardGame.UI
 
         public void SetSelected(bool selected)
         {
+            if (isSelected == selected) return;
             isSelected = selected;
             UpdateVisualState();
         }
 
         private void UpdateVisualState()
         {
-            // تحديث طبقة الرسم لتظهر البطاقة المختارة أو الممرر عليها الماوس فوق البطاقات المجاورة
-            if (localCanvas != null)
-            {
-                if (isSelected)
-                {
-                    localCanvas.overrideSorting = true;
-                    localCanvas.sortingOrder = 25;
-                }
-                else if (isHovered)
-                {
-                    localCanvas.overrideSorting = true;
-                    localCanvas.sortingOrder = 15;
-                }
-                else
-                {
-                    localCanvas.overrideSorting = false;
-                    localCanvas.sortingOrder = 1;
-                }
-            }
-
-            // تحديث لون وتوهج الإطار
             if (cardOutline != null)
             {
                 if (isSelected)
                 {
-                    // توهج ذهبي ملكي عريض ومشع للبطاقة المحددة
                     cardOutline.effectColor = new Color(1f, 0.92f, 0.25f, 1f);
-                    cardOutline.effectDistance = new Vector2(3f, 3f);
                 }
                 else if (isHovered)
                 {
-                    // وميض أبيض ناصع عند مرور مؤشر الفأرة
                     cardOutline.effectColor = new Color(1f, 1f, 1f, 0.95f);
-                    cardOutline.effectDistance = new Vector2(2.5f, 2.5f);
                 }
                 else
                 {
-                    // اللون الأصلي لعنصر البطاقة
                     cardOutline.effectColor = defaultOutlineColor;
-                    cardOutline.effectDistance = new Vector2(2f, 2f);
                 }
             }
         }
@@ -197,13 +190,19 @@ namespace MonsterCardGame.UI
             originalParent = transform.parent;
             originalSiblingIndex = transform.GetSiblingIndex();
 
+            if (visualRoot != null && visualRoot != rectTransform)
+            {
+                visualRoot.anchoredPosition = Vector2.zero;
+                visualRoot.localScale = Vector3.one;
+            }
+
             if (canvasGroup != null)
             {
                 canvasGroup.blocksRaycasts = false;
-                canvasGroup.alpha = 0.60f; // شفافية مريحة تتيح رؤية الخانات والبطاقات أسفل مؤشر الفأرة تماماً
+                canvasGroup.alpha = 0.65f;
             }
 
-            transform.localScale = Vector3.one * 0.85f; // حجم مصغر أثناء السحب لعدم حجب بطاقات وخانات الساحة
+            transform.localScale = Vector3.one * 0.85f;
 
             if (rootCanvas == null)
             {
@@ -216,7 +215,7 @@ namespace MonsterCardGame.UI
                 transform.SetAsLastSibling();
             }
 
-            if (BattleUIManager.Instance != null)
+            if (BattleUIManager.Instance != null && !isSelected)
             {
                 BattleUIManager.Instance.OnCardSelectedInHand(cardData);
             }
@@ -240,7 +239,7 @@ namespace MonsterCardGame.UI
 
             bool handled = false;
 
-            // 1. فحص العناصر الواقعة تحت مؤشر الفأرة
+            // 1. Raycast elements under cursor
             var results = new List<RaycastResult>();
             if (EventSystem.current != null)
             {
@@ -249,8 +248,7 @@ namespace MonsterCardGame.UI
 
             foreach (var hit in results)
             {
-                // إذا تم إفلات الكارت فوق زر التضحية
-                if (hit.gameObject.name.Contains("Sacrifice") || hit.gameObject.name.Contains("تضحية"))
+                if (hit.gameObject.name.Contains("Sacrifice"))
                 {
                     if (BattleUIManager.Instance != null)
                     {
@@ -261,7 +259,6 @@ namespace MonsterCardGame.UI
                     }
                 }
 
-                // إذا كانت بطاقة وحش وأُفلتت فوق خانة للاعب
                 if (cardData.cardType == CardType.Monster)
                 {
                     var slotView = hit.gameObject.GetComponentInParent<SlotView>();
@@ -273,7 +270,7 @@ namespace MonsterCardGame.UI
                 }
             }
 
-            // 2. إذا كانت بطاقة سحر أو بيئة وسُحبت لمنتصف الساحة (الأعلى من منطقة اليد)
+            // 2. If Spell or Environment card is dragged to the arena above the hand dock
             if (!handled)
             {
                 if (cardData.cardType == CardType.Spell && eventData.position.y > 220f)
@@ -286,7 +283,7 @@ namespace MonsterCardGame.UI
                 }
             }
 
-            // 3. مسافة امتصاص الأمان للوحوش عند الإفلات قرب الخانات
+            // 3. Proximity snap distance for monster drops near player slots
             if (!handled && cardData.cardType == CardType.Monster && BattleUIManager.Instance != null)
             {
                 for (int i = 0; i < BattleUIManager.Instance.playerSlotViews.Length; i++)
@@ -304,14 +301,14 @@ namespace MonsterCardGame.UI
                 }
             }
 
-            // 4. إعادة الكارت لليد إن لم يتم تصريفه مع الحفاظ على ترتيبه الأصلي
+            // 4. Return card to hand if not played
             if (!handled)
             {
                 if (originalParent != null)
                 {
                     transform.SetParent(originalParent, false);
                     transform.SetSiblingIndex(originalSiblingIndex);
-                    rectTransform.anchoredPosition = new Vector2(rectTransform.anchoredPosition.x, 0f);
+                    LayoutRebuilder.ForceRebuildLayoutImmediate(originalParent as RectTransform);
                 }
                 UpdateVisualState();
             }
@@ -328,7 +325,7 @@ namespace MonsterCardGame.UI
 
             if (gm.humanPlayer.SummonMonster(cardData, slotIndex, gm.currentTurn))
             {
-                BattleUIManager.Instance.LogCombatMessage($"✅ تم استدعاء [{cardData.name}] في الخانة {slotIndex}.");
+                BattleUIManager.Instance.LogCombatMessage($"✅ Summoned [{cardData.name}] to Slot {slotIndex}.");
                 BattleUIManager.Instance.DeselectHandCards();
                 BattleUIManager.Instance.UpdateUI();
                 var sv = BattleUIManager.Instance.GetSlotView(slotIndex, true);
@@ -340,7 +337,7 @@ namespace MonsterCardGame.UI
             }
             else
             {
-                BattleUIManager.Instance.LogCombatMessage($"❌ تعذر إنزال الوحش في الخانة {slotIndex} (تأكد من الباور والشواغر).");
+                BattleUIManager.Instance.LogCombatMessage($"❌ Cannot summon monster to Slot {slotIndex} (Check Power & slot availability).");
                 return false;
             }
         }

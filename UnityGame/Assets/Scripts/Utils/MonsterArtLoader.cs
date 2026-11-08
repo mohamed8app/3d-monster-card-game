@@ -1,77 +1,138 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using MonsterCardGame.Data;
 
 namespace MonsterCardGame.Utils
 {
     /// <summary>
-    /// مدير تحميل وتوزيع رسومات وصور الوحوش والتعاويذ وكروت البيئة وعناصرها بذكاء.
-    /// Manages high-resolution illustrations, elemental colors, spells and weather visuals.
+    /// Smart ID-based artwork loader for Monsters, Spells, and Environment cards.
+    /// Automatically loads images by Card ID (e.g. 599.jpg) from disk or Resources/CardsArt.
     /// </summary>
     public static class MonsterArtLoader
     {
+        private static readonly Dictionary<string, Texture2D> textureCache = new Dictionary<string, Texture2D>();
         private static readonly Dictionary<string, Sprite> spriteCache = new Dictionary<string, Sprite>();
+        private static readonly Dictionary<string, Sprite> inspectorSpriteCache = new Dictionary<string, Sprite>();
+        private static readonly string[] SupportedExtensions = { ".png", ".jpg", ".jpeg", ".webp" };
+        private static readonly string[] SubfolderCandidates = { "", "Monsters", "Spells", "Environments" };
+        private const string LegacyArtFolderName = "\u0635\u0648\u0631_\u0627\u0644\u0643\u0631\u0648\u062A_\u0648\u0627\u0644\u0648\u062D\u0648\u0634";
+
+        public static string ResolveCardIdKey(CardData data)
+        {
+            if (data == null) return string.Empty;
+            if (data.id > 0) return data.id.ToString();
+            if (!string.IsNullOrEmpty(data.name)) return data.name.Trim();
+            return string.Empty;
+        }
 
         public static Sprite GetCardSprite(CardData data)
         {
-            if (data == null) return null;
+            string key = ResolveCardIdKey(data);
+            if (string.IsNullOrEmpty(key)) return null;
 
-            string key = data.id.ToString();
-
-            // 1. فحص الكاش أولاً
-            if (spriteCache.TryGetValue(key, out var cachedSprite) && cachedSprite != null)
+            if (spriteCache.TryGetValue(key, out Sprite cached) && cached != null)
             {
-                return cachedSprite;
+                return cached;
             }
 
-            // 2. البحث عن صورة خاصة برقم البطاقة أو اسمها في مجلد Monsters أو Resources
-            Texture2D customTex = Resources.Load<Texture2D>("Monsters/" + key);
-            if (customTex == null) customTex = Resources.Load<Texture2D>(key);
-            if (customTex == null && !string.IsNullOrEmpty(data.name))
-            {
-                customTex = Resources.Load<Texture2D>("Monsters/" + data.name);
-                if (customTex == null) customTex = Resources.Load<Texture2D>(data.name);
-            }
-
-            if (customTex != null)
-            {
-                var customSprite = CreateSpriteFromTexture(customTex);
-                spriteCache[key] = customSprite;
-                return customSprite;
-            }
-
-            // 3. التوزيع الذكي حسب عائلة العنصر (Elemental Archetypes)
-            string resourceName = data.element switch
-            {
-                "نار" => "fire_dragon",
-                "ظلام" => "shadow_knight",
-                "أشباح" => "shadow_knight",
-                "كهرباء" => "lightning_beast",
-                "ميكا" => "lightning_beast",
-                "مياه" => "frost_leviathan",
-                "جليد" => "frost_leviathan",
-                "رياح" => "arcane_mage",
-                "غابة" => "arcane_mage",
-                "سحر" => "arcane_mage",
-                "ضياء" => "arcane_mage",
-                "أرض" => "lightning_beast",
-                _ => "arcane_mage"
-            };
-
-            if (spriteCache.TryGetValue(resourceName, out var archetypeSprite) && archetypeSprite != null)
-            {
-                spriteCache[key] = archetypeSprite;
-                return archetypeSprite;
-            }
-
-            var tex = Resources.Load<Texture2D>(resourceName);
+            Texture2D tex = LoadCardTexture(key);
             if (tex != null)
             {
-                var s = CreateSpriteFromTexture(tex);
-                spriteCache[resourceName] = s;
-                spriteCache[key] = s;
-                return s;
+                Sprite closeUp = CreateFocusedSpriteFromTexture(tex, 0.02f, 0.06f, 0.96f, 0.92f);
+                if (closeUp != null)
+                {
+                    spriteCache[key] = closeUp;
+                    return closeUp;
+                }
+            }
+
+            return null;
+        }
+
+        public static Sprite GetInspectorSprite(CardData data)
+        {
+            string key = ResolveCardIdKey(data);
+            if (string.IsNullOrEmpty(key)) return null;
+
+            if (inspectorSpriteCache.TryGetValue(key, out Sprite cached) && cached != null)
+            {
+                return cached;
+            }
+
+            Texture2D tex = LoadCardTexture(key);
+            if (tex != null)
+            {
+                Sprite showcase = CreateFocusedSpriteFromTexture(tex, 0.02f, 0.22f, 0.96f, 0.75f);
+                if (showcase != null)
+                {
+                    inspectorSpriteCache[key] = showcase;
+                    return showcase;
+                }
+            }
+
+            return GetCardSprite(data);
+        }
+
+        private static Texture2D LoadCardTexture(string key)
+        {
+            if (textureCache.TryGetValue(key, out Texture2D cachedTex) && cachedTex != null)
+            {
+                return cachedTex;
+            }
+
+            string[] baseDirs = GetSearchDirectories();
+            string[] fileVariants = { key, $"monster_{key}", $"spell_{key}", $"card_{key}" };
+
+            foreach (string baseDir in baseDirs)
+            {
+                if (string.IsNullOrEmpty(baseDir) || !Directory.Exists(baseDir)) continue;
+
+                foreach (string sub in SubfolderCandidates)
+                {
+                    string targetDir = string.IsNullOrEmpty(sub) ? baseDir : Path.Combine(baseDir, sub);
+                    if (!Directory.Exists(targetDir)) continue;
+
+                    foreach (string nameVar in fileVariants)
+                    {
+                        foreach (string ext in SupportedExtensions)
+                        {
+                            string fullPath = Path.Combine(targetDir, nameVar + ext);
+                            if (File.Exists(fullPath))
+                            {
+                                Texture2D diskTex = LoadTextureFromDisk(fullPath);
+                                if (diskTex != null)
+                                {
+                                    textureCache[key] = diskTex;
+                                    return diskTex;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            string[] resourcePaths = {
+                $"CardsArt/{key}",
+                $"CardsArt/Monsters/{key}",
+                $"CardsArt/Spells/{key}",
+                $"Monsters/{key}",
+                $"Spells/{key}",
+                key
+            };
+
+            foreach (string resPath in resourcePaths)
+            {
+                Texture2D resTex = Resources.Load<Texture2D>(resPath);
+                if (resTex != null)
+                {
+                    resTex.filterMode = FilterMode.Trilinear;
+                    resTex.anisoLevel = 16;
+                    resTex.mipMapBias = -0.65f;
+                    textureCache[key] = resTex;
+                    return resTex;
+                }
             }
 
             return null;
@@ -82,28 +143,156 @@ namespace MonsterCardGame.Utils
             return GetCardSprite(data);
         }
 
-        private static Sprite CreateSpriteFromTexture(Texture2D tex)
+        /// <summary>
+        /// Scans all custom art folders on disk and Resources/CardsArt to return all Card IDs that currently have custom artwork.
+        /// </summary>
+        public static HashSet<int> GetAvailableCustomArtCardIds()
+        {
+            var foundIds = new HashSet<int>();
+            string[] baseDirs = GetSearchDirectories();
+
+            foreach (string baseDir in baseDirs)
+            {
+                if (string.IsNullOrEmpty(baseDir) || !Directory.Exists(baseDir)) continue;
+
+                foreach (string sub in SubfolderCandidates)
+                {
+                    string targetDir = string.IsNullOrEmpty(sub) ? baseDir : Path.Combine(baseDir, sub);
+                    if (!Directory.Exists(targetDir)) continue;
+
+                    try
+                    {
+                        string[] files = Directory.GetFiles(targetDir);
+                        foreach (string file in files)
+                        {
+                            string ext = Path.GetExtension(file).ToLowerInvariant();
+                            bool validExt = false;
+                            for (int i = 0; i < SupportedExtensions.Length; i++)
+                            {
+                                if (SupportedExtensions[i] == ext)
+                                {
+                                    validExt = true;
+                                    break;
+                                }
+                            }
+                            if (!validExt) continue;
+
+                            string rawName = Path.GetFileNameWithoutExtension(file).Trim();
+                            if (TryParseCardIdFromFileName(rawName, out int parsedId))
+                            {
+                                foundIds.Add(parsedId);
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            try
+            {
+                var resTextures = Resources.LoadAll<Texture2D>("CardsArt");
+                if (resTextures != null)
+                {
+                    foreach (var tex in resTextures)
+                    {
+                        if (tex != null && TryParseCardIdFromFileName(tex.name, out int parsedId))
+                        {
+                            foundIds.Add(parsedId);
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            return foundIds;
+        }
+
+        private static bool TryParseCardIdFromFileName(string rawName, out int cardId)
+        {
+            cardId = 0;
+            if (string.IsNullOrEmpty(rawName)) return false;
+
+            string cleaned = rawName.ToLowerInvariant();
+            string[] prefixes = { "monster_", "spell_", "card_" };
+            foreach (string p in prefixes)
+            {
+                if (cleaned.StartsWith(p))
+                {
+                    cleaned = cleaned.Substring(p.Length).Trim();
+                    break;
+                }
+            }
+
+            return int.TryParse(cleaned, out cardId) && cardId > 0;
+        }
+
+        private static string[] GetSearchDirectories()
+        {
+            string dataPath = Application.dataPath;
+            return new string[]
+            {
+                Path.Combine(@"D:\deck game", LegacyArtFolderName),
+                @"D:\deck game\CardsArt",
+                @"D:\deck game\UnityGame\Assets\Resources\CardsArt",
+                @"D:\deck game\Game_Windows_Exe\CardsArt",
+                Path.GetFullPath(Path.Combine(dataPath, "../../" + LegacyArtFolderName)),
+                Path.GetFullPath(Path.Combine(dataPath, "../" + LegacyArtFolderName)),
+                Path.GetFullPath(Path.Combine(dataPath, "../CardsArt")),
+                Path.GetFullPath(Path.Combine(dataPath, "Resources/CardsArt"))
+            };
+        }
+
+        private static Texture2D LoadTextureFromDisk(string filePath)
+        {
+            try
+            {
+                byte[] bytes = File.ReadAllBytes(filePath);
+                if (bytes == null || bytes.Length == 0) return null;
+
+                Texture2D tex = new Texture2D(2, 2, TextureFormat.RGBA32, true);
+                if (tex.LoadImage(bytes))
+                {
+                    tex.wrapMode = TextureWrapMode.Clamp;
+                    tex.filterMode = FilterMode.Trilinear;
+                    tex.anisoLevel = 16;
+                    tex.mipMapBias = -0.65f;
+                    tex.Apply(true, false);
+                    return tex;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[MonsterArtLoader] Failed to load texture from {filePath}: {ex.Message}");
+            }
+            return null;
+        }
+
+        private static Sprite CreateFocusedSpriteFromTexture(Texture2D tex, float normX, float normY, float normW, float normH)
         {
             if (tex == null) return null;
-            return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+            float x = Mathf.Clamp01(normX) * tex.width;
+            float y = Mathf.Clamp01(normY) * tex.height;
+            float w = Mathf.Clamp(normW, 0.1f, 1f - normX) * tex.width;
+            float h = Mathf.Clamp(normH, 0.1f, 1f - normY) * tex.height;
+            return Sprite.Create(tex, new Rect(x, y, w, h), new Vector2(0.5f, 0.5f), 100f);
         }
 
         public static Color GetElementColor(string element)
         {
             return element switch
             {
-                "نار" => new Color(1f, 0.35f, 0.15f),
-                "مياه" => new Color(0.2f, 0.65f, 1f),
-                "جليد" => new Color(0.4f, 0.9f, 1f),
-                "كهرباء" => new Color(1f, 0.9f, 0.2f),
-                "ظلام" => new Color(0.6f, 0.25f, 0.85f),
-                "أشباح" => new Color(0.7f, 0.45f, 0.95f),
-                "ميكا" => new Color(0.75f, 0.8f, 0.9f),
-                "سحر" => new Color(0.95f, 0.45f, 0.95f),
-                "ضياء" => new Color(1f, 0.95f, 0.55f),
-                "أرض" => new Color(0.75f, 0.55f, 0.35f),
-                "رياح" => new Color(0.4f, 0.95f, 0.75f),
-                "غابة" => new Color(0.3f, 0.85f, 0.35f),
+                "Fire" => new Color(1f, 0.35f, 0.15f),
+                "Water" => new Color(0.2f, 0.65f, 1f),
+                "Ice" => new Color(0.4f, 0.9f, 1f),
+                "Electric" => new Color(1f, 0.9f, 0.2f),
+                "Dark" => new Color(0.6f, 0.25f, 0.85f),
+                "Ghosts" => new Color(0.7f, 0.45f, 0.95f),
+                "Mecha" => new Color(0.75f, 0.8f, 0.9f),
+                "Arcane" or "Arcane Monsters" => new Color(0.95f, 0.45f, 0.95f),
+                "Light" => new Color(1f, 0.95f, 0.55f),
+                "Earth" => new Color(0.75f, 0.55f, 0.35f),
+                "Air" => new Color(0.4f, 0.95f, 0.75f),
+                "Forest" => new Color(0.3f, 0.85f, 0.35f),
                 _ => new Color(0.85f, 0.85f, 0.9f)
             };
         }
@@ -112,18 +301,18 @@ namespace MonsterCardGame.Utils
         {
             return element switch
             {
-                "نار" => new Color(0.18f, 0.08f, 0.08f, 0.95f),       // وهج بركاني ناري
-                "مياه" => new Color(0.06f, 0.12f, 0.22f, 0.95f),      // زرقة المحيط السحيق
-                "جليد" => new Color(0.07f, 0.15f, 0.24f, 0.95f),      // صقيع العاصفة الثلجية
-                "أرض" => new Color(0.15f, 0.11f, 0.07f, 0.95f),       // تراب وزلازل صخرية
-                "كهرباء" => new Color(0.14f, 0.13f, 0.06f, 0.95f),    // عاصفة برق مشحونة
-                "رياح" => new Color(0.07f, 0.15f, 0.14f, 0.95f),      // إعصار هوائي عاتٍ
-                "غابة" => new Color(0.06f, 0.15f, 0.08f, 0.95f),      // غابة استوائية عميقة
-                "ضياء" => new Color(0.17f, 0.16f, 0.09f, 0.95f),      // شفق مقدس ساطع
-                "ظلام" => new Color(0.09f, 0.05f, 0.15f, 0.95f),      // كسوف كوني داكن
-                "ميكا" => new Color(0.11f, 0.13f, 0.16f, 0.95f),      // مصنع آلي رمادي
-                "أشباح" => new Color(0.12f, 0.08f, 0.18f, 0.95f),     // عالم أثيري شبحي
-                "سحر" => new Color(0.16f, 0.06f, 0.18f, 0.95f),      // فضاء كوني أركيني
+                "Fire" => new Color(0.18f, 0.08f, 0.08f, 0.95f),
+                "Water" => new Color(0.06f, 0.12f, 0.22f, 0.95f),
+                "Ice" => new Color(0.07f, 0.15f, 0.24f, 0.95f),
+                "Earth" => new Color(0.15f, 0.11f, 0.07f, 0.95f),
+                "Electric" => new Color(0.14f, 0.13f, 0.06f, 0.95f),
+                "Air" => new Color(0.07f, 0.15f, 0.14f, 0.95f),
+                "Forest" => new Color(0.06f, 0.15f, 0.08f, 0.95f),
+                "Light" => new Color(0.17f, 0.16f, 0.09f, 0.95f),
+                "Dark" => new Color(0.09f, 0.05f, 0.15f, 0.95f),
+                "Mecha" => new Color(0.11f, 0.13f, 0.16f, 0.95f),
+                "Ghosts" => new Color(0.12f, 0.08f, 0.18f, 0.95f),
+                "Arcane" or "Arcane Monsters" => new Color(0.16f, 0.06f, 0.18f, 0.95f),
                 _ => new Color(0.08f, 0.09f, 0.13f, 1f)
             };
         }
@@ -132,18 +321,18 @@ namespace MonsterCardGame.Utils
         {
             return element switch
             {
-                "نار" => "🔥",
-                "مياه" => "💧",
-                "جليد" => "❄️",
-                "أرض" => "🪨",
-                "كهرباء" => "⚡",
-                "رياح" => "🌪️",
-                "غابة" => "🌿",
-                "ضياء" => "✨",
-                "ظلام" => "🌑",
-                "ميكا" => "⚙️",
-                "أشباح" => "👻",
-                "سحر" => "🔮",
+                "Fire" => "🔥",
+                "Water" => "💧",
+                "Ice" => "❄️",
+                "Earth" => "🪨",
+                "Electric" => "⚡",
+                "Air" => "🌪️",
+                "Forest" => "🌿",
+                "Light" => "✨",
+                "Dark" => "🌑",
+                "Mecha" => "⚙️",
+                "Ghosts" => "👻",
+                "Arcane" or "Arcane Monsters" => "🔮",
                 _ => "⭐"
             };
         }
@@ -152,6 +341,26 @@ namespace MonsterCardGame.Utils
         {
             return type switch
             {
+                SpellType.LinkWingsStrike => "🔗",
+                SpellType.CopySupportPassive => "✨",
+                SpellType.LinkCenterTwin => "⛓️",
+                SpellType.ElementalSynergyShield => "🛡️",
+                SpellType.SwapWingWithCenter => "🔄",
+                SpellType.PullEnemyCenterToWing => "🧲",
+                SpellType.PushEnemyCenterOpenLane => "🌪️",
+                SpellType.TeleportAttackerToWeakest => "⚡",
+                SpellType.ConvertDefToAtk => "⚔️",
+                SpellType.DistributeShieldToWings => "🛡️",
+                SpellType.InvertEnemyStats => "🔄",
+                SpellType.SiphonDefToAtk => "🩸",
+                SpellType.ZeroSkillCostBoost => "⚡",
+                SpellType.DoubleStrikeCenter => "🗡️",
+                SpellType.CleanseAndFortify => "✨",
+                SpellType.SupportBatteryHeal => "💚",
+                SpellType.ArcanePiercingShot => "🏹",
+                SpellType.DrawTwoAndStrike => "📜",
+                SpellType.ReviveFromGraveyard => "💀",
+                SpellType.ManaStealAndAOE => "💥",
                 SpellType.DirectDamage => "☄️",
                 SpellType.BoardAOE => "⚡",
                 SpellType.LeaderHeal => "💚",
@@ -170,18 +379,18 @@ namespace MonsterCardGame.Utils
         {
             return element switch
             {
-                "نار" => "🌋",
-                "مياه" => "🌊",
-                "جليد" => "❄️",
-                "أرض" => "🪨",
-                "كهرباء" => "⚡",
-                "رياح" => "🌪️",
-                "غابة" => "🌿",
-                "ضياء" => "✨",
-                "ظلام" => "🌑",
-                "ميكا" => "⚙️",
-                "أشباح" => "👻",
-                "سحر" => "🔮",
+                "Fire" => "🌋",
+                "Water" => "🌊",
+                "Ice" => "❄️",
+                "Earth" => "🪨",
+                "Electric" => "⚡",
+                "Air" => "🌪️",
+                "Forest" => "🌿",
+                "Light" => "✨",
+                "Dark" => "🌑",
+                "Mecha" => "⚙️",
+                "Ghosts" => "👻",
+                "Arcane" or "Arcane Monsters" => "🔮",
                 _ => "☀️"
             };
         }

@@ -22,7 +22,7 @@ namespace MonsterCardGame.Data
             level = Mathf.Clamp(lvl, 1, 3);
             envLevel = level;
             buffedElement = elem;
-            id = 4000 + GetElementIndex(elem);
+            id = 9988 + GetElementIndex(elem);
 
             SetLevelStats(level);
             SetupMatrix(elem);
@@ -56,7 +56,7 @@ namespace MonsterCardGame.Data
             }
             else
             {
-                turnsRemaining = duration; // تجديد مدة المستوى الثالث
+                turnsRemaining = duration;
             }
         }
 
@@ -70,70 +70,70 @@ namespace MonsterCardGame.Data
         {
             switch (elem)
             {
-                case "نار":
-                    name = "بركان الحمم";
-                    debuffedElements = new List<string> { "غابة", "جليد", "ميكا" };
-                    description = "حمم منصهرة تسعر وحوش النار (+30%)، وتذيب الجليد وتحرق الغابات وتعطل الميكا (-20%).";
+                case "Fire":
+                    name = "Fire Environment";
+                    debuffedElements = new List<string> { "Forest", "Ice", "Mecha" };
+                    description = "Molten lava empowers Fire monsters (+30%), while melting Ice, burning Forest, and overheating Mecha (-20%).";
                     break;
-                case "مياه":
-                    name = "طوفان المحيط";
-                    debuffedElements = new List<string> { "نار", "أرض", "ميكا" };
-                    description = "أمواج عاتية تقوي وحوش المياه (+30%)، وتخمد النيران وتجرف الصخور وتصدئ الآلات (-20%).";
+                case "Water":
+                    name = "Water Environment";
+                    debuffedElements = new List<string> { "Fire", "Earth", "Mecha" };
+                    description = "Raging waves empower Water monsters (+30%), while extinguishing Fire, eroding Earth, and rusting Mecha (-20%).";
                     break;
-                case "جليد":
-                    name = "العاصفة الثلجية";
-                    debuffedElements = new List<string> { "مياه", "غابة", "رياح" };
-                    description = "صقيع قارس يعزز وحوش الجليد (+30%)، ويجمد المياه ويميت النبات ويثقل الرياح (-20%).";
+                case "Ice":
+                    name = "Ice Environment";
+                    debuffedElements = new List<string> { "Water", "Forest", "Air" };
+                    description = "Bitter frost empowers Ice monsters (+30%), while freezing Water, withering Forest, and weighing down Air (-20%).";
                     break;
-                case "أرض":
-                    name = "الزلزال الصخري";
-                    debuffedElements = new List<string> { "كهرباء", "نار", "جليد" };
-                    description = "زلزال صخري يرسخ وحوش الأرض (+30%)، ويفرغ الشحنات ويخنق النار ويسحق الجليد (-20%).";
+                case "Earth":
+                    name = "Earth Environment";
+                    debuffedElements = new List<string> { "Electric", "Fire", "Ice" };
+                    description = "Seismic tremors empower Earth monsters (+30%), while grounding Electric, smothering Fire, and crushing Ice (-20%).";
                     break;
-                case "كهرباء":
-                    name = "العاصفة الرعدية";
-                    debuffedElements = new List<string> { "ميكا", "مياه", "رياح" };
-                    description = "صواعق رعدية تغذي وحوش الكهرباء (+30%)، وتكهرب الماء وتشوش الآلات وتصطاد الطائر (-20%).";
+                case "Electric":
+                    name = "Electric Environment";
+                    debuffedElements = new List<string> { "Mecha", "Water", "Air" };
+                    description = "Thunderstorms empower Electric monsters (+30%), while short-circuiting Mecha, electrifying Water, and striking Air (-20%).";
                     break;
-                case "رياح":
-                    name = "إعصار الأعالي";
-                    debuffedElements = new List<string> { "أشباح", "أرض", "ظلام" };
-                    description = "رياح إعصارية تزيد سرعة وحوش الرياح (+30%)، وتشتت الأطياف وتنحت الصخور وتطرد الظلام (-20%).";
+                case "Air":
+                    name = "Air Environment";
+                    debuffedElements = new List<string> { "Ghosts", "Earth", "Dark" };
+                    description = "Cyclonic winds empower Air monsters (+30%), while scattering Ghosts, eroding Earth, and dispersing Dark (-20%).";
                     break;
-                case "غابة":
-                    name = "الغابة العظيمة";
-                    debuffedElements = new List<string> { "أرض", "مياه", "رياح" };
-                    description = "طبيعة خصبة تنعش وحوش الغابة (+30%)، وجذور تشق الصخور وتستنزف المياه والرياح (-20%).";
+                case "Forest":
+                    name = "Forest Environment";
+                    debuffedElements = new List<string> { "Earth", "Water", "Air" };
+                    description = "Lush nature empowers Forest monsters (+30%), while roots split Earth and drain Water and Air (-20%).";
                     break;
-                case "ضياء":
-                    name = "الشفق المقدس";
-                    debuffedElements = new List<string> { "ظلام", "أشباح", "سحر" };
-                    description = "نور ساطع يبارك وحوش الضياء (+30%)، ويبدد العتمة ويطهر الأشباح ويبطل الطلاسم (-20%).";
+                case "Light":
+                    name = "Light Environment";
+                    debuffedElements = new List<string> { "Dark", "Ghosts", "Arcane" };
+                    description = "Radiant light blesses Light monsters (+30%), while banishing Dark, purifying Ghosts, and dispelling Arcane (-20%).";
                     break;
-                case "ظلام":
-                    name = "الكسوف السحيق";
-                    debuffedElements = new List<string> { "ضياء", "سحر", "كهرباء" };
-                    description = "عتمة مطلقة تقوي وحوش الظلام (+30%)، وتحجب الضياء وتلوث السحر وتخنق الكهرباء (-20%).";
+                case "Dark":
+                    name = "Dark Environment";
+                    debuffedElements = new List<string> { "Light", "Arcane", "Electric" };
+                    description = "Total eclipse empowers Dark monsters (+30%), while eclipsing Light, corrupting Arcane, and dampening Electric (-20%).";
                     break;
-                case "ميكا":
-                    name = "المصنع الآلي";
-                    debuffedElements = new List<string> { "غابة", "أشباح", "ضياء" };
-                    description = "محركات وتروس تشحذ وحوش الميكا (+30%)، وتبيد الغابات وتصطاد الأطياف وتعكس النور (-20%).";
+                case "Mecha":
+                    name = "Mecha Environment";
+                    debuffedElements = new List<string> { "Forest", "Ghosts", "Light" };
+                    description = "Industrial gears empower Mecha monsters (+30%), while clearing Forest, trapping Ghosts, and reflecting Light (-20%).";
                     break;
-                case "أشباح":
-                    name = "العالم الأثيري";
-                    debuffedElements = new List<string> { "نار", "كهرباء", "سحر" };
-                    description = "ضباب أثيري يمكّن وحوش الأشباح (+30%)، ويخمد اللهب ويسحب الشحنات ويستنزف السحرة (-20%).";
+                case "Ghosts":
+                    name = "Ghosts Environment";
+                    debuffedElements = new List<string> { "Fire", "Electric", "Arcane" };
+                    description = "Ethereal mist empowers Ghosts monsters (+30%), while chilling Fire, draining Electric, and haunting Arcane (-20%).";
                     break;
-                case "سحر":
-                    name = "الفضاء الأركيني";
-                    debuffedElements = new List<string> { "جليد", "ضياء", "ظلام" };
-                    description = "موجات طاقة أركينية تضاعف وحوش السحر (+30%)، وتفكك الجليد وتحرف النور والعتمة (-20%).";
+                case "Arcane":
+                    name = "Arcane Environment";
+                    debuffedElements = new List<string> { "Ice", "Light", "Dark" };
+                    description = "Arcane surges empower Arcane monsters (+30%), while shattering Ice and bending Light and Dark (-20%).";
                     break;
                 default:
-                    name = "طقس مستقر";
+                    name = "Stable Weather";
                     debuffedElements = new List<string>();
-                    description = "مناخ معتدل لا يغير موازين العناصر.";
+                    description = "Neutral battlefield climate with balanced elements.";
                     break;
             }
         }
@@ -151,16 +151,16 @@ namespace MonsterCardGame.Data
         {
             return elem switch
             {
-                "نار" => 1, "مياه" => 2, "جليد" => 3, "أرض" => 4,
-                "كهرباء" => 5, "رياح" => 6, "غابة" => 7, "ضياء" => 8,
-                "ظلام" => 9, "ميكا" => 10, "أشباح" => 11, "سحر" => 12,
+                "Fire" => 1, "Water" => 2, "Ice" => 3, "Earth" => 4,
+                "Electric" => 5, "Air" => 6, "Forest" => 7, "Light" => 8,
+                "Dark" => 9, "Mecha" => 10, "Ghosts" => 11, "Arcane" => 12,
                 _ => 1
             };
         }
 
         public static List<EnvironmentCardData> GetAllEnvironments()
         {
-            string[] elems = { "نار", "مياه", "جليد", "أرض", "كهرباء", "رياح", "غابة", "ضياء", "ظلام", "ميكا", "أشباح", "سحر" };
+            string[] elems = { "Fire", "Water", "Ice", "Earth", "Electric", "Air", "Forest", "Light", "Dark", "Mecha", "Ghosts", "Arcane" };
             var list = new List<EnvironmentCardData>();
             foreach (var elem in elems)
             {
@@ -171,7 +171,7 @@ namespace MonsterCardGame.Data
 
         public static EnvironmentCardData GetRandomEnvironment()
         {
-            string[] elems = { "نار", "مياه", "جليد", "أرض", "كهرباء", "رياح", "غابة", "ضياء", "ظلام", "ميكا", "أشباح", "سحر" };
+            string[] elems = { "Fire", "Water", "Ice", "Earth", "Electric", "Air", "Forest", "Light", "Dark", "Mecha", "Ghosts", "Arcane" };
             string randomElem = elems[UnityEngine.Random.Range(0, elems.Length)];
             return new EnvironmentCardData(randomElem, 1);
         }

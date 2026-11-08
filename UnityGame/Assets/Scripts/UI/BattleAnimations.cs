@@ -8,13 +8,12 @@ using MonsterCardGame.Utils;
 namespace MonsterCardGame.UI
 {
     /// <summary>
-    /// محرك مؤثرات الحركة والانتقالات التفاعلية بين الأدوار وحركات الهجوم والإنزال والضرر.
     /// Motion, Transition and Combat Tweening Animations System.
     /// </summary>
     public static class BattleAnimations
     {
         /// <summary>
-        /// شريط إعلان مرحلة / انتقال الدور المتحرك (Turn Transition Banner)
+        /// Turn Transition Banner Animation
         /// </summary>
         public static IEnumerator AnimateTurnBanner(Canvas canvas, string text, Color color, float duration = 1.1f)
         {
@@ -37,7 +36,7 @@ namespace MonsterCardGame.UI
             rect.localScale = Vector3.one * 0.4f;
             group.alpha = 0f;
 
-            // دخول سريع مع ارتداد (Zoom in + EaseOutBack)
+            // Zoom in + EaseOutBack
             float t = 0;
             float inDuration = 0.25f;
             while (t < inDuration)
@@ -52,10 +51,9 @@ namespace MonsterCardGame.UI
             rect.localScale = Vector3.one;
             group.alpha = 1f;
 
-            // بقاء قصير
             yield return new WaitForSeconds(duration - 0.45f);
 
-            // خروج انسيابي (Fade out + Slide up)
+            // Fade out + Slide up
             t = 0;
             float outDuration = 0.2f;
             Vector2 startPos = rect.anchoredPosition;
@@ -72,7 +70,7 @@ namespace MonsterCardGame.UI
         }
 
         /// <summary>
-        /// حركة إنزال واستدعاء الكارت (Card Summon Pop-in & Bounce)
+        /// Card Summon Pop-in & Bounce
         /// </summary>
         public static IEnumerator AnimateCardSummon(Transform target)
         {
@@ -95,7 +93,7 @@ namespace MonsterCardGame.UI
         }
 
         /// <summary>
-        /// حركة اندفاع الهجوم (Lunge Forward & Strike & Spring Back)
+        /// Lunge Forward, Strike & Spring Back
         /// </summary>
         public static IEnumerator AnimateCardAttack(Transform attacker, Vector3 targetPos, Action onImpact)
         {
@@ -107,9 +105,9 @@ namespace MonsterCardGame.UI
 
             Vector3 startPos = attacker.position;
             Vector3 dir = (targetPos - startPos).normalized;
-            Vector3 strikePos = startPos + dir * 115f; // اندفاع قتالي عميق وسريع نحو الهدف
+            Vector3 strikePos = startPos + dir * 115f;
 
-            // 1. استعداد للخلف (Anticipation)
+            // 1. Anticipation pullback
             float t = 0;
             float pullDuration = 0.12f;
             while (t < pullDuration)
@@ -120,7 +118,7 @@ namespace MonsterCardGame.UI
                 yield return null;
             }
 
-            // 2. ضربة سريعة خاطفة (Lunge Forward)
+            // 2. Lunge Forward
             t = 0;
             float strikeDuration = 0.12f;
             while (t < strikeDuration)
@@ -131,12 +129,12 @@ namespace MonsterCardGame.UI
                 yield return null;
             }
 
-            // 3. لحظة الاصطدام (Impact!)
+            // 3. Impact!
             attacker.position = strikePos;
             onImpact?.Invoke();
             yield return new WaitForSeconds(0.08f);
 
-            // 4. ارتداد لمكانه الأصلي (Spring Back)
+            // 4. Spring Back
             t = 0;
             float returnDuration = 0.18f;
             while (t < returnDuration)
@@ -150,7 +148,7 @@ namespace MonsterCardGame.UI
         }
 
         /// <summary>
-        /// اهتزاز تلقي الضرر والتوهج الأحمر (Hit Shake & Red Flash)
+        /// Hit Shake & Flash
         /// </summary>
         public static IEnumerator AnimateHitShake(Transform target, Color flashColor, float intensity = 12f)
         {
@@ -166,7 +164,7 @@ namespace MonsterCardGame.UI
             while (t < duration)
             {
                 t += Time.deltaTime;
-                float p = 1f - (t / duration); // يتناقص مع الوقت
+                float p = 1f - (t / duration);
                 float offsetX = Mathf.Sin(t * 50f) * intensity * p;
                 target.position = originalPos + new Vector3(offsetX, 0, 0);
 
@@ -182,7 +180,7 @@ namespace MonsterCardGame.UI
         }
 
         /// <summary>
-        /// أرقام الضرر المتطايرة لأعلى مع التلاشي (Floating Damage Text)
+        /// Floating Damage Text
         /// </summary>
         public static IEnumerator AnimateFloatingDamage(Transform canvasTransform, Vector3 worldPos, int damage, bool isLeaderHit)
         {
@@ -205,7 +203,7 @@ namespace MonsterCardGame.UI
 
             var txt = obj.AddComponent<Text>();
             txt.font = GameBootstrapper.GetFont();
-            txt.text = ArabicFixer.Fix(content);
+            txt.text = content;
             txt.fontSize = fontSize;
             txt.color = textColor;
             txt.alignment = TextAnchor.MiddleCenter;
@@ -230,7 +228,7 @@ namespace MonsterCardGame.UI
         }
 
         /// <summary>
-        /// حركة ظهور سينمائية لنافذة الخاتمة والانتصار / الهزيمة (Modal Pop-in & Bounce)
+        /// Modal Pop-in & Bounce
         /// </summary>
         public static IEnumerator AnimateModalPopIn(Transform target)
         {
@@ -252,7 +250,7 @@ namespace MonsterCardGame.UI
         }
 
         /// <summary>
-        /// مؤثر إطلاق تعويذة سحرية مع وميض أركيني وشعار التعويذة
+        /// Spell Cast Banner Animation
         /// </summary>
         public static IEnumerator AnimateSpellCast(Canvas canvas, MonsterCardGame.Data.CardData spellCard, string casterName)
         {
@@ -273,7 +271,7 @@ namespace MonsterCardGame.UI
             var titleTxt = GameBootstrapper.CreateText(bannerObj.transform, "SpellTitle", title, 24,
                 Color.white, TextAnchor.UpperCenter, new Vector2(0, 16), new Vector2(600, 32));
 
-            string sub = $"أطلق {casterName} تعويذة ({spellCard.element}): {spellCard.description}";
+            string sub = $"{casterName} cast Spell ({spellCard.element}): {spellCard.description}";
             var subTxt = GameBootstrapper.CreateText(bannerObj.transform, "SpellDesc", sub, 13,
                 elemColor, TextAnchor.LowerCenter, new Vector2(0, -18), new Vector2(600, 26));
 
@@ -314,7 +312,7 @@ namespace MonsterCardGame.UI
         }
 
         /// <summary>
-        /// مؤثر تنشيط كارت البيئة والمناخ مع عاصفة رعدية وبانر ملحمي
+        /// Environment Shift Banner Animation
         /// </summary>
         public static IEnumerator AnimateEnvironmentShift(Canvas canvas, MonsterCardGame.Data.EnvironmentCardData envData, string activatorName)
         {
@@ -332,11 +330,11 @@ namespace MonsterCardGame.UI
             outline.effectDistance = new Vector2(3.5f, 3.5f);
 
             string stars = new string('★', envData.level);
-            string title = $"{envEmoji} تحول المناخ: {envData.name} ({stars} المستوى {envData.level})";
+            string title = $"{envEmoji} Weather Shift: {envData.name} ({stars} Level {envData.level})";
             var titleTxt = GameBootstrapper.CreateText(bannerObj.transform, "EnvTitle", title, 24,
                 Color.white, TextAnchor.UpperCenter, new Vector2(0, 18), new Vector2(700, 32));
 
-            string sub = $"فعّل {activatorName} مناخ ({envData.element}): {envData.description}";
+            string sub = $"{activatorName} activated ({envData.element}) weather: {envData.description}";
             var subTxt = GameBootstrapper.CreateText(bannerObj.transform, "EnvDesc", sub, 13,
                 elemColor, TextAnchor.LowerCenter, new Vector2(0, -18), new Vector2(700, 26));
 
@@ -392,7 +390,7 @@ namespace MonsterCardGame.UI
 
             var txt = obj.AddComponent<Text>();
             txt.font = GameBootstrapper.GetFont();
-            txt.text = ArabicFixer.Fix($"+{healAmount} HP 💚");
+            txt.text = $"+{healAmount} HP 💚";
             txt.fontSize = 26;
             txt.color = new Color(0.2f, 1f, 0.45f);
             txt.alignment = TextAnchor.MiddleCenter;
@@ -417,7 +415,7 @@ namespace MonsterCardGame.UI
         }
 
         /// <summary>
-        /// اهتزاز الشاشة عند إصابة القائد بضربة مباشرة (Screen Shake)
+        /// Screen Shake on Direct Leader Hit
         /// </summary>
         public static IEnumerator AnimateScreenShake(Transform target, float intensity = 8f, float duration = 0.22f)
         {
@@ -439,7 +437,7 @@ namespace MonsterCardGame.UI
             target.localPosition = origin;
         }
 
-        // معادلات التنعيم الرياضية (Easing Functions)
+        // Easing Functions
         private static float EaseOutBack(float x)
         {
             const float c1 = 1.70158f;

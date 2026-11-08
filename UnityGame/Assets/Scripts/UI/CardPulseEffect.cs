@@ -5,7 +5,6 @@ using UnityEngine.UI;
 namespace MonsterCardGame.UI
 {
     /// <summary>
-    /// يمنح الوحوش الجاهزة للهجوم تأثيراً نابضاً بالحياة (Breathing & Glow Pulse)
     /// Gives ready-to-attack cards an organic breathing animation and glowing aura.
     /// </summary>
     public class CardPulseEffect : MonoBehaviour
