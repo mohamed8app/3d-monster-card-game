@@ -15,8 +15,10 @@ namespace MonsterCardGame.UI
         [Header("Leader HP & Resources")]
         public Text playerHpText;
         public Slider playerHpSlider;
+        public Image playerAvatarImage;
         public Text enemyHpText;
         public Slider enemyHpSlider;
+        public Image enemyAvatarImage;
 
         public Text playerPowerText;
         public Text turnInfoText;
@@ -501,30 +503,41 @@ namespace MonsterCardGame.UI
 
         private GameObject CreateFaceDownCardUI(Transform parent, int index)
         {
-            var cardObj = GameBootstrapper.CreatePanel(parent, $"EnemyCardBack_{index}", new Color(0.11f, 0.08f, 0.18f, 0.98f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(52, 72));
+            var cardRootObj = GameBootstrapper.CreatePanel(parent, $"EnemyCardBack_{index}", new Color(0f, 0f, 0f, 0.005f),
+                new Vector2(0, 0.5f), new Vector2(0, 0.5f), Vector2.zero, new Vector2(138, 182));
 
-            var layoutElem = cardObj.AddComponent<LayoutElement>();
-            layoutElem.preferredWidth = 52;
-            layoutElem.preferredHeight = 72;
-            layoutElem.minWidth = 52;
-            layoutElem.minHeight = 72;
+            var layoutElem = cardRootObj.AddComponent<LayoutElement>();
+            layoutElem.preferredWidth = 138;
+            layoutElem.preferredHeight = 182;
+            layoutElem.minWidth = 138;
+            layoutElem.minHeight = 182;
 
-            var outline = cardObj.AddComponent<Outline>();
-            outline.effectColor = new Color(0.92f, 0.76f, 0.28f, 0.95f);
-            outline.effectDistance = new Vector2(1.5f, 1.5f);
+            var cardObj = GameBootstrapper.CreatePanel(cardRootObj.transform, "VisualRoot", new Color(0.08f, 0.06f, 0.10f, 1f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(138, 182));
+            var cardImg = cardObj.GetComponent<Image>();
+            cardImg.raycastTarget = false;
 
-            var innerPanel = GameBootstrapper.CreatePanel(cardObj.transform, "InnerRuneBorder", new Color(0.07f, 0.05f, 0.12f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(42, 60));
+            Sprite backSprite = MonsterArtLoader.GetCardBackSprite();
+            if (backSprite != null)
+            {
+                cardImg.sprite = backSprite;
+                cardImg.color = Color.white;
+                cardImg.preserveAspect = false;
+            }
+            else
+            {
+                cardImg.color = new Color(0.12f, 0.08f, 0.16f, 1f);
+                var glyph = GameBootstrapper.CreateText(cardObj.transform, "BackGlyph", "❖", 32,
+                    new Color(0.95f, 0.80f, 0.35f, 0.6f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(80, 80));
+                glyph.raycastTarget = false;
+            }
 
-            var innerOutline = innerPanel.AddComponent<Outline>();
-            innerOutline.effectColor = new Color(0.55f, 0.35f, 0.8f, 0.7f);
-            innerOutline.effectDistance = new Vector2(1, 1);
+            var frame = GameBootstrapper.CreateHollowOrnatePanel(cardObj.transform, "BackGoldRim",
+                new Color(0.92f, 0.78f, 0.38f, 0.90f), Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            var frameImg = frame.GetComponent<Image>();
+            if (frameImg != null) frameImg.raycastTarget = false;
 
-            GameBootstrapper.CreateText(innerPanel.transform, "RuneSymbol", "🔮", 16,
-                new Color(1f, 0.85f, 0.35f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(38, 48));
-
-            return cardObj;
+            return cardRootObj;
         }
 
         private GameObject CreateDynamicCardUI(Transform parent, CardData card)
@@ -556,6 +569,10 @@ namespace MonsterCardGame.UI
                 ? new Color(0.95f, 0.75f, 0.25f, 0.95f)
                 : elemColor;
             outline.effectDistance = new Vector2(2, 2);
+            if (card.cardType == CardType.Monster)
+            {
+                outline.enabled = false;
+            }
 
             Sprite customArt = MonsterArtLoader.GetCardSprite(card);
 
@@ -595,46 +612,53 @@ namespace MonsterCardGame.UI
                     tierBadgeTxt.raycastTarget = false;
                 }
 
-                // Top-Right Blue Cost Circle
-                var costCircle = GameBootstrapper.CreateCirclePanel(cardObj.transform, "CostCircle", new Color(0.10f, 0.28f, 0.65f, 0.96f),
-                    new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-18, -18), new Vector2(32, 32));
-                var costOutline = costCircle.AddComponent<Outline>();
-                costOutline.effectColor = new Color(0.40f, 0.90f, 1f, 1f);
-                costOutline.effectDistance = new Vector2(1.5f, 1.5f);
-                var txtCost = GameBootstrapper.CreateText(costCircle.transform, "CostText", card.cost.ToString(), 16,
-                    new Color(1f, 0.95f, 0.70f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(32, 32));
+                // Classic Hand-Crafted Frame Overlay
+                var frameObj = new GameObject("FrameOverlay");
+                frameObj.transform.SetParent(cardObj.transform, false);
+                var rectFrame = frameObj.AddComponent<RectTransform>();
+                rectFrame.anchorMin = Vector2.zero;
+                rectFrame.anchorMax = Vector2.one;
+                rectFrame.sizeDelta = Vector2.zero;
+                rectFrame.anchoredPosition = Vector2.zero;
+                var frameImg = frameObj.AddComponent<Image>();
+                Sprite frameSprite = MonsterArtLoader.GetCardFrameOverlaySprite(card.element);
+                if (frameSprite != null)
+                {
+                    frameImg.sprite = frameSprite;
+                    frameImg.color = Color.white;
+                    frameImg.preserveAspect = false;
+                }
+                frameImg.raycastTarget = false;
+
+                // Top-Center Summon Cost Number (Inscribed inside top medallion socket)
+                var txtCost = GameBootstrapper.CreateText(cardObj.transform, "CostText", card.cost.ToString(), 14,
+                    new Color(1f, 0.96f, 0.72f), TextAnchor.MiddleCenter, new Vector2(0, -11f), new Vector2(28, 22));
+                txtCost.rectTransform.anchorMin = new Vector2(0.5f, 1f);
+                txtCost.rectTransform.anchorMax = new Vector2(0.5f, 1f);
+                txtCost.rectTransform.anchoredPosition = new Vector2(0, -11f);
                 txtCost.fontStyle = FontStyle.Bold;
                 txtCost.raycastTarget = false;
+                GameBootstrapper.AddTextShadow(txtCost);
 
-                // Bottom-Left Red ATK Circle
-                var atkBadge = GameBootstrapper.CreateCirclePanel(cardObj.transform, "AtkBadge", new Color(0.70f, 0.12f, 0.16f, 0.96f),
-                    new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(18, 18), new Vector2(32, 32));
-                var atkOutline = atkBadge.AddComponent<Outline>();
-                atkOutline.effectColor = new Color(1f, 0.45f, 0.35f, 1f);
-                atkOutline.effectDistance = new Vector2(1.5f, 1.5f);
-                var txtAtk = GameBootstrapper.CreateText(atkBadge.transform, "AtkText", card.atk.ToString(), 16,
-                    Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(32, 32));
+                // Bottom-Left ATK Number (Inscribed inside bottom-left socket)
+                var txtAtk = GameBootstrapper.CreateText(cardObj.transform, "AtkText", card.atk.ToString(), 15,
+                    Color.white, TextAnchor.MiddleCenter, new Vector2(17.5f, 20.5f), new Vector2(26, 22));
+                txtAtk.rectTransform.anchorMin = new Vector2(0f, 0f);
+                txtAtk.rectTransform.anchorMax = new Vector2(0f, 0f);
+                txtAtk.rectTransform.anchoredPosition = new Vector2(17.5f, 20.5f);
                 txtAtk.fontStyle = FontStyle.Bold;
                 txtAtk.raycastTarget = false;
+                GameBootstrapper.AddTextShadow(txtAtk);
 
-                // Bottom-Right Green DEF Circle
-                var defBadge = GameBootstrapper.CreateCirclePanel(cardObj.transform, "DefBadge", new Color(0.10f, 0.52f, 0.22f, 0.96f),
-                    new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-18, 18), new Vector2(32, 32));
-                var defOutline = defBadge.AddComponent<Outline>();
-                defOutline.effectColor = new Color(0.35f, 1f, 0.45f, 1f);
-                defOutline.effectDistance = new Vector2(1.5f, 1.5f);
-                var txtDef = GameBootstrapper.CreateText(defBadge.transform, "DefText", card.def.ToString(), 16,
-                    Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(32, 32));
+                // Bottom-Right DEF Number (Inscribed inside bottom-right socket)
+                var txtDef = GameBootstrapper.CreateText(cardObj.transform, "DefText", card.def.ToString(), 15,
+                    Color.white, TextAnchor.MiddleCenter, new Vector2(-17.5f, 20.5f), new Vector2(26, 22));
+                txtDef.rectTransform.anchorMin = new Vector2(1f, 0f);
+                txtDef.rectTransform.anchorMax = new Vector2(1f, 0f);
+                txtDef.rectTransform.anchoredPosition = new Vector2(-17.5f, 20.5f);
                 txtDef.fontStyle = FontStyle.Bold;
                 txtDef.raycastTarget = false;
-
-                // Bottom-Center ID Plate
-                var namePanel = GameBootstrapper.CreatePanel(cardObj.transform, "NamePlate", new Color(0.04f, 0.05f, 0.08f, 0.85f),
-                    new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0, 16), new Vector2(66, 20));
-                var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", card.name, 12,
-                    Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(64, 20));
-                txtName.fontStyle = FontStyle.Bold;
-                txtName.raycastTarget = false;
+                GameBootstrapper.AddTextShadow(txtDef);
             }
             else if (card.cardType == CardType.Spell)
             {
@@ -980,15 +1004,20 @@ namespace MonsterCardGame.UI
 
             if (card.cardType == CardType.Monster)
             {
+                HighlightAvailableSlots(true);
                 LogCombatMessage($"Selected Monster: [{card.name}] (Cost: {card.cost}) — Click a slot to summon, or Right-Click to sacrifice (+1 Mana).");
             }
-            else if (card.cardType == CardType.Spell)
+            else
             {
-                LogCombatMessage($"Selected Spell: [{card.name}] (Cost: {card.cost}) — Click 'Cast Spell' or drag upward, or Right-Click to sacrifice.");
-            }
-            else if (card.cardType == CardType.Environment)
-            {
-                LogCombatMessage($"Selected Weather: [{card.name}] (Cost: {card.cost}) — Click 'Activate Weather' or drag upward, or Right-Click to sacrifice.");
+                HighlightAvailableSlots(false);
+                if (card.cardType == CardType.Spell)
+                {
+                    LogCombatMessage($"Selected Spell: [{card.name}] (Cost: {card.cost}) — Click 'Cast Spell' or drag upward, or Right-Click to sacrifice.");
+                }
+                else if (card.cardType == CardType.Environment)
+                {
+                    LogCombatMessage($"Selected Weather: [{card.name}] (Cost: {card.cost}) — Click 'Activate Weather' or drag upward, or Right-Click to sacrifice.");
+                }
             }
 
             if (playCardButton != null)
@@ -1018,6 +1047,7 @@ namespace MonsterCardGame.UI
         public void DeselectHandCards()
         {
             selectedCardForAction = null;
+            HighlightAvailableSlots(false);
 
             if (playerHandContainer != null)
             {
@@ -1041,6 +1071,19 @@ namespace MonsterCardGame.UI
             if (sacrificeButton != null)
             {
                 sacrificeButton.interactable = false;
+            }
+        }
+
+        public void HighlightAvailableSlots(bool highlight)
+        {
+            if (playerSlotViews == null) return;
+            for (int i = 0; i < playerSlotViews.Length; i++)
+            {
+                var sv = playerSlotViews[i];
+                if (sv != null)
+                {
+                    sv.SetSummonHighlight(highlight);
+                }
             }
         }
 

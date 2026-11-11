@@ -26,7 +26,6 @@ namespace MonsterCardGame.UI
 
         private bool isInitialized = false;
         private static readonly Dictionary<string, Sprite> envSpriteCache = new Dictionary<string, Sprite>();
-        private const string LegacyArtFolderName = "\u0635\u0648\u0631_\u0627\u0644\u0643\u0631\u0648\u062A_\u0648\u0627\u0644\u0648\u062D\u0648\u0634";
 
         // Dual Video Channel Buffer for Butter-Smooth Crossfading
         private class VideoChannel
@@ -349,22 +348,12 @@ namespace MonsterCardGame.UI
         private static string[] GetEnvironmentSearchFolders()
         {
             string dataPath = Application.dataPath;
-            string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
             return new string[]
             {
-                Path.Combine(@"D:\deck game", LegacyArtFolderName, "Environments"),
-                Path.Combine(@"D:\deck game", LegacyArtFolderName),
-                desktopPath,
-                @"D:\deck game\Game_Windows_Exe\Environments",
-                @"D:\deck game\CardsArt\Environments",
-                @"D:\deck game\CardsArt",
-                @"D:\deck game\UnityGame\Assets\Resources\Environments",
-                Path.GetFullPath(Path.Combine(dataPath, "../../" + LegacyArtFolderName + "/Environments")),
-                Path.GetFullPath(Path.Combine(dataPath, "../../" + LegacyArtFolderName)),
-                Path.GetFullPath(Path.Combine(dataPath, "../" + LegacyArtFolderName + "/Environments")),
-                Path.GetFullPath(Path.Combine(dataPath, "../" + LegacyArtFolderName)),
+                Path.Combine(Application.streamingAssetsPath, "Environments"),
                 Path.GetFullPath(Path.Combine(dataPath, "../Environments")),
-                Path.GetFullPath(Path.Combine(dataPath, "../../Environments"))
+                Path.GetFullPath(Path.Combine(dataPath, "../../Environments")),
+                Path.GetFullPath(Path.Combine(dataPath, "Resources/Environments"))
             };
         }
 
@@ -514,26 +503,44 @@ namespace MonsterCardGame.UI
                 return cached;
             }
 
-            // 1. Check disk folders first (00.jpg, 01.jpg, 02.jpg, 03.jpg, etc.)
-            Texture2D diskTex = TryLoadDiskEnvironmentTexture(elem, baseKey, lvl);
-            if (diskTex == null && baseKey != "default")
+            // 1. At runtime, allow external disk/StreamingAssets overrides first.
+            // In Editor/scene-baking mode, prefer Resources GUID references to keep scene files lightweight.
+            if (Application.isPlaying)
             {
-                diskTex = TryLoadDiskEnvironmentTexture("", "default", 0);
-            }
-            if (diskTex != null)
-            {
-                var diskSp = Sprite.Create(diskTex, new Rect(0, 0, diskTex.width, diskTex.height), new Vector2(0.5f, 0.5f));
-                envSpriteCache[cacheKey] = diskSp;
-                return diskSp;
+                Texture2D diskTex = TryLoadDiskEnvironmentTexture(elem, baseKey, lvl);
+                if (diskTex == null && baseKey != "default")
+                {
+                    diskTex = TryLoadDiskEnvironmentTexture("", "default", 0);
+                }
+                if (diskTex != null)
+                {
+                    var diskSp = Sprite.Create(diskTex, new Rect(0, 0, diskTex.width, diskTex.height), new Vector2(0.5f, 0.5f));
+                    envSpriteCache[cacheKey] = diskSp;
+                    return diskSp;
+                }
             }
 
-            // 2. Fallback to built-in Resources
-            string resPath = (baseKey == "default") ? "arena_ground" : $"Environments/env_{baseKey}";
-            var tex = Resources.Load<Texture2D>(resPath);
-            if (tex == null && baseKey != "default")
+            // 2. Built-in Resources (supports level-specific Fire textures 01/02/03 as well as env_<element>)
+            Texture2D tex = null;
+            if (baseKey == "default" || lvl <= 0)
             {
-                tex = Resources.Load<Texture2D>("arena_ground");
+                tex = Resources.Load<Texture2D>("arena_ground") ?? Resources.Load<Texture2D>("Environments/00");
             }
+            else
+            {
+                if (baseKey == "fire")
+                {
+                    tex = Resources.Load<Texture2D>($"Environments/0{Mathf.Clamp(lvl, 1, 3)}")
+                          ?? Resources.Load<Texture2D>("Environments/01");
+                }
+                if (tex == null)
+                {
+                    tex = Resources.Load<Texture2D>($"Environments/env_{baseKey}_{Mathf.Clamp(lvl, 1, 3)}")
+                          ?? Resources.Load<Texture2D>($"Environments/env_{baseKey}")
+                          ?? Resources.Load<Texture2D>("arena_ground");
+                }
+            }
+
             if (tex != null)
             {
                 var sp = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));

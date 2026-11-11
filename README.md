@@ -26,43 +26,29 @@
 
 ---
 
-## 🗂️ هيكل المشروع (Project Architecture)
+## 🗂️ هيكل المشروع المنظّم (Project Architecture)
 
-* **`UnityGame/`**: مشروع محرك Unity المكتوب بلغة **C#**:
-  * `Assets/Scripts/Core/`:
-    * `GameManager.cs`: إدارة دورة المعركة والقرعة وتبديل الأدوار.
-    * `PlayerState.cs`: إدارة الـ 1,000 HP، التضحية، الباور، واليد.
-    * `BoardSlot.cs`: نظام الخانات الـ 7 وتحديد أدوار الأجنحة والوسط والمدافع.
-    * `CombatSystem.cs`: محرك حساب هجوم الاتجاه الواحد واختراق الأجنحة وامتصاص المدافع.
-    * `AIOpponent.cs`: ذكاء اصطناعي تكتيكي متكامل لاتخاذ قرارات التضحية والاستدعاء والهجوم.
-  * `Assets/Scripts/Data/`:
-    * `MonsterData.cs`: نموذج بيانات الوحوش وتصنيف الرتب والقدرات.
-    * `EnvironmentData.cs`: مصفوفة كروت البيئة ومعدلات التعديل.
-  * `Assets/Resources/`:
-    * `monsters_150.json`: قاعدة بيانات الوحوش الـ 150 كاملة.
-* **`battle_engine_advanced.py`**: محرك المحاكاة السريع بلغة بايثون.
-* **`simulator_100k_gui.py`**: واجهة مستخدم رسومية (Tkinter GUI) لتحليل الـ 100,000 مباراة وعرض نسب الفوز وتصنيف الوحوش.
-* **`GAME_MECHANICS_PLAN.md`**: وثيقة التصميم الشاملة للعبة (Game Design Document).
-* **`EVALUATION_100000_MONSTERS.md`**: التقرير الإحصائي الصادر عن محاكاة 100,000 مباراة.
-
----
-
-## 📊 نتائج محاكاة الـ 100,000 مباراة (Balance & Meta Report)
-
-* **زمن التنفيذ:** 18.8 ثانية عبر 8 أنوية (5,295 مباراة/ثانية).
-* **نسبة فوز اللاعب البادئ (First Player Win Rate):** **53.8%** (توازن ممتاز).
-* **أكثر دور اشتعلت فيه المعركة (Climax Turn):** الدور 39.
-* **توزيع الضرر الميداني:**
-  * ضرر الأجنحة المباشر للقائد: **76.1%** (الأجنحة هي جبهة الحسم).
-  * ضرر الوسط المباشر للقائد: **13.1%** فقط.
-  * ضرر امتصه المدافع الخلفي (Guardian): **10.8%** من ضربات الوسط لحماية القائد.
+* **`UnityGame/`**: مشروع محرك Unity 6 الرئيسي (**C#**):
+  * `Assets/Scripts/Core/`: منطق اللعبة (`GameManager.cs`, `PlayerState.cs`, `BoardSlot.cs`, `CombatSystem.cs`, `AIOpponent.cs`, `MonsterInstance.cs`).
+  * `Assets/Scripts/Data/`: نماذج وقواعد البيانات (`CardData.cs`, `MonsterData.cs`, `EnvironmentData.cs`, `SpellDatabase.cs`).
+  * `Assets/Scripts/UI/`: واجهات وساحة المعركة (`GameBootstrapper.cs`, `BattleUIManager.cs`, `BattlefieldAtmosphereEngine.cs`, `CardView.cs`, `SlotView.cs`, `DraggableCard.cs`, `BattleAnimations.cs`).
+  * `Assets/Scripts/Utils/`: الأدوات وتحميل صور الكروت (`MonsterArtLoader.cs`, `ArabicFixer.cs`).
+  * `Assets/Editor/`: أداة البناء التلقائي للمشهد والـ EXE (`BattleSceneBuilder.cs`).
+  * `Assets/Resources/`: المصدر الوحيد المعتمد للأصول المدمجة (`cards_10000.json`, `monsters_150.json`, `CardsArt/Monsters/`, `Environments/` صور البيئات, إطارات الكروت, الصوتيات `Audio/`, الخطوط `Fonts/`).
+  * `Assets/StreamingAssets/Environments/`: فيديوهات البيئات والمؤثرات الدورية فقط (`00.mp4`, `01.mp4`, `02.mp4`, `03.mp4`).
+  * `Assets/Scenes/`: المشهد الرئيسي (`MainBattleScene.unity`).
+* **`Game_Windows_Exe/`**: مجلد نسخة الويندوز الجاهزة للتشغيل (`MonsterCardGame.exe`).
+* **`Data/`**: قاعدة بيانات الإكسل الرئيسية (`قاعدة_بيانات_الوحوش_والكروت.xlsx`).
+* **`Tools/`**: أدوات البايثون للتوليد والمحاكاة والتقييم:
+  * `simulator_100k_evaluator.py`: محاكي تقييم الـ 100,000 جولة وتحديث الإكسل وملفات JSON.
+  * `generate_10k_monsters.py`, `generate_game_audio.py`, `generate_monsters.py`, `download_unity_hub.py`, `تثبيت_محرك_يونيتي.bat`.
+* **`Docs/`**: وثائق التصميم والأرشيف (`GAME_MECHANICS_PLAN.md`, `MONSTERS_DATABASE_150.md`, `fire_dragon_art_prompt.txt`, `Legacy_Art/`, `Legacy_Web_Prototype/`, `VFX_Drafts/`).
 
 ---
 
-## 🚀 تشغيل المحاكي التفاعلي محلياً
+## 🚀 الاختصارات السريعة من المجلد الرئيسي
 
-لتشغيل الواجهة الرسومية للمحاكي:
-```bash
-python simulator_100k_gui.py
-```
-أو بالضغط ضغطتين على: `تشغيل_محاكي_100_الف.bat`.
+* **تشغيل اللعبة:** اضغط مرتين على `العب_الان.bat`
+* **بناء نسخة EXE جديدة:** اضغط مرتين على `run_build.bat`
+* **فتح المشروع في Unity:** اضغط مرتين على `فتح_مشروع_اللعبه_في_يونيتي.bat`
+* **تشغيل محاكي الـ 100 ألف جولة:** اضغط مرتين على `تقييم_القدرات_100_ألف_جولة.bat` (أو `python Tools/simulator_100k_evaluator.py`)

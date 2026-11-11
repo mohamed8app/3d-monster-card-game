@@ -168,7 +168,20 @@ namespace MonsterCardGame.Core
                 }
             }
 
-            return result;
+            // Showcase elemental variety: prioritize distinct elements first (Ice, Water, Fire)
+            var curatedFirst = new int[] { 1201, 1194, 611, 599, 15, 13 };
+            var sortedResult = new List<CardData>();
+            foreach (int preferredId in curatedFirst)
+            {
+                var match = result.Find(c => c != null && c.id == preferredId);
+                if (match != null)
+                {
+                    sortedResult.Add(match);
+                    result.Remove(match);
+                }
+            }
+            sortedResult.AddRange(result);
+            return sortedResult;
         }
 
         public void StartGame()
@@ -235,6 +248,15 @@ namespace MonsterCardGame.Core
                     CardData artCard = priorityArtCards[i];
                     humanPlayer.deck.RemoveAll(c => c != null && c.id == artCard.id);
                     humanPlayer.deck.Insert(0, artCard);
+                }
+
+                // Equip AI player with custom-art monsters too so they appear on both battle lines
+                if (priorityArtCards.Count >= 2 && aiPlayer != null && aiPlayer.hand != null && aiPlayer.hand.Count >= 2)
+                {
+                    aiPlayer.hand[0] = priorityArtCards[0]; // #1201 Ice Titan
+                    aiPlayer.hand[1] = priorityArtCards[1]; // #1194 Water Beast
+                    aiPlayer.manaCapacity = Mathf.Max(aiPlayer.manaCapacity, maxPriorityCost);
+                    aiPlayer.currentPower = aiPlayer.manaCapacity;
                 }
             }
 

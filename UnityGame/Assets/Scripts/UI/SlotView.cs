@@ -23,8 +23,10 @@ namespace MonsterCardGame.UI
         // Portrait Field Card Token Standee
         public CardData currentCardData;
         public MonsterInstance currentMonsterInstance;
+        public Image summoningCircleImage;
         private GameObject fieldCardToken;
         private Image tokenArtImage;
+        private Image tokenFrameImage;
         private Outline tokenOutline;
         private Text tokenNameText;
         private Text tokenCostText;
@@ -34,6 +36,13 @@ namespace MonsterCardGame.UI
         private Image hpBarFillImage;
         private CardPulseEffect pulseEffect;
         private bool isHovered = false;
+        private bool isHighlightedForSummon = false;
+        private float circleRotation = 0f;
+
+        public void SetSummonHighlight(bool active)
+        {
+            isHighlightedForSummon = active && (currentCardData == null) && isPlayerSide;
+        }
 
         public void OnPointerClick(PointerEventData eventData)
         {
@@ -61,6 +70,7 @@ namespace MonsterCardGame.UI
 
         private void Update()
         {
+            // 1. Occupied Slot: Standee Card Token Breathing / Hover
             if (fieldCardToken != null && fieldCardToken.activeSelf)
             {
                 if (pulseEffect != null && pulseEffect.isPulsing && !isHovered)
@@ -73,6 +83,39 @@ namespace MonsterCardGame.UI
                 {
                     float s = Mathf.Lerp(curScale.x, targetScale, Time.unscaledDeltaTime * 16f);
                     fieldCardToken.transform.localScale = new Vector3(s, s, 1f);
+                }
+            }
+            // 2. Empty Slot: Summoning Circle (Static Size, Light Blink & Active Summon Rotation)
+            else if (summoningCircleImage != null && summoningCircleImage.gameObject.activeSelf && currentCardData == null)
+            {
+                // Permanent fixed size: no scaling in or out
+                summoningCircleImage.transform.localScale = Vector3.one;
+
+                if (isHighlightedForSummon)
+                {
+                    // Active Summoning Mode: Spins continuously and light increases brightly!
+                    float spinSpeed = isHovered ? 160f : 85f;
+                    circleRotation = (circleRotation - spinSpeed * Time.unscaledDeltaTime) % 360f;
+                    summoningCircleImage.transform.localRotation = Quaternion.Euler(0, 0, circleRotation);
+
+                    // High radiant light ready for summon
+                    float targetAlpha = isHovered ? 1.0f : 0.90f;
+                    summoningCircleImage.color = new Color(1f, 1f, 1f, targetAlpha);
+                }
+                else if (isHovered)
+                {
+                    // Direct mouse hover
+                    summoningCircleImage.color = new Color(1f, 1f, 1f, 0.85f);
+                    summoningCircleImage.transform.localRotation = Quaternion.Euler(0, 0, circleRotation);
+                }
+                else
+                {
+                    // Idle Breathing Glow: Static position & size, gentle light pulsing (تنور وتطفي ببطء)
+                    float breatheSine = 0.5f + 0.5f * Mathf.Sin(Time.time * 2.0f + slotIndex * 0.45f);
+                    float ambientAlpha = Mathf.Lerp(0.25f, 0.65f, breatheSine);
+
+                    summoningCircleImage.color = new Color(1f, 1f, 1f, ambientAlpha);
+                    summoningCircleImage.transform.localRotation = Quaternion.Euler(0, 0, circleRotation);
                 }
             }
         }
@@ -120,6 +163,10 @@ namespace MonsterCardGame.UI
             {
                 slotNameText.gameObject.SetActive(false);
             }
+            if (summoningCircleImage != null)
+            {
+                summoningCircleImage.gameObject.SetActive(false);
+            }
             var runeGlyph = transform.Find("RuneGlyph");
             if (runeGlyph != null) runeGlyph.gameObject.SetActive(false);
 
@@ -143,6 +190,12 @@ namespace MonsterCardGame.UI
                     tokenArtImage.sprite = null;
                     tokenArtImage.color = bgCol;
                 }
+            }
+
+            // 1.5. Dynamic Elemental Frame Overlay
+            if (tokenFrameImage != null && data != null)
+            {
+                tokenFrameImage.sprite = MonsterArtLoader.GetCardFrameOverlaySprite(data.element);
             }
 
             // 2. Central Monster ID label (only shown when custom art is not present)
@@ -219,6 +272,7 @@ namespace MonsterCardGame.UI
             tokenOutline = fieldCardToken.AddComponent<Outline>();
             tokenOutline.effectColor = new Color(0.95f, 0.85f, 0.3f, 0.95f);
             tokenOutline.effectDistance = new Vector2(2f, 2f);
+            tokenOutline.enabled = false;
 
             pulseEffect = fieldCardToken.AddComponent<CardPulseEffect>();
 
@@ -240,41 +294,54 @@ namespace MonsterCardGame.UI
             tokenNameText.fontStyle = FontStyle.Bold;
             tokenNameText.raycastTarget = false;
 
-            // 2. Top-Right Blue Cost Circle (Astral Masters Style)
-            var costCircle = GameBootstrapper.CreateCirclePanel(fieldCardToken.transform, "CostCircle",
-                new Color(0.10f, 0.28f, 0.65f, 0.96f),
-                new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-20, -20), new Vector2(34, 34));
-            var costOutline = costCircle.AddComponent<Outline>();
-            costOutline.effectColor = new Color(0.40f, 0.90f, 1f, 1f);
-            costOutline.effectDistance = new Vector2(1.5f, 1.5f);
-            tokenCostText = GameBootstrapper.CreateText(costCircle.transform, "CostText", "", 17,
-                new Color(1f, 0.95f, 0.70f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(34, 34));
+            // 2. Classic Hand-Crafted Frame Overlay
+            var frameOverlayObj = new GameObject("FrameOverlay");
+            frameOverlayObj.transform.SetParent(fieldCardToken.transform, false);
+            var rectFrame = frameOverlayObj.AddComponent<RectTransform>();
+            rectFrame.anchorMin = Vector2.zero;
+            rectFrame.anchorMax = Vector2.one;
+            rectFrame.sizeDelta = Vector2.zero;
+            rectFrame.anchoredPosition = Vector2.zero;
+            var frameImg = frameOverlayObj.AddComponent<Image>();
+            tokenFrameImage = frameImg;
+            Sprite frameSprite = MonsterArtLoader.GetCardFrameOverlaySprite();
+            if (frameSprite != null)
+            {
+                frameImg.sprite = frameSprite;
+                frameImg.color = Color.white;
+                frameImg.preserveAspect = false;
+            }
+            frameImg.raycastTarget = false;
+
+            // 3. Top-Center Summon Cost Number (Inscribed inside the top medallion socket)
+            tokenCostText = GameBootstrapper.CreateText(fieldCardToken.transform, "CostText", "", 14,
+                new Color(1f, 0.96f, 0.72f), TextAnchor.MiddleCenter, new Vector2(0, -11f), new Vector2(28, 22));
+            tokenCostText.rectTransform.anchorMin = new Vector2(0.5f, 1f);
+            tokenCostText.rectTransform.anchorMax = new Vector2(0.5f, 1f);
+            tokenCostText.rectTransform.anchoredPosition = new Vector2(0, -11f);
             tokenCostText.fontStyle = FontStyle.Bold;
             tokenCostText.raycastTarget = false;
+            GameBootstrapper.AddTextShadow(tokenCostText);
 
-            // 3. Bottom-Left Red ATK Circle (Astral Masters Style)
-            var atkCircle = GameBootstrapper.CreateCirclePanel(fieldCardToken.transform, "AtkCircle",
-                new Color(0.70f, 0.12f, 0.16f, 0.96f),
-                new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(20, 20), new Vector2(34, 34));
-            var atkOutline = atkCircle.AddComponent<Outline>();
-            atkOutline.effectColor = new Color(1f, 0.45f, 0.35f, 1f);
-            atkOutline.effectDistance = new Vector2(1.5f, 1.5f);
-            tokenAtkText = GameBootstrapper.CreateText(atkCircle.transform, "AtkText", "0", 17,
-                Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(34, 34));
+            // 4. Bottom-Left ATK Number (Inscribed inside the bottom-left riveted socket)
+            tokenAtkText = GameBootstrapper.CreateText(fieldCardToken.transform, "AtkText", "0", 15,
+                Color.white, TextAnchor.MiddleCenter, new Vector2(17.5f, 20.5f), new Vector2(26, 22));
+            tokenAtkText.rectTransform.anchorMin = new Vector2(0f, 0f);
+            tokenAtkText.rectTransform.anchorMax = new Vector2(0f, 0f);
+            tokenAtkText.rectTransform.anchoredPosition = new Vector2(17.5f, 20.5f);
             tokenAtkText.fontStyle = FontStyle.Bold;
             tokenAtkText.raycastTarget = false;
+            GameBootstrapper.AddTextShadow(tokenAtkText);
 
-            // 4. Bottom-Right Green DEF Circle (Astral Masters Style)
-            var defCircle = GameBootstrapper.CreateCirclePanel(fieldCardToken.transform, "DefCircle",
-                new Color(0.10f, 0.52f, 0.22f, 0.96f),
-                new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-20, 20), new Vector2(34, 34));
-            var defOutline = defCircle.AddComponent<Outline>();
-            defOutline.effectColor = new Color(0.35f, 1f, 0.45f, 1f);
-            defOutline.effectDistance = new Vector2(1.5f, 1.5f);
-            tokenDefText = GameBootstrapper.CreateText(defCircle.transform, "DefText", "0", 17,
-                Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(34, 34));
+            // 5. Bottom-Right DEF Number (Inscribed inside the bottom-right riveted socket)
+            tokenDefText = GameBootstrapper.CreateText(fieldCardToken.transform, "DefText", "0", 15,
+                Color.white, TextAnchor.MiddleCenter, new Vector2(-17.5f, 20.5f), new Vector2(26, 22));
+            tokenDefText.rectTransform.anchorMin = new Vector2(1f, 0f);
+            tokenDefText.rectTransform.anchorMax = new Vector2(1f, 0f);
+            tokenDefText.rectTransform.anchoredPosition = new Vector2(-17.5f, 20.5f);
             tokenDefText.fontStyle = FontStyle.Bold;
             tokenDefText.raycastTarget = false;
+            GameBootstrapper.AddTextShadow(tokenDefText);
 
             // Ensure all child graphics inside fieldCardToken never block or split pointer raycasts on the slot
             foreach (var g in fieldCardToken.GetComponentsInChildren<Graphic>(true))
@@ -287,9 +354,15 @@ namespace MonsterCardGame.UI
         {
             currentCardData = null;
             currentMonsterInstance = null;
+            isHighlightedForSummon = false;
             if (fieldCardToken != null)
             {
                 fieldCardToken.SetActive(false);
+            }
+            if (summoningCircleImage != null)
+            {
+                summoningCircleImage.gameObject.SetActive(true);
+                summoningCircleImage.color = new Color(1f, 1f, 1f, 0.60f);
             }
             if (slotNameText != null)
             {

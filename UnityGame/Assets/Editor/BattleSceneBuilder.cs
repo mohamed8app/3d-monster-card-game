@@ -44,7 +44,8 @@ namespace MonsterCardGame.Editor
 
             BuildScene();
 
-            string buildFolder = "D:/deck game/Game_Windows_Exe";
+            string projectRoot = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "../.."));
+            string buildFolder = System.IO.Path.Combine(projectRoot, "Game_Windows_Exe");
             if (!System.IO.Directory.Exists(buildFolder))
             {
                 System.IO.Directory.CreateDirectory(buildFolder);

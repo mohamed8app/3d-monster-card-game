@@ -37,6 +37,8 @@ Thumbs.db
 Desktop.ini
 .DS_Store
 
-# Temporary downloads
+# Temporary downloads & local drafts
 *.exe
 !UnityHubSetup*.exe
+*.tmp
+Docs/VFX_Drafts/

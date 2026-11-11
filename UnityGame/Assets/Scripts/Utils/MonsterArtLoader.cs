@@ -17,7 +17,6 @@ namespace MonsterCardGame.Utils
         private static readonly Dictionary<string, Sprite> inspectorSpriteCache = new Dictionary<string, Sprite>();
         private static readonly string[] SupportedExtensions = { ".png", ".jpg", ".jpeg", ".webp" };
         private static readonly string[] SubfolderCandidates = { "", "Monsters", "Spells", "Environments" };
-        private const string LegacyArtFolderName = "\u0635\u0648\u0631_\u0627\u0644\u0643\u0631\u0648\u062A_\u0648\u0627\u0644\u0648\u062D\u0648\u0634";
 
         public static string ResolveCardIdKey(CardData data)
         {
@@ -73,6 +72,87 @@ namespace MonsterCardGame.Utils
             }
 
             return GetCardSprite(data);
+        }
+
+        private static readonly Dictionary<string, Sprite> _elementalFrameCache = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+
+        public static Sprite GetCardFrameOverlaySprite(string element = "Fire")
+        {
+            if (string.IsNullOrWhiteSpace(element)) element = "Fire";
+            string cleanElem = element.Trim().ToLowerInvariant();
+
+            if (_elementalFrameCache.TryGetValue(cleanElem, out Sprite cached) && cached != null)
+            {
+                return cached;
+            }
+
+            string[] nameVariants = {
+                $"card_frame_{cleanElem}",
+                $"card_frame_{cleanElem}.png",
+                "card_frame_overlay",
+                "card_frame_overlay.png",
+                "card_frame_fire",
+                "card_frame_fire.png"
+            };
+
+            Texture2D tex = null;
+
+            // 1. Check StreamingAssets at runtime for external overrides
+            if (Application.isPlaying)
+            {
+                foreach (var variant in nameVariants)
+                {
+                    string filename = variant.EndsWith(".png") ? variant : variant + ".png";
+                    string streamPath = Path.Combine(Application.streamingAssetsPath, filename);
+                    if (File.Exists(streamPath))
+                    {
+                        tex = LoadTextureFromDisk(streamPath);
+                        if (tex != null) break;
+                    }
+                }
+            }
+
+            // 2. Check Resources (primary source; keeps baked Editor scenes lightweight)
+            if (tex == null)
+            {
+                foreach (var variant in nameVariants)
+                {
+                    string resName = variant.EndsWith(".png") ? variant.Substring(0, variant.Length - 4) : variant;
+                    tex = Resources.Load<Texture2D>(resName);
+                    if (tex != null) break;
+                }
+            }
+
+            // 3. Check external disk search directories at runtime
+            if (tex == null && Application.isPlaying)
+            {
+                string[] baseDirs = GetSearchDirectories();
+                foreach (string baseDir in baseDirs)
+                {
+                    if (string.IsNullOrEmpty(baseDir) || !Directory.Exists(baseDir)) continue;
+                    foreach (var variant in nameVariants)
+                    {
+                        string filename = variant.EndsWith(".png") ? variant : variant + ".png";
+                        string candidate = Path.Combine(baseDir, filename);
+                        if (File.Exists(candidate))
+                        {
+                            tex = LoadTextureFromDisk(candidate);
+                            if (tex != null) break;
+                        }
+                    }
+                    if (tex != null) break;
+                }
+            }
+
+            if (tex != null)
+            {
+                tex.filterMode = FilterMode.Bilinear;
+                Sprite sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+                _elementalFrameCache[cleanElem] = sprite;
+                return sprite;
+            }
+
+            return null;
         }
 
         private static Texture2D LoadCardTexture(string key)
@@ -231,12 +311,7 @@ namespace MonsterCardGame.Utils
             string dataPath = Application.dataPath;
             return new string[]
             {
-                Path.Combine(@"D:\deck game", LegacyArtFolderName),
-                @"D:\deck game\CardsArt",
-                @"D:\deck game\UnityGame\Assets\Resources\CardsArt",
-                @"D:\deck game\Game_Windows_Exe\CardsArt",
-                Path.GetFullPath(Path.Combine(dataPath, "../../" + LegacyArtFolderName)),
-                Path.GetFullPath(Path.Combine(dataPath, "../" + LegacyArtFolderName)),
+                Path.Combine(Application.streamingAssetsPath, "CardsArt"),
                 Path.GetFullPath(Path.Combine(dataPath, "../CardsArt")),
                 Path.GetFullPath(Path.Combine(dataPath, "Resources/CardsArt"))
             };
@@ -263,6 +338,84 @@ namespace MonsterCardGame.Utils
             catch (Exception ex)
             {
                 Debug.LogWarning($"[MonsterArtLoader] Failed to load texture from {filePath}: {ex.Message}");
+            }
+            return null;
+        }
+
+        private static Sprite _cardBackSprite;
+        private static Sprite _playerAvatarSprite;
+        private static Sprite _enemyAvatarSprite;
+
+        public static Sprite GetCardBackSprite()
+        {
+            if (_cardBackSprite != null) return _cardBackSprite;
+            _cardBackSprite = LoadSpriteByKey("card_back");
+            return _cardBackSprite;
+        }
+
+        public static Sprite GetPlayerAvatarSprite()
+        {
+            if (_playerAvatarSprite != null) return _playerAvatarSprite;
+            _playerAvatarSprite = LoadSpriteByKey("player_avatar");
+            return _playerAvatarSprite;
+        }
+
+        public static Sprite GetEnemyAvatarSprite()
+        {
+            if (_enemyAvatarSprite != null) return _enemyAvatarSprite;
+            _enemyAvatarSprite = LoadSpriteByKey("enemy_avatar");
+            return _enemyAvatarSprite;
+        }
+
+        private static Sprite LoadSpriteByKey(string key)
+        {
+            Texture2D tex = null;
+            string[] extensions = { ".jpg", ".png", ".jpeg" };
+
+            // 1. StreamingAssets override at runtime
+            if (Application.isPlaying)
+            {
+                foreach (var ext in extensions)
+                {
+                    string p = Path.Combine(Application.streamingAssetsPath, key + ext);
+                    if (File.Exists(p))
+                    {
+                        tex = LoadTextureFromDisk(p);
+                        if (tex != null) break;
+                    }
+                }
+            }
+
+            // 2. Resources
+            if (tex == null)
+            {
+                tex = Resources.Load<Texture2D>(key);
+            }
+
+            // 3. External search directories at runtime
+            if (tex == null && Application.isPlaying)
+            {
+                string[] baseDirs = GetSearchDirectories();
+                foreach (string baseDir in baseDirs)
+                {
+                    if (string.IsNullOrEmpty(baseDir) || !Directory.Exists(baseDir)) continue;
+                    foreach (var ext in extensions)
+                    {
+                        string p = Path.Combine(baseDir, key + ext);
+                        if (File.Exists(p))
+                        {
+                            tex = LoadTextureFromDisk(p);
+                            if (tex != null) break;
+                        }
+                    }
+                    if (tex != null) break;
+                }
+            }
+
+            if (tex != null)
+            {
+                tex.filterMode = FilterMode.Trilinear;
+                return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
             }
             return null;
         }

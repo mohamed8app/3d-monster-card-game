@@ -215,9 +215,16 @@ namespace MonsterCardGame.UI
                 transform.SetAsLastSibling();
             }
 
-            if (BattleUIManager.Instance != null && !isSelected)
+            if (BattleUIManager.Instance != null)
             {
-                BattleUIManager.Instance.OnCardSelectedInHand(cardData);
+                if (!isSelected)
+                {
+                    BattleUIManager.Instance.OnCardSelectedInHand(cardData);
+                }
+                else if (cardData != null && cardData.cardType == CardType.Monster)
+                {
+                    BattleUIManager.Instance.HighlightAvailableSlots(true);
+                }
             }
         }
 
@@ -229,6 +236,11 @@ namespace MonsterCardGame.UI
         public void OnEndDrag(PointerEventData eventData)
         {
             isDragging = false;
+
+            if (BattleUIManager.Instance != null)
+            {
+                BattleUIManager.Instance.HighlightAvailableSlots(false);
+            }
 
             if (canvasGroup != null)
             {
