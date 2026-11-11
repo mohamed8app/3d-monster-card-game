@@ -35,6 +35,12 @@ namespace MonsterCardGame.UI
         private RectTransform hpBarFillRect;
         private Image hpBarFillImage;
         private CardPulseEffect pulseEffect;
+        private Button abilityButton;
+        private Image abilityButtonImage;
+        private Outline abilityButtonOutline;
+        private Text abilityButtonText;
+        private bool isAbilityReady = false;
+        private bool isSelectedOnBoard = false;
         private bool isHovered = false;
         private bool isHighlightedForSummon = false;
         private float circleRotation = 0f;
@@ -42,6 +48,32 @@ namespace MonsterCardGame.UI
         public void SetSummonHighlight(bool active)
         {
             isHighlightedForSummon = active && (currentCardData == null) && isPlayerSide;
+        }
+
+        public void SetBoardSelected(bool selected)
+        {
+            isSelectedOnBoard = selected && (currentCardData != null);
+            RefreshTokenOutline();
+        }
+
+        private void RefreshTokenOutline()
+        {
+            if (tokenOutline == null) return;
+            bool isReadyToStrike = currentMonsterInstance != null && currentMonsterInstance.canAttack && isPlayerSide;
+            if (isReadyToStrike)
+            {
+                tokenOutline.enabled = true;
+                tokenOutline.effectColor = new Color(1f, 0.88f, 0.3f, 0.95f);
+            }
+            else if (isSelectedOnBoard)
+            {
+                tokenOutline.enabled = true;
+                tokenOutline.effectColor = new Color(0.32f, 0.92f, 1f, 0.98f);
+            }
+            else
+            {
+                tokenOutline.enabled = false;
+            }
         }
 
         public void OnPointerClick(PointerEventData eventData)
@@ -73,6 +105,27 @@ namespace MonsterCardGame.UI
             // 1. Occupied Slot: Standee Card Token Breathing / Hover
             if (fieldCardToken != null && fieldCardToken.activeSelf)
             {
+                if (abilityButton != null && abilityButton.gameObject.activeSelf)
+                {
+                    if (isAbilityReady)
+                    {
+                        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 4.5f);
+                        float btnScale = Mathf.Lerp(1.0f, 1.055f, pulse);
+                        abilityButton.transform.localScale = new Vector3(btnScale, btnScale, 1f);
+                        if (abilityButtonOutline != null)
+                        {
+                            abilityButtonOutline.effectColor = Color.Lerp(
+                                new Color(0.40f, 0.92f, 1f, 0.92f),
+                                new Color(1f, 0.92f, 0.38f, 1f),
+                                pulse);
+                        }
+                    }
+                    else
+                    {
+                        abilityButton.transform.localScale = Vector3.one;
+                    }
+                }
+
                 if (pulseEffect != null && pulseEffect.isPulsing && !isHovered)
                 {
                     return;
@@ -255,9 +308,125 @@ namespace MonsterCardGame.UI
                 Color glow = isReadyToStrike ? new Color(1f, 0.88f, 0.3f, 0.95f) : elemColor;
                 pulseEffect.SetPulsing(isReadyToStrike, glow);
             }
-            else if (tokenOutline != null)
+            RefreshTokenOutline();
+
+            // 6. Active Ability Pill Button on Player Board Monsters
+            UpdateAbilityButton(instance);
+        }
+
+        private void EnsureAbilityButtonCreated()
+        {
+            if (abilityButton != null) return;
+
+            abilityButton = GameBootstrapper.CreateBeveledButton(
+                transform,
+                $"SlotAbilityBtn_{slotIndex}",
+                "⚡ ABILITY",
+                new Color(0.08f, 0.58f, 0.90f, 0.98f),
+                new Color(1f, 0.96f, 0.72f),
+                new Vector2(0f, -104f),
+                new Vector2(128f, 24f),
+                11,
+                () =>
+                {
+                    if (BattleUIManager.Instance != null)
+                    {
+                        BattleUIManager.Instance.OnSlotAbilityButtonClicked(slotIndex);
+                    }
+                });
+
+            abilityButtonImage = abilityButton.GetComponent<Image>();
+            abilityButtonOutline = abilityButton.gameObject.GetComponent<Outline>();
+            if (abilityButtonOutline == null)
             {
-                tokenOutline.effectColor = isReadyToStrike ? new Color(1f, 0.88f, 0.3f, 0.95f) : elemColor;
+                abilityButtonOutline = abilityButton.gameObject.AddComponent<Outline>();
+            }
+            abilityButtonOutline.effectDistance = new Vector2(1.5f, 1.5f);
+            abilityButtonText = abilityButton.GetComponentInChildren<Text>();
+            abilityButton.gameObject.SetActive(false);
+        }
+
+        private void UpdateAbilityButton(MonsterInstance instance)
+        {
+            if (!isPlayerSide || instance == null || !instance.IsAlive || !instance.HasActiveSkill)
+            {
+                isAbilityReady = false;
+                if (abilityButton != null) abilityButton.gameObject.SetActive(false);
+                return;
+            }
+
+            EnsureAbilityButtonCreated();
+            abilityButton.gameObject.SetActive(true);
+            abilityButton.transform.SetAsLastSibling();
+
+            var gm = GameManager.Instance;
+            if (gm == null || CombatSystem.Instance == null)
+            {
+                isAbilityReady = false;
+                if (abilityButtonText != null) abilityButtonText.text = "⚡ ABILITY";
+                return;
+            }
+
+            var state = CombatSystem.Instance.GetAbilityState(gm.humanPlayer, gm.aiPlayer, slotIndex, out int cost, out string _);
+            isAbilityReady = (state == CombatSystem.AbilityReadyState.Ready);
+
+            Color bg;
+            Color txtCol;
+            Color rimCol;
+            string label;
+
+            switch (state)
+            {
+                case CombatSystem.AbilityReadyState.Ready:
+                    bg = new Color(0.08f, 0.58f, 0.90f, 0.98f);
+                    txtCol = new Color(1f, 0.96f, 0.72f);
+                    rimCol = new Color(1f, 0.88f, 0.35f, 1f);
+                    label = $"⚡ SKILL ({cost}⚡)";
+                    break;
+                case CombatSystem.AbilityReadyState.AlreadyUsed:
+                    bg = new Color(0.14f, 0.24f, 0.18f, 0.94f);
+                    txtCol = new Color(0.65f, 0.90f, 0.72f);
+                    rimCol = new Color(0.35f, 0.65f, 0.45f, 0.75f);
+                    label = "✓ USED";
+                    break;
+                case CombatSystem.AbilityReadyState.NotEnoughPower:
+                    bg = new Color(0.16f, 0.18f, 0.26f, 0.94f);
+                    txtCol = new Color(1f, 0.80f, 0.45f);
+                    rimCol = new Color(0.85f, 0.58f, 0.22f, 0.80f);
+                    label = $"⚡ NEED {cost}⚡";
+                    break;
+                case CombatSystem.AbilityReadyState.NoValidTarget:
+                    bg = new Color(0.22f, 0.17f, 0.14f, 0.94f);
+                    txtCol = new Color(1f, 0.75f, 0.50f);
+                    rimCol = new Color(0.80f, 0.45f, 0.25f, 0.75f);
+                    label = "🎯 NO TARGET";
+                    break;
+                case CombatSystem.AbilityReadyState.Silenced:
+                    bg = new Color(0.24f, 0.14f, 0.30f, 0.94f);
+                    txtCol = new Color(0.85f, 0.70f, 1f);
+                    rimCol = new Color(0.65f, 0.35f, 0.85f, 0.80f);
+                    label = "🔒 SILENCED";
+                    break;
+                case CombatSystem.AbilityReadyState.Frozen:
+                    bg = new Color(0.14f, 0.24f, 0.32f, 0.94f);
+                    txtCol = new Color(0.70f, 0.92f, 1f);
+                    rimCol = new Color(0.45f, 0.80f, 0.95f, 0.80f);
+                    label = "❄️ FROZEN";
+                    break;
+                default:
+                    bg = new Color(0.15f, 0.16f, 0.22f, 0.92f);
+                    txtCol = new Color(0.75f, 0.80f, 0.90f);
+                    rimCol = new Color(0.45f, 0.50f, 0.65f, 0.70f);
+                    label = $"⏳ SKILL ({cost}⚡)";
+                    break;
+            }
+
+            if (abilityButtonImage != null) abilityButtonImage.color = bg;
+            if (abilityButtonOutline != null) abilityButtonOutline.effectColor = rimCol;
+            if (abilityButtonText != null)
+            {
+                abilityButtonText.text = label;
+                abilityButtonText.color = txtCol;
             }
         }
 
@@ -355,6 +524,12 @@ namespace MonsterCardGame.UI
             currentCardData = null;
             currentMonsterInstance = null;
             isHighlightedForSummon = false;
+            isAbilityReady = false;
+            isSelectedOnBoard = false;
+            if (abilityButton != null)
+            {
+                abilityButton.gameObject.SetActive(false);
+            }
             if (fieldCardToken != null)
             {
                 fieldCardToken.SetActive(false);

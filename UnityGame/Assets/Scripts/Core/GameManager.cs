@@ -862,11 +862,6 @@ namespace MonsterCardGame.Core
         {
             if (!isPlayerTurn || currentPhase != GamePhase.ActionPhase) return;
 
-            if (CombatSystem.Instance != null)
-            {
-                CombatSystem.Instance.ExecuteActiveSkills(humanPlayer, aiPlayer);
-            }
-
             bool hasReadyAttackers = false;
             foreach (var slot in humanPlayer.slots)
             {
@@ -910,11 +905,6 @@ namespace MonsterCardGame.Core
         public void OnPlayerEndTurn()
         {
             if (!isPlayerTurn || currentPhase != GamePhase.ActionPhase) return;
-
-            if (CombatSystem.Instance != null)
-            {
-                CombatSystem.Instance.ExecuteActiveSkills(humanPlayer, aiPlayer);
-            }
 
             bool hasReadyAttackers = false;
             foreach (var slot in humanPlayer.slots)
@@ -982,13 +972,14 @@ namespace MonsterCardGame.Core
                 currentTurn++;
                 if (BattleUIManager.Instance != null)
                 {
+                    BattleUIManager.Instance.ClearBoardSelection();
                     BattleUIManager.Instance.UpdateUI();
                 }
                 StartTurn();
             }
         }
 
-        private void CheckGameOver()
+        public void CheckGameOver()
         {
             if (currentPhase == GamePhase.GameOver) return;
 
@@ -1032,6 +1023,7 @@ namespace MonsterCardGame.Core
                     BattleUIManager.Instance.gameOverPanel.SetActive(false);
                 }
                 BattleUIManager.Instance.DeselectHandCards();
+                BattleUIManager.Instance.ClearBoardSelection();
             }
 
             StartGame();

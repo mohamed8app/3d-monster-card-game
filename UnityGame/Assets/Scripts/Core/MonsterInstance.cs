@@ -19,6 +19,7 @@ namespace MonsterCardGame.Core
         // Tactical status effects (Synced 100% with the 100,000-match simulator)
         public List<string> passives = new List<string>();
         public List<string> actives = new List<string>();
+        public bool hasUsedActiveThisTurn = false;
         public int frozenTurns = 0;
         public int silencedTurns = 0;
         public int burnDmg = 0;
@@ -29,6 +30,7 @@ namespace MonsterCardGame.Core
         public bool doubleStrike = false;
 
         public bool IsAlive => currentDef > 0;
+        public bool HasActiveSkill => actives != null && actives.Count > 0;
 
         public MonsterInstance(CardData monsterData, int currentTurn)
         {
@@ -133,6 +135,7 @@ namespace MonsterCardGame.Core
         {
             if (IsAlive)
             {
+                hasUsedActiveThisTurn = false;
                 if (currentTurn > summonedTurn && frozenTurns <= 0)
                 {
                     canAttack = true;

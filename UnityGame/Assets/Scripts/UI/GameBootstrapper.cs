@@ -376,18 +376,33 @@ namespace MonsterCardGame.UI
                 new Color(0.48f, 0.90f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(300, 22));
             AddTextShadow(ui.detailMetaText);
 
-            // 4. Tactical Ability & Spell Effect Scroll Box (192 height)
+            // 4. Tactical Ability & Spell Effect Scroll Box (192 height, shrinks to 150 when Inspector Ability button is shown)
             var descBox = CreateOrnatePanel(detailsPanel.transform, "DescBox",
                 new Color(0.04f, 0.05f, 0.09f, 0.96f),
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -142), new Vector2(314, 192));
+            ui.detailDescBoxRect = descBox.GetComponent<RectTransform>();
 
             var descHeader = CreateText(descBox.transform, "DescBoxHeader", "─── ❖ TACTICAL ABILITY & EFFECT ❖ ───", 11,
-                new Color(0.95f, 0.80f, 0.40f, 0.90f), TextAnchor.UpperCenter, new Vector2(0, 82), new Vector2(290, 18));
+                new Color(0.95f, 0.80f, 0.40f, 0.90f), TextAnchor.MiddleCenter, new Vector2(0, -14), new Vector2(290, 18));
+            descHeader.rectTransform.anchorMin = new Vector2(0.5f, 1f);
+            descHeader.rectTransform.anchorMax = new Vector2(0.5f, 1f);
+            descHeader.rectTransform.anchoredPosition = new Vector2(0, -14);
 
             ui.detailDescText = CreateText(descBox.transform, "DetailDesc", "Full monster abilities, tactical passives, and spell effects will appear here.", 12,
-                new Color(0.92f, 0.95f, 0.98f), TextAnchor.UpperLeft, new Vector2(0, -10), new Vector2(290, 156));
+                new Color(0.92f, 0.95f, 0.98f), TextAnchor.UpperLeft, Vector2.zero, Vector2.zero);
+            ui.detailDescText.rectTransform.anchorMin = Vector2.zero;
+            ui.detailDescText.rectTransform.anchorMax = Vector2.one;
+            ui.detailDescText.rectTransform.offsetMin = new Vector2(12, 10);
+            ui.detailDescText.rectTransform.offsetMax = new Vector2(-12, -26);
             ui.detailDescText.horizontalOverflow = HorizontalWrapMode.Wrap;
             ui.detailDescText.verticalOverflow = VerticalWrapMode.Truncate;
+
+            ui.inspectorActivateAbilityButton = CreateBeveledButton(detailsPanel.transform, "InspectorActivateAbilityBtn",
+                "⚡ Activate Special Ability",
+                new Color(0.08f, 0.56f, 0.88f, 0.98f), new Color(1f, 0.96f, 0.72f),
+                new Vector2(0, -225), new Vector2(314, 38), 13,
+                () => { if (BattleUIManager.Instance != null) BattleUIManager.Instance.OnActivateInspectedAbilityClicked(); });
+            ui.inspectorActivateAbilityButton.gameObject.SetActive(false);
 
             // 5. Bottom ATK / DEF Shields & Unit Status Badge
             var atkBadge = CreateOrnatePanel(detailsPanel.transform, "FullAtkBadge",
@@ -401,7 +416,12 @@ namespace MonsterCardGame.UI
                 new Color(0.07f, 0.11f, 0.18f, 0.95f),
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -274), new Vector2(114, 42));
             ui.detailStatusText = CreateText(statusBadge.transform, "DetailStatus", "⚔️ Ready", 11,
-                new Color(0.38f, 1f, 0.58f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(108, 36));
+                new Color(0.38f, 1f, 0.58f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(106, 36));
+            ui.detailStatusText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            ui.detailStatusText.verticalOverflow = VerticalWrapMode.Truncate;
+            ui.detailStatusText.resizeTextForBestFit = true;
+            ui.detailStatusText.resizeTextMinSize = 8;
+            ui.detailStatusText.resizeTextMaxSize = 11;
             ui.detailStatsText = ui.detailStatusText;
 
             var defBadge = CreateOrnatePanel(detailsPanel.transform, "FullDefBadge",
@@ -856,11 +876,6 @@ namespace MonsterCardGame.UI
                 slotView.Setup(i, isPlayerSide, player.slots[i]);
                 slotView.summoningCircleImage = circleImg;
                 slotView.slotNameText = null;
-
-                var btn = slotObj.AddComponent<Button>();
-                int capturedIndex = i;
-                bool capturedSide = isPlayerSide;
-                btn.onClick.AddListener(() => ui.OnSlotClicked(capturedIndex, capturedSide));
 
                 if (isPlayerSide)
                 {

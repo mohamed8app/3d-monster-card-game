@@ -81,8 +81,12 @@ namespace MonsterCardGame.UI
         public Text detailStatsText;
         public Text detailDescText;
         public Text detailStatusText;
+        public Button inspectorActivateAbilityButton;
+        public RectTransform detailDescBoxRect;
 
         private CardData selectedCardForAction = null;
+        private int selectedBoardSlotIndex = -1;
+        private int inspectedBoardSlotIndex = -1;
 
         private void Awake()
         {
@@ -315,24 +319,7 @@ namespace MonsterCardGame.UI
                 sacrificeButton.interactable = gm.isPlayerTurn && !gm.humanPlayer.hasSacrificedThisTurn && selectedCardForAction != null;
             }
 
-            if (playCardButton != null)
-            {
-                bool canPlaySelected = gm.isPlayerTurn && selectedCardForAction != null &&
-                    (selectedCardForAction.cardType == CardType.Spell || selectedCardForAction.cardType == CardType.Environment) &&
-                    selectedCardForAction.cost <= gm.humanPlayer.currentPower;
-
-                playCardButton.interactable = canPlaySelected;
-                var txt = playCardButton.GetComponentInChildren<Text>();
-                if (txt != null)
-                {
-                    if (selectedCardForAction != null && selectedCardForAction.cardType == CardType.Spell)
-                        txt.text = $"🔮 Cast Spell ({selectedCardForAction.cost}⚡)";
-                    else if (selectedCardForAction != null && selectedCardForAction.cardType == CardType.Environment)
-                        txt.text = $"🌍 Activate Weather ({selectedCardForAction.cost}⚡)";
-                    else
-                        txt.text = "✨ Activate Card / Spell";
-                }
-            }
+            UpdatePlayCardButtonState();
 
             // 5. Update Board Slots
             UpdateSlots();
@@ -352,12 +339,22 @@ namespace MonsterCardGame.UI
             var gm = GameManager.Instance;
             if (gm == null) return;
 
+            if (selectedBoardSlotIndex >= 0 && selectedBoardSlotIndex < 6)
+            {
+                var selSlot = gm.humanPlayer.slots[selectedBoardSlotIndex];
+                if (selSlot == null || !selSlot.IsOccupied)
+                {
+                    selectedBoardSlotIndex = -1;
+                }
+            }
+
             for (int i = 0; i < 6; i++)
             {
                 var pSlot = gm.humanPlayer.slots[i];
                 if (pSlot != null && pSlot.IsOccupied && i < playerSlotViews.Length && playerSlotViews[i] != null)
                 {
                     playerSlotViews[i].DisplayMonster(pSlot.currentMonster.data, pSlot.currentMonster);
+                    playerSlotViews[i].SetBoardSelected(i == selectedBoardSlotIndex);
                 }
                 else if (i < playerSlotViews.Length && playerSlotViews[i] != null)
                 {
@@ -874,20 +871,49 @@ namespace MonsterCardGame.UI
                 {
                     if (isPlayer)
                     {
-                        if (instance.canAttack)
+                        string atkStatus;
+                        Color statusCol;
+                        if (instance.frozenTurns > 0)
                         {
-                            detailStatusText.text = "⚡ Ready to Attack & Strike this turn!";
-                            detailStatusText.color = new Color(0.2f, 1f, 0.5f);
+                            atkStatus = $"❄️ Frozen ({instance.frozenTurns}T)";
+                            statusCol = new Color(0.55f, 0.90f, 1f);
+                        }
+                        else if (instance.canAttack)
+                        {
+                            atkStatus = "⚔️ Ready to Attack!";
+                            statusCol = new Color(0.2f, 1f, 0.5f);
                         }
                         else if (gm != null && instance.summonedTurn == gm.currentTurn)
                         {
-                            detailStatusText.text = "💤 Summoning Sickness (Summoned this turn — attacks next turn).";
-                            detailStatusText.color = new Color(0.5f, 0.8f, 1f);
+                            atkStatus = "💤 Summoned this turn";
+                            statusCol = new Color(0.5f, 0.8f, 1f);
                         }
                         else
                         {
-                            detailStatusText.text = "⏳ Already attacked this turn.";
-                            detailStatusText.color = new Color(0.9f, 0.7f, 0.3f);
+                            atkStatus = "⏳ Attacked this turn";
+                            statusCol = new Color(0.9f, 0.7f, 0.3f);
+                        }
+
+                        if (instance.HasActiveSkill && CombatSystem.Instance != null && instance.currentSlot != null)
+                        {
+                            var abState = CombatSystem.Instance.GetAbilityState(gm.humanPlayer, gm.aiPlayer, instance.currentSlot.slotIndex, out int cost, out string _);
+                            string abTag = abState switch
+                            {
+                                CombatSystem.AbilityReadyState.Ready => $"⚡ Skill Ready ({cost}⚡)",
+                                CombatSystem.AbilityReadyState.AlreadyUsed => "✓ Skill Used",
+                                CombatSystem.AbilityReadyState.NotEnoughPower => $"⚡ Need {cost}⚡",
+                                CombatSystem.AbilityReadyState.NoValidTarget => "🎯 No Target",
+                                CombatSystem.AbilityReadyState.Silenced => "🔒 Silenced",
+                                CombatSystem.AbilityReadyState.Frozen => "❄️ Frozen",
+                                _ => $"⏳ Skill ({cost}⚡)"
+                            };
+                            detailStatusText.text = $"{atkStatus}\n{abTag}";
+                            detailStatusText.color = (abState == CombatSystem.AbilityReadyState.Ready) ? new Color(0.35f, 1f, 0.75f) : statusCol;
+                        }
+                        else
+                        {
+                            detailStatusText.text = atkStatus;
+                            detailStatusText.color = statusCol;
                         }
                     }
                     else
@@ -910,12 +936,76 @@ namespace MonsterCardGame.UI
                     detailStatusText.color = new Color(0.4f, 0.85f, 1f);
                 }
             }
+
+            UpdateInspectorAbilityButton(instance, isPlayer);
+        }
+
+        private void UpdateInspectorAbilityButton(MonsterInstance instance, bool isPlayer)
+        {
+            bool showAbilityBtn = isPlayer && instance != null && instance.IsAlive && instance.HasActiveSkill && instance.currentSlot != null;
+            inspectedBoardSlotIndex = showAbilityBtn ? instance.currentSlot.slotIndex : -1;
+
+            if (detailDescBoxRect != null)
+            {
+                if (showAbilityBtn)
+                {
+                    detailDescBoxRect.anchoredPosition = new Vector2(0f, -123f);
+                    detailDescBoxRect.sizeDelta = new Vector2(314f, 152f);
+                }
+                else
+                {
+                    detailDescBoxRect.anchoredPosition = new Vector2(0f, -142f);
+                    detailDescBoxRect.sizeDelta = new Vector2(314f, 192f);
+                }
+            }
+
+            if (inspectorActivateAbilityButton == null) return;
+            inspectorActivateAbilityButton.gameObject.SetActive(showAbilityBtn);
+            if (!showAbilityBtn) return;
+
+            var gm = GameManager.Instance;
+            if (gm == null || CombatSystem.Instance == null)
+            {
+                inspectorActivateAbilityButton.interactable = false;
+                return;
+            }
+
+            var state = CombatSystem.Instance.GetAbilityState(gm.humanPlayer, gm.aiPlayer, inspectedBoardSlotIndex, out int cost, out string _);
+            bool ready = (state == CombatSystem.AbilityReadyState.Ready);
+            inspectorActivateAbilityButton.interactable = ready;
+
+            var btnImg = inspectorActivateAbilityButton.GetComponent<Image>();
+            var btnTxt = inspectorActivateAbilityButton.GetComponentInChildren<Text>();
+
+            if (btnImg != null)
+            {
+                btnImg.color = ready
+                    ? new Color(0.08f, 0.58f, 0.90f, 0.98f)
+                    : (state == CombatSystem.AbilityReadyState.AlreadyUsed
+                        ? new Color(0.16f, 0.28f, 0.22f, 0.95f)
+                        : new Color(0.20f, 0.22f, 0.30f, 0.92f));
+            }
+
+            if (btnTxt != null)
+            {
+                btnTxt.text = state switch
+                {
+                    CombatSystem.AbilityReadyState.Ready => $"⚡ Activate Ability ({cost}⚡ Power)",
+                    CombatSystem.AbilityReadyState.AlreadyUsed => "✓ Ability Used This Turn",
+                    CombatSystem.AbilityReadyState.NotEnoughPower => $"⚡ Need {cost}⚡ Power to Activate",
+                    CombatSystem.AbilityReadyState.NoValidTarget => "🎯 Needs Enemy Target on Board",
+                    CombatSystem.AbilityReadyState.Silenced => "🔒 Ability Silenced",
+                    CombatSystem.AbilityReadyState.Frozen => "❄️ Monster is Frozen",
+                    _ => $"⏳ Wait for Your Turn ({cost}⚡)"
+                };
+            }
         }
 
         public void ShowCardDetails(CardData data)
         {
             if (data == null) return;
             if (cardDetailsPanel != null) cardDetailsPanel.SetActive(true);
+            UpdateInspectorAbilityButton(null, false);
 
             UpdateDetailArtNumber(data);
 
@@ -987,6 +1077,7 @@ namespace MonsterCardGame.UI
                 return;
             }
 
+            ClearBoardSelection();
             selectedCardForAction = card;
             ShowCardDetails(card);
 
@@ -1020,22 +1111,7 @@ namespace MonsterCardGame.UI
                 }
             }
 
-            if (playCardButton != null)
-            {
-                var gm = GameManager.Instance;
-                bool canPlay = gm != null && gm.isPlayerTurn && card.cost <= gm.humanPlayer.currentPower &&
-                    (card.cardType == CardType.Spell || card.cardType == CardType.Environment);
-                playCardButton.interactable = canPlay;
-
-                var txt = playCardButton.GetComponentInChildren<Text>();
-                if (txt != null)
-                {
-                    if (card.cardType == CardType.Spell)
-                        txt.text = $"🔮 Cast Spell ({card.cost}⚡)";
-                    else if (card.cardType == CardType.Environment)
-                        txt.text = $"🌍 Activate Weather ({card.cost}⚡)";
-                }
-            }
+            UpdatePlayCardButtonState();
 
             if (sacrificeButton != null)
             {
@@ -1061,17 +1137,78 @@ namespace MonsterCardGame.UI
                 }
             }
 
-            if (playCardButton != null)
-            {
-                playCardButton.interactable = false;
-                var txt = playCardButton.GetComponentInChildren<Text>();
-                if (txt != null) txt.text = "✨ Activate Card / Spell";
-            }
+            UpdatePlayCardButtonState();
 
             if (sacrificeButton != null)
             {
                 sacrificeButton.interactable = false;
             }
+        }
+
+        public void ClearBoardSelection()
+        {
+            selectedBoardSlotIndex = -1;
+            inspectedBoardSlotIndex = -1;
+            if (playerSlotViews != null)
+            {
+                for (int i = 0; i < playerSlotViews.Length; i++)
+                {
+                    if (playerSlotViews[i] != null) playerSlotViews[i].SetBoardSelected(false);
+                }
+            }
+            UpdatePlayCardButtonState();
+        }
+
+        private void UpdatePlayCardButtonState()
+        {
+            if (playCardButton == null) return;
+            var gm = GameManager.Instance;
+            var txt = playCardButton.GetComponentInChildren<Text>();
+
+            if (selectedCardForAction != null)
+            {
+                bool canPlaySelected = gm != null && gm.isPlayerTurn &&
+                    (selectedCardForAction.cardType == CardType.Spell || selectedCardForAction.cardType == CardType.Environment) &&
+                    selectedCardForAction.cost <= gm.humanPlayer.currentPower;
+
+                playCardButton.interactable = canPlaySelected;
+                if (txt != null)
+                {
+                    if (selectedCardForAction.cardType == CardType.Spell)
+                        txt.text = $"🔮 Cast Spell ({selectedCardForAction.cost}⚡)";
+                    else if (selectedCardForAction.cardType == CardType.Environment)
+                        txt.text = $"🌍 Activate Weather ({selectedCardForAction.cost}⚡)";
+                    else
+                        txt.text = "✨ Select Slot to Summon";
+                }
+                return;
+            }
+
+            if (selectedBoardSlotIndex >= 0 && gm != null && CombatSystem.Instance != null)
+            {
+                var state = CombatSystem.Instance.GetAbilityState(gm.humanPlayer, gm.aiPlayer, selectedBoardSlotIndex, out int cost, out string _);
+                if (state != CombatSystem.AbilityReadyState.NoAbility)
+                {
+                    playCardButton.interactable = (state == CombatSystem.AbilityReadyState.Ready);
+                    if (txt != null)
+                    {
+                        txt.text = state switch
+                        {
+                            CombatSystem.AbilityReadyState.Ready => $"⚡ Activate Ability ({cost}⚡)",
+                            CombatSystem.AbilityReadyState.AlreadyUsed => "✓ Ability Used This Turn",
+                            CombatSystem.AbilityReadyState.NotEnoughPower => $"⚡ Need {cost}⚡ Power",
+                            CombatSystem.AbilityReadyState.NoValidTarget => "🎯 Needs Enemy Target",
+                            CombatSystem.AbilityReadyState.Silenced => "🔒 Ability Silenced",
+                            CombatSystem.AbilityReadyState.Frozen => "❄️ Monster Frozen",
+                            _ => $"⏳ Ability ({cost}⚡)"
+                        };
+                    }
+                    return;
+                }
+            }
+
+            playCardButton.interactable = false;
+            if (txt != null) txt.text = "✨ Activate Card / Spell";
         }
 
         public void HighlightAvailableSlots(bool highlight)
@@ -1095,10 +1232,20 @@ namespace MonsterCardGame.UI
             var targetPlayer = isPlayerSide ? gm.humanPlayer : gm.aiPlayer;
             var slot = (slotIndex >= 0 && slotIndex < targetPlayer.slots.Length) ? targetPlayer.slots[slotIndex] : null;
 
-            // 1. If the slot is occupied by a monster, inspect it immediately
+            // 1. If the slot is occupied by a monster, select & inspect it immediately
             if (slot != null && slot.IsOccupied && slot.currentMonster != null)
             {
+                DeselectHandCards();
+                selectedBoardSlotIndex = isPlayerSide ? slotIndex : -1;
+                if (playerSlotViews != null)
+                {
+                    for (int i = 0; i < playerSlotViews.Length; i++)
+                    {
+                        if (playerSlotViews[i] != null) playerSlotViews[i].SetBoardSelected(i == selectedBoardSlotIndex);
+                    }
+                }
                 ShowMonsterDetails(slot.currentMonster.data, slot.currentMonster, isPlayerSide);
+                UpdatePlayCardButtonState();
                 return;
             }
 
@@ -1114,19 +1261,7 @@ namespace MonsterCardGame.UI
             var chosenCard = selectedCardForAction;
             if (gm.humanPlayer.SummonMonster(chosenCard, slotIndex, gm.currentTurn))
             {
-                MonsterCardGame.Audio.SoundManager.Instance.PlayCardPlay();
-                LogCombatMessage($"✅ Summoned [{chosenCard.name}] to Slot {slotIndex}.");
-                DeselectHandCards();
-                UpdateUI();
-                if (slotIndex >= 0 && slotIndex < playerSlotViews.Length && playerSlotViews[slotIndex] != null)
-                {
-                    StartCoroutine(BattleAnimations.AnimateCardSummon(playerSlotViews[slotIndex].transform));
-                    var summonedSlot = gm.humanPlayer.slots[slotIndex];
-                    if (summonedSlot != null && summonedSlot.currentMonster != null)
-                    {
-                        ShowMonsterDetails(summonedSlot.currentMonster.data, summonedSlot.currentMonster, true);
-                    }
-                }
+                OnPlayerMonsterSummoned(chosenCard, slotIndex);
             }
             else
             {
@@ -1134,28 +1269,149 @@ namespace MonsterCardGame.UI
             }
         }
 
+        public void OnPlayerMonsterSummoned(CardData chosenCard, int slotIndex)
+        {
+            var gm = GameManager.Instance;
+            if (gm == null || chosenCard == null) return;
+
+            if (MonsterCardGame.Audio.SoundManager.Instance != null)
+                MonsterCardGame.Audio.SoundManager.Instance.PlayCardPlay();
+
+            LogCombatMessage($"✅ Summoned [{chosenCard.name}] to Slot {slotIndex}.");
+            DeselectHandCards();
+
+            var summonedSlot = (slotIndex >= 0 && slotIndex < gm.humanPlayer.slots.Length) ? gm.humanPlayer.slots[slotIndex] : null;
+            var summonedMonster = (summonedSlot != null) ? summonedSlot.currentMonster : null;
+
+            if (summonedMonster != null && summonedMonster.HasActiveSkill)
+            {
+                selectedBoardSlotIndex = slotIndex;
+                if (CombatSystem.Instance != null)
+                {
+                    var abState = CombatSystem.Instance.GetAbilityState(gm.humanPlayer, gm.aiPlayer, slotIndex, out int cost, out string reason);
+                    if (abState == CombatSystem.AbilityReadyState.Ready)
+                    {
+                        LogCombatMessage($"⚡ [{chosenCard.name}]'s Special Ability is READY! Click ⚡ SKILL ({cost}⚡) on the monster or 'Activate Ability'!");
+                    }
+                    else
+                    {
+                        LogCombatMessage($"✨ [{chosenCard.name}] has Special Ability ({cost}⚡): {reason}");
+                    }
+                }
+            }
+            else
+            {
+                selectedBoardSlotIndex = -1;
+            }
+
+            UpdateUI();
+
+            if (slotIndex >= 0 && slotIndex < playerSlotViews.Length && playerSlotViews[slotIndex] != null)
+            {
+                StartCoroutine(BattleAnimations.AnimateCardSummon(playerSlotViews[slotIndex].transform));
+            }
+
+            if (summonedMonster != null)
+            {
+                ShowMonsterDetails(summonedMonster.data, summonedMonster, true);
+            }
+        }
+
+        public void OnSlotAbilityButtonClicked(int slotIndex)
+        {
+            DeselectHandCards();
+            selectedBoardSlotIndex = slotIndex;
+            if (playerSlotViews != null)
+            {
+                for (int i = 0; i < playerSlotViews.Length; i++)
+                {
+                    if (playerSlotViews[i] != null) playerSlotViews[i].SetBoardSelected(i == selectedBoardSlotIndex);
+                }
+            }
+            TryActivateBoardAbility(slotIndex);
+        }
+
+        public void OnActivateInspectedAbilityClicked()
+        {
+            int targetSlot = (inspectedBoardSlotIndex >= 0) ? inspectedBoardSlotIndex : selectedBoardSlotIndex;
+            if (targetSlot >= 0)
+            {
+                TryActivateBoardAbility(targetSlot);
+            }
+        }
+
+        public void TryActivateBoardAbility(int slotIndex)
+        {
+            var gm = GameManager.Instance;
+            if (gm == null || CombatSystem.Instance == null) return;
+
+            var slot = (slotIndex >= 0 && slotIndex < gm.humanPlayer.slots.Length) ? gm.humanPlayer.slots[slotIndex] : null;
+            var monster = (slot != null && slot.IsOccupied) ? slot.currentMonster : null;
+            string actText = (monster != null && monster.HasActiveSkill) ? monster.actives[0] : "";
+
+            if (!CombatSystem.Instance.ActivateMonsterAbility(gm.humanPlayer, gm.aiPlayer, slotIndex, out string msg))
+            {
+                LogCombatMessage(msg);
+                if (monster != null)
+                {
+                    ShowMonsterDetails(monster.data, monster, true);
+                }
+                UpdatePlayCardButtonState();
+                return;
+            }
+
+            if (MonsterCardGame.Audio.SoundManager.Instance != null)
+                MonsterCardGame.Audio.SoundManager.Instance.PlayCardAttack();
+
+            LogCombatMessage(msg);
+            if (monster != null)
+            {
+                ShowAbilityBanner(monster.data, actText);
+            }
+
+            gm.CheckGameOver();
+            UpdateUI();
+
+            var refreshedSlot = (slotIndex >= 0 && slotIndex < gm.humanPlayer.slots.Length) ? gm.humanPlayer.slots[slotIndex] : null;
+            if (refreshedSlot != null && refreshedSlot.IsOccupied && refreshedSlot.currentMonster != null)
+            {
+                ShowMonsterDetails(refreshedSlot.currentMonster.data, refreshedSlot.currentMonster, true);
+            }
+            else
+            {
+                ClearBoardSelection();
+                UpdateUI();
+            }
+        }
+
         private void OnPlayCardClicked()
         {
-            if (selectedCardForAction == null) return;
             var gm = GameManager.Instance;
             if (gm == null || !gm.isPlayerTurn) return;
 
-            var chosenCard = selectedCardForAction;
-            if (chosenCard.cardType == CardType.Spell)
+            if (selectedCardForAction != null)
             {
-                if (gm.CastSpell(gm.humanPlayer, gm.aiPlayer, chosenCard))
+                var chosenCard = selectedCardForAction;
+                if (chosenCard.cardType == CardType.Spell)
                 {
-                    DeselectHandCards();
-                    UpdateUI();
+                    if (gm.CastSpell(gm.humanPlayer, gm.aiPlayer, chosenCard))
+                    {
+                        DeselectHandCards();
+                        UpdateUI();
+                    }
+                }
+                else if (chosenCard.cardType == CardType.Environment)
+                {
+                    if (gm.PlayEnvironmentCard(gm.humanPlayer, chosenCard))
+                    {
+                        DeselectHandCards();
+                        UpdateUI();
+                    }
                 }
             }
-            else if (chosenCard.cardType == CardType.Environment)
+            else if (selectedBoardSlotIndex >= 0)
             {
-                if (gm.PlayEnvironmentCard(gm.humanPlayer, chosenCard))
-                {
-                    DeselectHandCards();
-                    UpdateUI();
-                }
+                TryActivateBoardAbility(selectedBoardSlotIndex);
             }
         }
 
@@ -1208,6 +1464,7 @@ namespace MonsterCardGame.UI
             if (gm == null) return;
 
             DeselectHandCards();
+            ClearBoardSelection();
             LogCombatMessage("⚔️ Launching Combat Phase! Your monsters charge toward enemy lines...");
             gm.OnPlayerExecuteAttackButton();
             UpdateUI();
@@ -1220,6 +1477,7 @@ namespace MonsterCardGame.UI
 
             MonsterCardGame.Audio.SoundManager.Instance.PlayTurnEnd();
             DeselectHandCards();
+            ClearBoardSelection();
             gm.OnPlayerEndTurn();
             UpdateUI();
         }
@@ -1255,6 +1513,20 @@ namespace MonsterCardGame.UI
             if (BattlefieldAtmosphereEngine.Instance != null && spellCard != null)
             {
                 Color c = MonsterArtLoader.GetElementColor(spellCard.element);
+                BattlefieldAtmosphereEngine.Instance.TriggerActionPulse(c, 1.35f);
+            }
+        }
+
+        public void ShowAbilityBanner(CardData monsterData, string abilityText)
+        {
+            var canvas = GetComponentInParent<Canvas>();
+            if (canvas != null && monsterData != null)
+            {
+                StartCoroutine(BattleAnimations.AnimateAbilityCast(canvas, monsterData, abilityText));
+            }
+            if (BattlefieldAtmosphereEngine.Instance != null && monsterData != null)
+            {
+                Color c = MonsterArtLoader.GetElementColor(monsterData.element);
                 BattlefieldAtmosphereEngine.Instance.TriggerActionPulse(c, 1.35f);
             }
         }

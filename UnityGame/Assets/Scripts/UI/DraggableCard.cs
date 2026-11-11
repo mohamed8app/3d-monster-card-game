@@ -337,19 +337,18 @@ namespace MonsterCardGame.UI
 
             if (gm.humanPlayer.SummonMonster(cardData, slotIndex, gm.currentTurn))
             {
-                BattleUIManager.Instance.LogCombatMessage($"✅ Summoned [{cardData.name}] to Slot {slotIndex}.");
-                BattleUIManager.Instance.DeselectHandCards();
-                BattleUIManager.Instance.UpdateUI();
-                var sv = BattleUIManager.Instance.GetSlotView(slotIndex, true);
-                if (sv != null)
+                if (BattleUIManager.Instance != null)
                 {
-                    BattleUIManager.Instance.StartCoroutine(BattleAnimations.AnimateCardSummon(sv.transform));
+                    BattleUIManager.Instance.OnPlayerMonsterSummoned(cardData, slotIndex);
                 }
                 return true;
             }
             else
             {
-                BattleUIManager.Instance.LogCombatMessage($"❌ Cannot summon monster to Slot {slotIndex} (Check Power & slot availability).");
+                if (BattleUIManager.Instance != null)
+                {
+                    BattleUIManager.Instance.LogCombatMessage($"❌ Cannot summon monster to Slot {slotIndex} (Check Power & slot availability).");
+                }
                 return false;
             }
         }

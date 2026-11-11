@@ -338,14 +338,51 @@ namespace MonsterCardGame.UI
             var subTxt = GameBootstrapper.CreateText(bannerObj.transform, "EnvDesc", sub, 13,
                 elemColor, TextAnchor.LowerCenter, new Vector2(0, -18), new Vector2(700, 26));
 
+            yield return AnimatePopupBanner(bannerObj, 1.1f, 0.25f, 0.22f, 40f);
+        }
+
+        /// <summary>
+        /// Monster Active Ability Cast Banner Animation
+        /// </summary>
+        public static IEnumerator AnimateAbilityCast(Canvas canvas, MonsterCardGame.Data.CardData monsterData, string abilityText)
+        {
+            if (canvas == null || monsterData == null) yield break;
+
+            Color elemColor = MonsterArtLoader.GetElementColor(monsterData.element);
+            string elemEmoji = MonsterArtLoader.GetElementEmoji(monsterData.element);
+
+            var bannerObj = GameBootstrapper.CreatePanel(canvas.transform, "AbilityCastBanner",
+                new Color(0.05f, 0.07f, 0.14f, 0.96f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 48), new Vector2(660, 88));
+
+            var outline = bannerObj.AddComponent<Outline>();
+            outline.effectColor = elemColor;
+            outline.effectDistance = new Vector2(3f, 3f);
+
+            string shortName = abilityText ?? "Special Ability";
+            int colonIdx = shortName.IndexOf(':');
+            string abilityTitle = colonIdx > 0 ? shortName.Substring(0, colonIdx).Trim() : shortName;
+            string abilityDesc = colonIdx > 0 ? shortName.Substring(colonIdx + 1).Trim() : shortName;
+
+            GameBootstrapper.CreateText(bannerObj.transform, "AbilityTitle",
+                $"⚡ {elemEmoji} Monster #{monsterData.name}: {abilityTitle}", 22,
+                Color.white, TextAnchor.UpperCenter, new Vector2(0, 16), new Vector2(636, 30));
+
+            GameBootstrapper.CreateText(bannerObj.transform, "AbilityDesc", abilityDesc, 13,
+                elemColor, TextAnchor.LowerCenter, new Vector2(0, -18), new Vector2(636, 26));
+
+            yield return AnimatePopupBanner(bannerObj, 0.95f, 0.22f, 0.20f, 35f);
+        }
+
+        private static IEnumerator AnimatePopupBanner(GameObject bannerObj, float holdDuration, float inDur, float outDur, float slideY)
+        {
             var rect = bannerObj.GetComponent<RectTransform>();
             var group = bannerObj.AddComponent<CanvasGroup>();
 
             rect.localScale = Vector3.one * 0.4f;
             group.alpha = 0f;
 
-            float t = 0;
-            float inDur = 0.25f;
+            float t = 0f;
             while (t < inDur)
             {
                 t += Time.deltaTime;
@@ -355,22 +392,67 @@ namespace MonsterCardGame.UI
                 yield return null;
             }
             rect.localScale = Vector3.one;
+            group.alpha = 1f;
 
-            yield return new WaitForSeconds(1.1f);
+            yield return new WaitForSeconds(holdDuration);
 
-            t = 0;
-            float outDur = 0.22f;
+            t = 0f;
             Vector2 startPos = rect.anchoredPosition;
             while (t < outDur)
             {
                 t += Time.deltaTime;
                 float p = t / outDur;
-                rect.anchoredPosition = startPos + new Vector2(0, p * 40f);
+                rect.anchoredPosition = startPos + new Vector2(0, p * slideY);
                 group.alpha = 1f - p;
                 yield return null;
             }
 
             GameObject.Destroy(bannerObj);
+        }
+
+        /// <summary>
+        /// Floating status / buff label above a board slot or commander
+        /// </summary>
+        public static IEnumerator AnimateFloatingStatus(Transform canvasTransform, Vector3 worldPos, string label, Color textColor)
+        {
+            if (canvasTransform == null || string.IsNullOrEmpty(label)) yield break;
+
+            var obj = new GameObject("FloatingStatus");
+            obj.transform.SetParent(canvasTransform, false);
+            obj.transform.position = worldPos + new Vector3(0, 28f, 0);
+
+            var rect = obj.AddComponent<RectTransform>();
+            rect.sizeDelta = new Vector2(220, 44);
+
+            var outline = obj.AddComponent<Outline>();
+            outline.effectColor = Color.black;
+            outline.effectDistance = new Vector2(2, 2);
+
+            var txt = obj.AddComponent<Text>();
+            txt.font = GameBootstrapper.GetFont();
+            txt.fontStyle = FontStyle.Bold;
+            txt.text = label;
+            txt.fontSize = 19;
+            txt.color = textColor;
+            txt.alignment = TextAnchor.MiddleCenter;
+
+            var group = obj.AddComponent<CanvasGroup>();
+
+            float duration = 0.9f;
+            float t = 0f;
+            Vector3 startP = obj.transform.position;
+            Vector3 targetP = startP + new Vector3(0, 52f, 0);
+
+            while (t < duration)
+            {
+                t += Time.deltaTime;
+                float p = t / duration;
+                obj.transform.position = Vector3.Lerp(startP, targetP, EaseOutQuad(p));
+                group.alpha = 1f - (p * p);
+                yield return null;
+            }
+
+            GameObject.Destroy(obj);
         }
 
         public static IEnumerator AnimateFloatingHeal(Transform canvasTransform, Vector3 worldPos, int healAmount)
