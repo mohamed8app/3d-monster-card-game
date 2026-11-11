@@ -497,6 +497,64 @@ namespace MonsterCardGame.UI
         }
 
         /// <summary>
+        /// Radiant expanding shockwave ring + star flash burst when a monster unleashes its Special Ability.
+        /// </summary>
+        public static IEnumerator AnimateAbilityShockwave(Transform canvasTransform, Transform slotTransform, Color elemColor)
+        {
+            if (canvasTransform == null || slotTransform == null) yield break;
+
+            Vector3 originPos = slotTransform.position;
+
+            var ringObj = new GameObject("AbilityShockwaveRing");
+            ringObj.transform.SetParent(canvasTransform, false);
+            ringObj.transform.position = originPos;
+            var ringRect = ringObj.AddComponent<RectTransform>();
+            ringRect.sizeDelta = new Vector2(180f, 180f);
+            var ringImg = ringObj.AddComponent<Image>();
+            ringImg.sprite = GameBootstrapper.GetAbilityShockwaveRingSprite();
+            ringImg.color = Color.Lerp(elemColor, Color.white, 0.35f);
+            ringImg.raycastTarget = false;
+
+            var flashObj = new GameObject("AbilityBurstFlash");
+            flashObj.transform.SetParent(canvasTransform, false);
+            flashObj.transform.position = originPos;
+            var flashRect = flashObj.AddComponent<RectTransform>();
+            flashRect.sizeDelta = new Vector2(160f, 160f);
+            var flashImg = flashObj.AddComponent<Image>();
+            flashImg.sprite = GameBootstrapper.GetAbilityFlashCoreSprite();
+            flashImg.color = Color.white;
+            flashImg.raycastTarget = false;
+
+            float duration = 0.42f;
+            float t = 0f;
+
+            while (t < duration)
+            {
+                t += Time.deltaTime;
+                float p = Mathf.Clamp01(t / duration);
+                float ease = EaseOutQuad(p);
+
+                float ringScale = Mathf.Lerp(0.45f, 2.35f, ease);
+                ringRect.localScale = new Vector3(ringScale, ringScale, 1f);
+                ringRect.localRotation = Quaternion.Euler(0f, 0f, -p * 65f);
+                Color rc = Color.Lerp(elemColor, Color.white, 0.3f);
+                rc.a = (1f - p) * 0.95f;
+                ringImg.color = rc;
+
+                float flashScale = Mathf.Lerp(0.6f, 1.85f, ease);
+                flashRect.localScale = new Vector3(flashScale, flashScale, 1f);
+                Color fc = Color.Lerp(Color.white, elemColor, p * 0.6f);
+                fc.a = Mathf.Pow(1f - p, 1.5f);
+                flashImg.color = fc;
+
+                yield return null;
+            }
+
+            GameObject.Destroy(ringObj);
+            GameObject.Destroy(flashObj);
+        }
+
+        /// <summary>
         /// Screen Shake on Direct Leader Hit
         /// </summary>
         public static IEnumerator AnimateScreenShake(Transform target, float intensity = 8f, float duration = 0.22f)

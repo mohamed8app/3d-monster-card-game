@@ -81,12 +81,9 @@ namespace MonsterCardGame.UI
         public Text detailStatsText;
         public Text detailDescText;
         public Text detailStatusText;
-        public Button inspectorActivateAbilityButton;
-        public RectTransform detailDescBoxRect;
 
         private CardData selectedCardForAction = null;
         private int selectedBoardSlotIndex = -1;
-        private int inspectedBoardSlotIndex = -1;
 
         private void Awake()
         {
@@ -177,6 +174,10 @@ namespace MonsterCardGame.UI
             {
                 OnQuitClicked();
             }
+            else if (Input.GetKeyDown(KeyCode.F11))
+            {
+                ToggleFullScreen();
+            }
             else if (Input.GetKeyDown(KeyCode.E))
             {
                 OnTestCycleEnvironmentClicked();
@@ -257,6 +258,18 @@ namespace MonsterCardGame.UI
 
             UpdateEnvironmentVisuals();
             UpdateUI();
+        }
+
+        public void ToggleFullScreen()
+        {
+            if (Screen.fullScreen)
+            {
+                Screen.SetResolution(1280, 720, FullScreenMode.Windowed);
+            }
+            else
+            {
+                GameBootstrapper.EnsureFullScreenDisplay();
+            }
         }
 
         public void OnQuitClicked()
@@ -899,7 +912,7 @@ namespace MonsterCardGame.UI
                             var abState = CombatSystem.Instance.GetAbilityState(gm.humanPlayer, gm.aiPlayer, instance.currentSlot.slotIndex, out int cost, out string _);
                             string abTag = abState switch
                             {
-                                CombatSystem.AbilityReadyState.Ready => $"⚡ Skill Ready ({cost}⚡)",
+                                CombatSystem.AbilityReadyState.Ready => $"⚡ Aura Ready ({cost}⚡) — Click ⚡ Flash / 2x Click",
                                 CombatSystem.AbilityReadyState.AlreadyUsed => "✓ Skill Used",
                                 CombatSystem.AbilityReadyState.NotEnoughPower => $"⚡ Need {cost}⚡",
                                 CombatSystem.AbilityReadyState.NoValidTarget => "🎯 No Target",
@@ -936,76 +949,12 @@ namespace MonsterCardGame.UI
                     detailStatusText.color = new Color(0.4f, 0.85f, 1f);
                 }
             }
-
-            UpdateInspectorAbilityButton(instance, isPlayer);
-        }
-
-        private void UpdateInspectorAbilityButton(MonsterInstance instance, bool isPlayer)
-        {
-            bool showAbilityBtn = isPlayer && instance != null && instance.IsAlive && instance.HasActiveSkill && instance.currentSlot != null;
-            inspectedBoardSlotIndex = showAbilityBtn ? instance.currentSlot.slotIndex : -1;
-
-            if (detailDescBoxRect != null)
-            {
-                if (showAbilityBtn)
-                {
-                    detailDescBoxRect.anchoredPosition = new Vector2(0f, -123f);
-                    detailDescBoxRect.sizeDelta = new Vector2(314f, 152f);
-                }
-                else
-                {
-                    detailDescBoxRect.anchoredPosition = new Vector2(0f, -142f);
-                    detailDescBoxRect.sizeDelta = new Vector2(314f, 192f);
-                }
-            }
-
-            if (inspectorActivateAbilityButton == null) return;
-            inspectorActivateAbilityButton.gameObject.SetActive(showAbilityBtn);
-            if (!showAbilityBtn) return;
-
-            var gm = GameManager.Instance;
-            if (gm == null || CombatSystem.Instance == null)
-            {
-                inspectorActivateAbilityButton.interactable = false;
-                return;
-            }
-
-            var state = CombatSystem.Instance.GetAbilityState(gm.humanPlayer, gm.aiPlayer, inspectedBoardSlotIndex, out int cost, out string _);
-            bool ready = (state == CombatSystem.AbilityReadyState.Ready);
-            inspectorActivateAbilityButton.interactable = ready;
-
-            var btnImg = inspectorActivateAbilityButton.GetComponent<Image>();
-            var btnTxt = inspectorActivateAbilityButton.GetComponentInChildren<Text>();
-
-            if (btnImg != null)
-            {
-                btnImg.color = ready
-                    ? new Color(0.08f, 0.58f, 0.90f, 0.98f)
-                    : (state == CombatSystem.AbilityReadyState.AlreadyUsed
-                        ? new Color(0.16f, 0.28f, 0.22f, 0.95f)
-                        : new Color(0.20f, 0.22f, 0.30f, 0.92f));
-            }
-
-            if (btnTxt != null)
-            {
-                btnTxt.text = state switch
-                {
-                    CombatSystem.AbilityReadyState.Ready => $"⚡ Activate Ability ({cost}⚡ Power)",
-                    CombatSystem.AbilityReadyState.AlreadyUsed => "✓ Ability Used This Turn",
-                    CombatSystem.AbilityReadyState.NotEnoughPower => $"⚡ Need {cost}⚡ Power to Activate",
-                    CombatSystem.AbilityReadyState.NoValidTarget => "🎯 Needs Enemy Target on Board",
-                    CombatSystem.AbilityReadyState.Silenced => "🔒 Ability Silenced",
-                    CombatSystem.AbilityReadyState.Frozen => "❄️ Monster is Frozen",
-                    _ => $"⏳ Wait for Your Turn ({cost}⚡)"
-                };
-            }
         }
 
         public void ShowCardDetails(CardData data)
         {
             if (data == null) return;
             if (cardDetailsPanel != null) cardDetailsPanel.SetActive(true);
-            UpdateInspectorAbilityButton(null, false);
 
             UpdateDetailArtNumber(data);
 
@@ -1148,7 +1097,6 @@ namespace MonsterCardGame.UI
         public void ClearBoardSelection()
         {
             selectedBoardSlotIndex = -1;
-            inspectedBoardSlotIndex = -1;
             if (playerSlotViews != null)
             {
                 for (int i = 0; i < playerSlotViews.Length; i++)
@@ -1291,7 +1239,7 @@ namespace MonsterCardGame.UI
                     var abState = CombatSystem.Instance.GetAbilityState(gm.humanPlayer, gm.aiPlayer, slotIndex, out int cost, out string reason);
                     if (abState == CombatSystem.AbilityReadyState.Ready)
                     {
-                        LogCombatMessage($"⚡ [{chosenCard.name}]'s Special Ability is READY! Click ⚡ SKILL ({cost}⚡) on the monster or 'Activate Ability'!");
+                        LogCombatMessage($"⚡ [{chosenCard.name}] Aura Awakened! Click its glowing ⚡ Flash Sigil (or Double-Click card) to unleash ({cost}⚡)!");
                     }
                     else
                     {
@@ -1331,15 +1279,6 @@ namespace MonsterCardGame.UI
             TryActivateBoardAbility(slotIndex);
         }
 
-        public void OnActivateInspectedAbilityClicked()
-        {
-            int targetSlot = (inspectedBoardSlotIndex >= 0) ? inspectedBoardSlotIndex : selectedBoardSlotIndex;
-            if (targetSlot >= 0)
-            {
-                TryActivateBoardAbility(targetSlot);
-            }
-        }
-
         public void TryActivateBoardAbility(int slotIndex)
         {
             var gm = GameManager.Instance;
@@ -1366,6 +1305,12 @@ namespace MonsterCardGame.UI
             LogCombatMessage(msg);
             if (monster != null)
             {
+                var canvas = GetComponentInParent<Canvas>();
+                var sv = GetSlotView(slotIndex, true);
+                if (canvas != null && sv != null)
+                {
+                    StartCoroutine(BattleAnimations.AnimateAbilityShockwave(canvas.transform, sv.transform, MonsterArtLoader.GetElementColor(monster.data.element)));
+                }
                 ShowAbilityBanner(monster.data, actText);
             }
 

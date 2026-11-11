@@ -35,15 +35,24 @@ namespace MonsterCardGame.UI
         private RectTransform hpBarFillRect;
         private Image hpBarFillImage;
         private CardPulseEffect pulseEffect;
-        private Button abilityButton;
-        private Image abilityButtonImage;
-        private Outline abilityButtonOutline;
-        private Text abilityButtonText;
+        private GameObject auraRoot;
+        private Image auraGlowImage;
+        private Image auraRuneRingImage;
+        private GameObject abilitySigilObj;
+        private Button abilitySigilButton;
+        private Image sigilRingImage;
+        private Image sigilFlashImage;
+        private Image sigilSwordsImage;
+        private Image sigilPipBgImage;
+        private Text sigilText;
+        private Color activeAuraColor = new Color(0.35f, 0.85f, 1f);
         private bool isAbilityReady = false;
+        private bool isSigilHovered = false;
         private bool isSelectedOnBoard = false;
         private bool isHovered = false;
         private bool isHighlightedForSummon = false;
         private float circleRotation = 0f;
+        private float auraRotation = 0f;
 
         public void SetSummonHighlight(bool active)
         {
@@ -59,13 +68,7 @@ namespace MonsterCardGame.UI
         private void RefreshTokenOutline()
         {
             if (tokenOutline == null) return;
-            bool isReadyToStrike = currentMonsterInstance != null && currentMonsterInstance.canAttack && isPlayerSide;
-            if (isReadyToStrike)
-            {
-                tokenOutline.enabled = true;
-                tokenOutline.effectColor = new Color(1f, 0.88f, 0.3f, 0.95f);
-            }
-            else if (isSelectedOnBoard)
+            if (isSelectedOnBoard)
             {
                 tokenOutline.enabled = true;
                 tokenOutline.effectColor = new Color(0.32f, 0.92f, 1f, 0.98f);
@@ -78,9 +81,24 @@ namespace MonsterCardGame.UI
 
         public void OnPointerClick(PointerEventData eventData)
         {
-            if (BattleUIManager.Instance != null)
+            if (BattleUIManager.Instance == null) return;
+
+            if (eventData != null && eventData.clickCount >= 2 && isPlayerSide &&
+                currentMonsterInstance != null && currentMonsterInstance.HasActiveSkill)
             {
-                BattleUIManager.Instance.OnSlotClicked(slotIndex, isPlayerSide);
+                BattleUIManager.Instance.OnSlotAbilityButtonClicked(slotIndex);
+                return;
+            }
+
+            BattleUIManager.Instance.OnSlotClicked(slotIndex, isPlayerSide);
+        }
+
+        public void SetSigilHovered(bool hovered)
+        {
+            isSigilHovered = hovered;
+            if (hovered && currentCardData != null && BattleUIManager.Instance != null)
+            {
+                BattleUIManager.Instance.ShowMonsterDetails(currentCardData, currentMonsterInstance, isPlayerSide);
             }
         }
 
@@ -102,40 +120,64 @@ namespace MonsterCardGame.UI
 
         private void Update()
         {
-            // 1. Occupied Slot: Standee Card Token Breathing / Hover
+            // 1. Occupied Slot: Static Card Scale (Rock-solid for Ability Sigil) + Steady Aura & Flash Glow
             if (fieldCardToken != null && fieldCardToken.activeSelf)
             {
-                if (abilityButton != null && abilityButton.gameObject.activeSelf)
+                fieldCardToken.transform.localScale = Vector3.one;
+
+                if (isAbilityReady)
                 {
-                    if (isAbilityReady)
+                    float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 4.2f);
+                    float flashPulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 6.5f);
+                    float speedMult = (isHovered || isSigilHovered) ? 1.8f : 1.0f;
+                    auraRotation = (auraRotation + 28f * speedMult * Time.unscaledDeltaTime) % 360f;
+
+                    if (auraRoot != null && auraRoot.activeSelf)
                     {
-                        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 4.5f);
-                        float btnScale = Mathf.Lerp(1.0f, 1.055f, pulse);
-                        abilityButton.transform.localScale = new Vector3(btnScale, btnScale, 1f);
-                        if (abilityButtonOutline != null)
+                        if (auraGlowImage != null)
                         {
-                            abilityButtonOutline.effectColor = Color.Lerp(
-                                new Color(0.40f, 0.92f, 1f, 0.92f),
-                                new Color(1f, 0.92f, 0.38f, 1f),
-                                pulse);
+                            auraGlowImage.transform.localScale = Vector3.one;
+                            Color gc = Color.Lerp(activeAuraColor, Color.white, 0.15f + 0.20f * pulse);
+                            gc.a = (isHovered || isSigilHovered) ? 0.96f : Mathf.Lerp(0.58f, 0.90f, pulse);
+                            auraGlowImage.color = gc;
+                        }
+                        if (auraRuneRingImage != null)
+                        {
+                            auraRuneRingImage.transform.localRotation = Quaternion.Euler(0f, 0f, auraRotation);
+                            Color rc = Color.Lerp(activeAuraColor, new Color(1f, 0.92f, 0.45f), 0.35f);
+                            rc.a = (isHovered || isSigilHovered) ? 0.85f : Mathf.Lerp(0.38f, 0.68f, pulse);
+                            auraRuneRingImage.color = rc;
                         }
                     }
-                    else
+
+                    if (abilitySigilObj != null && abilitySigilObj.activeSelf)
                     {
-                        abilityButton.transform.localScale = Vector3.one;
+                        abilitySigilObj.transform.localScale = Vector3.one;
+
+                        if (sigilRingImage != null)
+                        {
+                            sigilRingImage.transform.localRotation = Quaternion.Euler(0f, 0f, -auraRotation * 3.0f);
+                            Color src = Color.Lerp(activeAuraColor, Color.white, isSigilHovered ? 0.70f : 0.45f);
+                            src.a = isSigilHovered ? 1.0f : Mathf.Lerp(0.75f, 1.0f, flashPulse);
+                            sigilRingImage.color = src;
+                        }
+                        if (sigilFlashImage != null)
+                        {
+                            Color fc = Color.Lerp(activeAuraColor, Color.white, isSigilHovered ? 0.65f : 0.30f);
+                            fc.a = isSigilHovered ? 0.72f : Mathf.Lerp(0.32f, 0.58f, flashPulse);
+                            sigilFlashImage.color = fc;
+                        }
+                        if (sigilSwordsImage != null)
+                        {
+                            Color sc = Color.Lerp(new Color(1f, 0.90f, 0.48f), Color.white, isSigilHovered ? 0.95f : (0.35f + 0.55f * flashPulse));
+                            sc.a = 1.0f;
+                            sigilSwordsImage.color = sc;
+                        }
                     }
                 }
-
-                if (pulseEffect != null && pulseEffect.isPulsing && !isHovered)
+                else if (abilitySigilObj != null && abilitySigilObj.activeSelf)
                 {
-                    return;
-                }
-                float targetScale = isHovered ? 1.05f : 1.0f;
-                Vector3 curScale = fieldCardToken.transform.localScale;
-                if (Mathf.Abs(curScale.x - targetScale) > 0.001f)
-                {
-                    float s = Mathf.Lerp(curScale.x, targetScale, Time.unscaledDeltaTime * 16f);
-                    fieldCardToken.transform.localScale = new Vector3(s, s, 1f);
+                    abilitySigilObj.transform.localScale = Vector3.one;
                 }
             }
             // 2. Empty Slot: Summoning Circle (Static Size, Light Blink & Active Summon Rotation)
@@ -301,33 +343,77 @@ namespace MonsterCardGame.UI
                 }
             }
 
-            // 5. Breathing Pulse for Ready Attackers
-            bool isReadyToStrike = instance.canAttack && isPlayerSide;
+            // 5. Ready-to-attack breathing pulse disabled (cards remain completely steady)
             if (pulseEffect != null)
             {
-                Color glow = isReadyToStrike ? new Color(1f, 0.88f, 0.3f, 0.95f) : elemColor;
-                pulseEffect.SetPulsing(isReadyToStrike, glow);
+                pulseEffect.SetPulsing(false, elemColor);
+            }
+            if (fieldCardToken != null)
+            {
+                fieldCardToken.transform.localScale = Vector3.one;
             }
             RefreshTokenOutline();
 
-            // 6. Active Ability Pill Button on Player Board Monsters
-            UpdateAbilityButton(instance);
+            // 6. Living Elemental Aura & Clickable Star-Flash Sigil on Player Board Monsters
+            UpdateAbilityAuraAndSigil(instance, elemColor);
         }
 
-        private void EnsureAbilityButtonCreated()
+        private void EnsureAbilityAuraAndSigilCreated()
         {
-            if (abilityButton != null) return;
+            if (auraRoot == null)
+            {
+                auraRoot = new GameObject("AbilityElementalAura");
+                auraRoot.transform.SetParent(transform, false);
+                auraRoot.transform.SetAsFirstSibling();
 
-            abilityButton = GameBootstrapper.CreateBeveledButton(
-                transform,
-                $"SlotAbilityBtn_{slotIndex}",
-                "⚡ ABILITY",
-                new Color(0.08f, 0.58f, 0.90f, 0.98f),
-                new Color(1f, 0.96f, 0.72f),
-                new Vector2(0f, -104f),
-                new Vector2(128f, 24f),
-                11,
-                () =>
+                var auraRect = auraRoot.AddComponent<RectTransform>();
+                auraRect.anchorMin = new Vector2(0.5f, 0.5f);
+                auraRect.anchorMax = new Vector2(0.5f, 0.5f);
+                auraRect.sizeDelta = new Vector2(194f, 232f);
+                auraRect.anchoredPosition = Vector2.zero;
+
+                var glowObj = new GameObject("AuraBackGlow");
+                glowObj.transform.SetParent(auraRoot.transform, false);
+                var glowRect = glowObj.AddComponent<RectTransform>();
+                glowRect.anchorMin = Vector2.zero;
+                glowRect.anchorMax = Vector2.one;
+                glowRect.sizeDelta = Vector2.zero;
+                auraGlowImage = glowObj.AddComponent<Image>();
+                auraGlowImage.sprite = GameBootstrapper.GetElementalAuraHaloSprite();
+                auraGlowImage.raycastTarget = false;
+
+                var ringObj = new GameObject("AuraRuneRing");
+                ringObj.transform.SetParent(auraRoot.transform, false);
+                var ringRect = ringObj.AddComponent<RectTransform>();
+                ringRect.anchorMin = new Vector2(0.5f, 0.5f);
+                ringRect.anchorMax = new Vector2(0.5f, 0.5f);
+                ringRect.sizeDelta = new Vector2(192f, 192f);
+                auraRuneRingImage = ringObj.AddComponent<Image>();
+                auraRuneRingImage.sprite = GameBootstrapper.GetSummoningCircleSprite();
+                auraRuneRingImage.raycastTarget = false;
+
+                auraRoot.SetActive(false);
+            }
+
+            if (abilitySigilObj == null)
+            {
+                abilitySigilObj = new GameObject($"AbilitySigilFlash_{slotIndex}");
+                abilitySigilObj.transform.SetParent(transform, false);
+
+                var sigilRect = abilitySigilObj.AddComponent<RectTransform>();
+                sigilRect.anchorMin = new Vector2(0.5f, 0.5f);
+                sigilRect.anchorMax = new Vector2(0.5f, 0.5f);
+                sigilRect.sizeDelta = new Vector2(44f, 44f);
+                sigilRect.anchoredPosition = new Vector2(0f, -72f);
+
+                var hitImg = abilitySigilObj.AddComponent<Image>();
+                hitImg.sprite = GameBootstrapper.GetCircleSprite();
+                hitImg.color = new Color(0.05f, 0.08f, 0.14f, 0.72f);
+                hitImg.raycastTarget = true;
+
+                abilitySigilButton = abilitySigilObj.AddComponent<Button>();
+                abilitySigilButton.transition = Selectable.Transition.None;
+                abilitySigilButton.onClick.AddListener(() =>
                 {
                     if (BattleUIManager.Instance != null)
                     {
@@ -335,98 +421,173 @@ namespace MonsterCardGame.UI
                     }
                 });
 
-            abilityButtonImage = abilityButton.GetComponent<Image>();
-            abilityButtonOutline = abilityButton.gameObject.GetComponent<Outline>();
-            if (abilityButtonOutline == null)
-            {
-                abilityButtonOutline = abilityButton.gameObject.AddComponent<Outline>();
+                var hoverRelay = abilitySigilObj.AddComponent<AbilitySigilHoverRelay>();
+                hoverRelay.ownerSlot = this;
+
+                var ringObj = new GameObject("SigilSpinRing");
+                ringObj.transform.SetParent(abilitySigilObj.transform, false);
+                var rRect = ringObj.AddComponent<RectTransform>();
+                rRect.anchorMin = new Vector2(0.5f, 0.5f);
+                rRect.anchorMax = new Vector2(0.5f, 0.5f);
+                rRect.sizeDelta = new Vector2(54f, 54f);
+                sigilRingImage = ringObj.AddComponent<Image>();
+                sigilRingImage.sprite = GameBootstrapper.GetSummoningCircleSprite();
+                sigilRingImage.raycastTarget = false;
+
+                var flashObj = new GameObject("SigilFlashCore");
+                flashObj.transform.SetParent(abilitySigilObj.transform, false);
+                var fRect = flashObj.AddComponent<RectTransform>();
+                fRect.anchorMin = new Vector2(0.5f, 0.5f);
+                fRect.anchorMax = new Vector2(0.5f, 0.5f);
+                fRect.sizeDelta = new Vector2(46f, 46f);
+                sigilFlashImage = flashObj.AddComponent<Image>();
+                sigilFlashImage.sprite = GameBootstrapper.GetAbilityFlashCoreSprite();
+                sigilFlashImage.raycastTarget = false;
+
+                var swordsObj = new GameObject("SigilCrossedSwords");
+                swordsObj.transform.SetParent(abilitySigilObj.transform, false);
+                var swRect = swordsObj.AddComponent<RectTransform>();
+                swRect.anchorMin = new Vector2(0.5f, 0.5f);
+                swRect.anchorMax = new Vector2(0.5f, 0.5f);
+                swRect.sizeDelta = new Vector2(30f, 30f);
+                sigilSwordsImage = swordsObj.AddComponent<Image>();
+                sigilSwordsImage.sprite = GameBootstrapper.GetCrossedSwordsSprite();
+                sigilSwordsImage.raycastTarget = false;
+
+                var pipObj = GameBootstrapper.CreateCirclePanel(abilitySigilObj.transform, "SigilCostPip",
+                    new Color(0.06f, 0.10f, 0.18f, 0.96f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                    new Vector2(16f, -14f), new Vector2(18f, 18f));
+                sigilPipBgImage = pipObj.GetComponent<Image>();
+                sigilPipBgImage.raycastTarget = false;
+                var pipOutline = pipObj.AddComponent<Outline>();
+                pipOutline.effectColor = new Color(1f, 0.85f, 0.35f, 0.88f);
+                pipOutline.effectDistance = new Vector2(1f, 1f);
+
+                sigilText = GameBootstrapper.CreateText(pipObj.transform, "SigilCostText", "1", 10,
+                    Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(18f, 18f));
+                sigilText.fontStyle = FontStyle.Bold;
+                sigilText.raycastTarget = false;
+                GameBootstrapper.AddTextShadow(sigilText);
+
+                abilitySigilObj.SetActive(false);
             }
-            abilityButtonOutline.effectDistance = new Vector2(1.5f, 1.5f);
-            abilityButtonText = abilityButton.GetComponentInChildren<Text>();
-            abilityButton.gameObject.SetActive(false);
         }
 
-        private void UpdateAbilityButton(MonsterInstance instance)
+        private void UpdateAbilityAuraAndSigil(MonsterInstance instance, Color elemColor)
         {
             if (!isPlayerSide || instance == null || !instance.IsAlive || !instance.HasActiveSkill)
             {
                 isAbilityReady = false;
-                if (abilityButton != null) abilityButton.gameObject.SetActive(false);
+                if (auraRoot != null) auraRoot.SetActive(false);
+                if (abilitySigilObj != null) abilitySigilObj.SetActive(false);
                 return;
             }
 
-            EnsureAbilityButtonCreated();
-            abilityButton.gameObject.SetActive(true);
-            abilityButton.transform.SetAsLastSibling();
+            EnsureAbilityAuraAndSigilCreated();
+
+            // Guarantee correct layering: Aura behind card -> FieldCardToken -> Flash Sigil on front rim
+            if (auraRoot != null && fieldCardToken != null)
+            {
+                auraRoot.transform.SetAsFirstSibling();
+                fieldCardToken.transform.SetSiblingIndex(auraRoot.transform.GetSiblingIndex() + 1);
+            }
+            if (abilitySigilObj != null)
+            {
+                abilitySigilObj.transform.SetAsLastSibling();
+            }
+
+            activeAuraColor = elemColor;
 
             var gm = GameManager.Instance;
             if (gm == null || CombatSystem.Instance == null)
             {
                 isAbilityReady = false;
-                if (abilityButtonText != null) abilityButtonText.text = "⚡ ABILITY";
+                if (auraRoot != null) auraRoot.SetActive(false);
+                if (abilitySigilObj != null) abilitySigilObj.SetActive(false);
                 return;
             }
 
             var state = CombatSystem.Instance.GetAbilityState(gm.humanPlayer, gm.aiPlayer, slotIndex, out int cost, out string _);
             isAbilityReady = (state == CombatSystem.AbilityReadyState.Ready);
 
-            Color bg;
-            Color txtCol;
-            Color rimCol;
-            string label;
-
-            switch (state)
+            if (auraRoot != null)
             {
-                case CombatSystem.AbilityReadyState.Ready:
-                    bg = new Color(0.08f, 0.58f, 0.90f, 0.98f);
-                    txtCol = new Color(1f, 0.96f, 0.72f);
-                    rimCol = new Color(1f, 0.88f, 0.35f, 1f);
-                    label = $"⚡ SKILL ({cost}⚡)";
-                    break;
-                case CombatSystem.AbilityReadyState.AlreadyUsed:
-                    bg = new Color(0.14f, 0.24f, 0.18f, 0.94f);
-                    txtCol = new Color(0.65f, 0.90f, 0.72f);
-                    rimCol = new Color(0.35f, 0.65f, 0.45f, 0.75f);
-                    label = "✓ USED";
-                    break;
-                case CombatSystem.AbilityReadyState.NotEnoughPower:
-                    bg = new Color(0.16f, 0.18f, 0.26f, 0.94f);
-                    txtCol = new Color(1f, 0.80f, 0.45f);
-                    rimCol = new Color(0.85f, 0.58f, 0.22f, 0.80f);
-                    label = $"⚡ NEED {cost}⚡";
-                    break;
-                case CombatSystem.AbilityReadyState.NoValidTarget:
-                    bg = new Color(0.22f, 0.17f, 0.14f, 0.94f);
-                    txtCol = new Color(1f, 0.75f, 0.50f);
-                    rimCol = new Color(0.80f, 0.45f, 0.25f, 0.75f);
-                    label = "🎯 NO TARGET";
-                    break;
-                case CombatSystem.AbilityReadyState.Silenced:
-                    bg = new Color(0.24f, 0.14f, 0.30f, 0.94f);
-                    txtCol = new Color(0.85f, 0.70f, 1f);
-                    rimCol = new Color(0.65f, 0.35f, 0.85f, 0.80f);
-                    label = "🔒 SILENCED";
-                    break;
-                case CombatSystem.AbilityReadyState.Frozen:
-                    bg = new Color(0.14f, 0.24f, 0.32f, 0.94f);
-                    txtCol = new Color(0.70f, 0.92f, 1f);
-                    rimCol = new Color(0.45f, 0.80f, 0.95f, 0.80f);
-                    label = "❄️ FROZEN";
-                    break;
-                default:
-                    bg = new Color(0.15f, 0.16f, 0.22f, 0.92f);
-                    txtCol = new Color(0.75f, 0.80f, 0.90f);
-                    rimCol = new Color(0.45f, 0.50f, 0.65f, 0.70f);
-                    label = $"⏳ SKILL ({cost}⚡)";
-                    break;
+                auraRoot.SetActive(isAbilityReady);
             }
 
-            if (abilityButtonImage != null) abilityButtonImage.color = bg;
-            if (abilityButtonOutline != null) abilityButtonOutline.effectColor = rimCol;
-            if (abilityButtonText != null)
+            if (abilitySigilObj != null)
             {
-                abilityButtonText.text = label;
-                abilityButtonText.color = txtCol;
+                abilitySigilObj.SetActive(true);
+            }
+
+            if (isAbilityReady)
+            {
+                if (sigilText != null)
+                {
+                    sigilText.text = cost.ToString();
+                    sigilText.color = new Color(1f, 0.96f, 0.72f);
+                }
+                if (sigilPipBgImage != null)
+                {
+                    sigilPipBgImage.color = new Color(0.08f, 0.32f, 0.65f, 0.98f);
+                }
+                if (sigilFlashImage != null)
+                {
+                    sigilFlashImage.color = Color.Lerp(elemColor, Color.white, 0.35f);
+                }
+                if (sigilSwordsImage != null)
+                {
+                    sigilSwordsImage.color = new Color(1f, 0.96f, 0.78f, 1f);
+                }
+                if (sigilRingImage != null)
+                {
+                    sigilRingImage.color = new Color(1f, 0.92f, 0.48f, 0.92f);
+                }
+            }
+            else
+            {
+                abilitySigilObj.transform.localScale = Vector3.one;
+                Color dimCol;
+                string glyph;
+
+                switch (state)
+                {
+                    case CombatSystem.AbilityReadyState.AlreadyUsed:
+                        dimCol = new Color(0.28f, 0.55f, 0.40f, 0.40f);
+                        glyph = "✓";
+                        break;
+                    case CombatSystem.AbilityReadyState.NotEnoughPower:
+                        dimCol = new Color(0.75f, 0.55f, 0.25f, 0.48f);
+                        glyph = cost.ToString();
+                        break;
+                    case CombatSystem.AbilityReadyState.NoValidTarget:
+                        dimCol = new Color(0.85f, 0.45f, 0.25f, 0.48f);
+                        glyph = "🎯";
+                        break;
+                    case CombatSystem.AbilityReadyState.Silenced:
+                        dimCol = new Color(0.55f, 0.30f, 0.75f, 0.48f);
+                        glyph = "🔒";
+                        break;
+                    case CombatSystem.AbilityReadyState.Frozen:
+                        dimCol = new Color(0.35f, 0.75f, 0.95f, 0.48f);
+                        glyph = "❄️";
+                        break;
+                    default:
+                        dimCol = new Color(0.45f, 0.50f, 0.65f, 0.38f);
+                        glyph = "⏳";
+                        break;
+                }
+
+                if (sigilFlashImage != null) sigilFlashImage.color = new Color(dimCol.r, dimCol.g, dimCol.b, 0.18f);
+                if (sigilSwordsImage != null) sigilSwordsImage.color = new Color(0.72f, 0.75f, 0.82f, 0.62f);
+                if (sigilRingImage != null) sigilRingImage.color = new Color(dimCol.r, dimCol.g, dimCol.b, 0.35f);
+                if (sigilPipBgImage != null) sigilPipBgImage.color = new Color(0.08f, 0.09f, 0.14f, 0.92f);
+                if (sigilText != null)
+                {
+                    sigilText.text = glyph;
+                    sigilText.color = new Color(0.92f, 0.92f, 0.96f, 0.85f);
+                }
             }
         }
 
@@ -525,10 +686,15 @@ namespace MonsterCardGame.UI
             currentMonsterInstance = null;
             isHighlightedForSummon = false;
             isAbilityReady = false;
+            isSigilHovered = false;
             isSelectedOnBoard = false;
-            if (abilityButton != null)
+            if (auraRoot != null)
             {
-                abilityButton.gameObject.SetActive(false);
+                auraRoot.SetActive(false);
+            }
+            if (abilitySigilObj != null)
+            {
+                abilitySigilObj.SetActive(false);
             }
             if (fieldCardToken != null)
             {
@@ -545,6 +711,21 @@ namespace MonsterCardGame.UI
             }
             var runeGlyph = transform.Find("RuneGlyph");
             if (runeGlyph != null) runeGlyph.gameObject.SetActive(true);
+        }
+    }
+
+    public class AbilitySigilHoverRelay : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
+    {
+        public SlotView ownerSlot;
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            if (ownerSlot != null) ownerSlot.SetSigilHovered(true);
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            if (ownerSlot != null) ownerSlot.SetSigilHovered(false);
         }
     }
 }

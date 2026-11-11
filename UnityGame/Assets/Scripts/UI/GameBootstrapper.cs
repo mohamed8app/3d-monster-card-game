@@ -23,6 +23,10 @@ namespace MonsterCardGame.UI
         private static Sprite _enemySlotPedestalSprite;
         private static Sprite _summoningCircleSprite;
         private static Sprite _handTraySprite;
+        private static Sprite _elementalAuraHaloSprite;
+        private static Sprite _abilityFlashCoreSprite;
+        private static Sprite _abilityShockwaveRingSprite;
+        private static Sprite _crossedSwordsSprite;
 
         public static Font GetFont()
         {
@@ -55,11 +59,41 @@ namespace MonsterCardGame.UI
             return defaultFont;
         }
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void ApplyStartupFullscreen()
+        {
+            EnsureFullScreenDisplay();
+        }
+
+        public static void EnsureFullScreenDisplay()
+        {
+            #if !UNITY_EDITOR
+            int nativeW = (Display.main != null && Display.main.systemWidth > 0)
+                ? Display.main.systemWidth
+                : Screen.currentResolution.width;
+            int nativeH = (Display.main != null && Display.main.systemHeight > 0)
+                ? Display.main.systemHeight
+                : Screen.currentResolution.height;
+
+            if (nativeW <= 0 || nativeH <= 0)
+            {
+                nativeW = 1920;
+                nativeH = 1080;
+            }
+
+            Screen.fullScreenMode = FullScreenMode.FullScreenWindow;
+            Screen.fullScreen = true;
+            Screen.SetResolution(nativeW, nativeH, FullScreenMode.FullScreenWindow);
+            #endif
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         public static void AutoInitializeGame()
         {
             if (Application.isPlaying)
             {
+                EnsureFullScreenDisplay();
+
                 // Remove any pre-baked scene objects to ensure all frames, sprites, and UI elements are constructed freshly in memory
                 var oldGms = FindObjectsOfType<GameManager>();
                 for (int i = 0; i < oldGms.Length; i++)
@@ -193,6 +227,7 @@ namespace MonsterCardGame.UI
             var scaler = canvasObj.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920, 1080);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
             scaler.matchWidthOrHeight = 0.5f;
             scaler.dynamicPixelsPerUnit = 2.5f;
 
@@ -376,11 +411,10 @@ namespace MonsterCardGame.UI
                 new Color(0.48f, 0.90f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(300, 22));
             AddTextShadow(ui.detailMetaText);
 
-            // 4. Tactical Ability & Spell Effect Scroll Box (192 height, shrinks to 150 when Inspector Ability button is shown)
+            // 4. Tactical Ability & Spell Effect Scroll Box (192 height)
             var descBox = CreateOrnatePanel(detailsPanel.transform, "DescBox",
                 new Color(0.04f, 0.05f, 0.09f, 0.96f),
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -142), new Vector2(314, 192));
-            ui.detailDescBoxRect = descBox.GetComponent<RectTransform>();
 
             var descHeader = CreateText(descBox.transform, "DescBoxHeader", "─── ❖ TACTICAL ABILITY & EFFECT ❖ ───", 11,
                 new Color(0.95f, 0.80f, 0.40f, 0.90f), TextAnchor.MiddleCenter, new Vector2(0, -14), new Vector2(290, 18));
@@ -396,13 +430,6 @@ namespace MonsterCardGame.UI
             ui.detailDescText.rectTransform.offsetMax = new Vector2(-12, -26);
             ui.detailDescText.horizontalOverflow = HorizontalWrapMode.Wrap;
             ui.detailDescText.verticalOverflow = VerticalWrapMode.Truncate;
-
-            ui.inspectorActivateAbilityButton = CreateBeveledButton(detailsPanel.transform, "InspectorActivateAbilityBtn",
-                "⚡ Activate Special Ability",
-                new Color(0.08f, 0.56f, 0.88f, 0.98f), new Color(1f, 0.96f, 0.72f),
-                new Vector2(0, -225), new Vector2(314, 38), 13,
-                () => { if (BattleUIManager.Instance != null) BattleUIManager.Instance.OnActivateInspectedAbilityClicked(); });
-            ui.inspectorActivateAbilityButton.gameObject.SetActive(false);
 
             // 5. Bottom ATK / DEF Shields & Unit Status Badge
             var atkBadge = CreateOrnatePanel(detailsPanel.transform, "FullAtkBadge",
@@ -1356,6 +1383,231 @@ namespace MonsterCardGame.UI
             tex.Apply();
             _circleSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
             return _circleSprite;
+        }
+
+        public static Sprite GetElementalAuraHaloSprite()
+        {
+            if (_elementalAuraHaloSprite != null) return _elementalAuraHaloSprite;
+
+            int w = 192, h = 232;
+            Texture2D tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Bilinear;
+            float cx = (w - 1) * 0.5f;
+            float cy = (h - 1) * 0.5f;
+            float halfCardW = 72f;
+            float halfCardH = 90f;
+
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    float dx = Mathf.Abs(x - cx);
+                    float dy = Mathf.Abs(y - cy);
+
+                    // Signed distance outside the card frame rectangle
+                    float qx = Mathf.Max(dx - halfCardW, 0f);
+                    float qy = Mathf.Max(dy - halfCardH, 0f);
+                    float outDist = Mathf.Sqrt(qx * qx + qy * qy);
+
+                    if (outDist > 24f)
+                    {
+                        tex.SetPixel(x, y, Color.clear);
+                        continue;
+                    }
+
+                    float angle = Mathf.Atan2(y - cy, x - cx);
+                    float wisp = 0.82f + 0.18f * Mathf.Sin(angle * 10f + outDist * 0.25f);
+                    float glow = outDist <= 1.5f
+                        ? 0.92f
+                        : Mathf.Exp(-(outDist - 1.5f) * 0.145f) * wisp;
+
+                    float edgeFade = Mathf.Clamp01((24f - outDist) / 5f);
+                    float alpha = Mathf.Clamp01(glow * edgeFade);
+                    float whiteness = Mathf.Lerp(0.75f, 1.0f, Mathf.Exp(-outDist * 0.25f));
+                    tex.SetPixel(x, y, new Color(whiteness, whiteness, whiteness, alpha));
+                }
+            }
+
+            tex.Apply();
+            _elementalAuraHaloSprite = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f));
+            return _elementalAuraHaloSprite;
+        }
+
+        public static Sprite GetAbilityFlashCoreSprite()
+        {
+            if (_abilityFlashCoreSprite != null) return _abilityFlashCoreSprite;
+
+            int size = 96;
+            Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Bilinear;
+            float c = (size - 1) * 0.5f;
+            float maxR = size * 0.48f;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float nx = (x - c) / maxR;
+                    float ny = (y - c) / maxR;
+                    float r = Mathf.Sqrt(nx * nx + ny * ny);
+                    if (r > 1.05f)
+                    {
+                        tex.SetPixel(x, y, Color.clear);
+                        continue;
+                    }
+
+                    // Soft circular halo + sharp 4-point star flare + subtle diagonal rays
+                    float orb = Mathf.Exp(-r * r * 5.5f);
+                    float crossFlare = (Mathf.Exp(-Mathf.Abs(nx) * 14f) * Mathf.Exp(-r * 2.2f))
+                                     + (Mathf.Exp(-Mathf.Abs(ny) * 14f) * Mathf.Exp(-r * 2.2f));
+                    float diag1 = (nx + ny) * 0.7071f;
+                    float diag2 = (nx - ny) * 0.7071f;
+                    float diagFlare = 0.5f * ((Mathf.Exp(-Mathf.Abs(diag1) * 18f) * Mathf.Exp(-r * 3.0f))
+                                            + (Mathf.Exp(-Mathf.Abs(diag2) * 18f) * Mathf.Exp(-r * 3.0f)));
+
+                    float coreCircle = Mathf.Clamp01((0.46f - r) * 8f) * 0.75f;
+                    float intensity = Mathf.Clamp01(orb * 0.85f + crossFlare * 0.65f + diagFlare * 0.5f + coreCircle);
+                    float edgeFade = Mathf.Clamp01((1.02f - r) * 5f);
+                    float alpha = Mathf.Clamp01(intensity * edgeFade);
+                    float bright = Mathf.Lerp(0.85f, 1.0f, intensity);
+
+                    tex.SetPixel(x, y, new Color(bright, bright, bright, alpha));
+                }
+            }
+
+            tex.Apply();
+            _abilityFlashCoreSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+            return _abilityFlashCoreSprite;
+        }
+
+        public static Sprite GetAbilityShockwaveRingSprite()
+        {
+            if (_abilityShockwaveRingSprite != null) return _abilityShockwaveRingSprite;
+
+            int size = 128;
+            Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Bilinear;
+            float c = (size - 1) * 0.5f;
+            float maxR = size * 0.48f;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float nx = (x - c) / maxR;
+                    float ny = (y - c) / maxR;
+                    float r = Mathf.Sqrt(nx * nx + ny * ny);
+                    if (r > 1.0f)
+                    {
+                        tex.SetPixel(x, y, Color.clear);
+                        continue;
+                    }
+
+                    float ring1 = Mathf.Exp(-Mathf.Pow((r - 0.82f) * 9.5f, 2f));
+                    float ring2 = 0.45f * Mathf.Exp(-Mathf.Pow((r - 0.62f) * 12f, 2f));
+                    float alpha = Mathf.Clamp01(ring1 + ring2) * Mathf.Clamp01((1.0f - r) * 8f);
+                    tex.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
+                }
+            }
+
+            tex.Apply();
+            _abilityShockwaveRingSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+            return _abilityShockwaveRingSprite;
+        }
+
+        private static void EvalSwordShape(float u, float v, out float alpha, out float shade)
+        {
+            const float aa = 0.035f;
+            alpha = 0f;
+            shade = 0.9f;
+
+            // Blade (-0.26 to 0.84)
+            if (u >= -0.28f && u <= 0.88f)
+            {
+                float halfW = (u <= 0.56f) ? 0.088f : Mathf.Max(0f, 0.088f * (0.84f - u) / 0.28f);
+                float dBlade = halfW - v;
+                float a = Mathf.Clamp01((dBlade + aa * 0.5f) / aa);
+                if (a > alpha)
+                {
+                    alpha = a;
+                    shade = (v < 0.028f) ? 1.0f : 0.84f;
+                }
+            }
+
+            // Crossguard (-0.37 to -0.25)
+            float dGuard = Mathf.Min(Mathf.Min(u + 0.37f, -0.25f - u), 0.27f - v);
+            float ga = Mathf.Clamp01((dGuard + aa * 0.5f) / aa);
+            if (ga > alpha)
+            {
+                alpha = ga;
+                shade = 0.96f;
+            }
+
+            // Grip (-0.68 to -0.37)
+            float dGrip = Mathf.Min(Mathf.Min(u + 0.68f, -0.37f - u), 0.052f - v);
+            float ha = Mathf.Clamp01((dGrip + aa * 0.5f) / aa);
+            if (ha > alpha)
+            {
+                alpha = ha;
+                shade = 0.72f;
+            }
+
+            // Pommel at (-0.74, 0)
+            float dPommel = 0.092f - Mathf.Sqrt((u + 0.74f) * (u + 0.74f) + v * v);
+            float pa = Mathf.Clamp01((dPommel + aa * 0.5f) / aa);
+            if (pa > alpha)
+            {
+                alpha = pa;
+                shade = 0.95f;
+            }
+        }
+
+        public static Sprite GetCrossedSwordsSprite()
+        {
+            if (_crossedSwordsSprite != null) return _crossedSwordsSprite;
+
+            int size = 96;
+            Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Bilinear;
+            float c = (size - 1) * 0.5f;
+            float maxR = size * 0.46f;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float nx = (x - c) / maxR;
+                    float ny = (y - c) / maxR;
+
+                    // Sword 1: bottom-left -> top-right (+45 deg)
+                    float u1 = (nx + ny) * 0.7071f;
+                    float v1 = Mathf.Abs((-nx + ny) * 0.7071f);
+                    EvalSwordShape(u1, v1, out float a1, out float s1);
+
+                    // Sword 2: bottom-right -> top-left (-45 deg)
+                    float u2 = (-nx + ny) * 0.7071f;
+                    float v2 = Mathf.Abs((nx + ny) * 0.7071f);
+                    EvalSwordShape(u2, v2, out float a2, out float s2);
+
+                    // Subtle bevel overlap shadow where Sword 2 crosses Sword 1
+                    EvalSwordShape(u2, Mathf.Max(0f, v2 - 0.045f), out float a2Shadow, out float _);
+
+                    float outA = Mathf.Clamp01(a1 + a2 * (1f - a1));
+                    if (outA <= 0.005f)
+                    {
+                        tex.SetPixel(x, y, Color.clear);
+                        continue;
+                    }
+
+                    float s1Shadowed = s1 * Mathf.Lerp(1f, 0.45f, a2Shadow * (1f - a2));
+                    float outShade = Mathf.Lerp(s1Shadowed, s2, a2);
+                    tex.SetPixel(x, y, new Color(outShade, outShade * 0.98f, outShade * 0.92f, outA));
+                }
+            }
+
+            tex.Apply();
+            _crossedSwordsSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+            return _crossedSwordsSprite;
         }
 
         public static GameObject CreateCirclePanel(Transform parent, string name, Color color, Vector2 anchorMin, Vector2 anchorMax, Vector2 pos, Vector2 size)
