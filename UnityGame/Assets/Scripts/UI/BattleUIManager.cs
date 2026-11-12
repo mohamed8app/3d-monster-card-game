@@ -542,11 +542,6 @@ namespace MonsterCardGame.UI
                 glyph.raycastTarget = false;
             }
 
-            var frame = GameBootstrapper.CreateHollowOrnatePanel(cardObj.transform, "BackGoldRim",
-                new Color(0.92f, 0.78f, 0.38f, 0.90f), Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-            var frameImg = frame.GetComponent<Image>();
-            if (frameImg != null) frameImg.raycastTarget = false;
-
             return cardRootObj;
         }
 
