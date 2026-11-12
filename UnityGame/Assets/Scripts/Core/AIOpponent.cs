@@ -164,9 +164,12 @@ namespace MonsterCardGame.Core
                 if (card.cost <= aiPlayer.currentPower)
                 {
                     int bestSlot = FindBestSlotForCard(card);
-                    if (bestSlot != -1)
+                    if (bestSlot != -1 && aiPlayer.SummonMonster(card, bestSlot, currentTurn))
                     {
-                        aiPlayer.SummonMonster(card, bestSlot, currentTurn);
+                        if (MonsterCardGame.Audio.SoundManager.Instance != null)
+                        {
+                            MonsterCardGame.Audio.SoundManager.Instance.TryPlayMonsterSignatureClip(card, "summon");
+                        }
                     }
                 }
             }

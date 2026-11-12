@@ -183,15 +183,41 @@ namespace MonsterCardGame.Core
             currentTurn = 1;
             activeEnvironment = null;
 
-            // Fair starting Mana & Power = 3 so early random Monsters & Spells (Cost 1-3) are playable on Turn 1
-            humanPlayer.manaCapacity = 3;
-            humanPlayer.currentPower = 3;
+            // Fair starting Mana & Power = 7 so Card #15 (Cost 5) can be summoned + its Active Skill (Cost 2) tested immediately on Turn 1
+            humanPlayer.manaCapacity = 7;
+            humanPlayer.currentPower = 7;
             aiPlayer.manaCapacity = 3;
             aiPlayer.currentPower = 3;
 
             Debug.Log($"🎲 Epic Battle Started! Decks: {defaultDeckSize} unique cards each | Opening Hand: {openingHandCount} | Unlimited Scaling & Unseen Pity Active.");
 
             StartTurn();
+
+            // Place Monster Card #15 (Dragon) directly into opening hand slot 0 for immediate battle & skill audio testing without duplicating IDs
+            if (allMonsters != null)
+            {
+                var dragonProto = allMonsters.Find(m => m != null && m.id == 15);
+                if (dragonProto != null && !humanPlayer.hand.Exists(c => c != null && c.id == 15))
+                {
+                    humanPlayer.deck.RemoveAll(c => c != null && c.id == 15);
+                    if (humanPlayer.hand.Count > 0)
+                    {
+                        var displaced = humanPlayer.hand[0];
+                        if (displaced != null)
+                        {
+                            humanPlayer.drawnCardIdsThisMatch.Remove(displaced.id);
+                            humanPlayer.deck.Add(displaced);
+                            humanPlayer.ShuffleDeck();
+                        }
+                        humanPlayer.hand[0] = CloneMonsterCard(dragonProto);
+                    }
+                    else
+                    {
+                        humanPlayer.hand.Add(CloneMonsterCard(dragonProto));
+                    }
+                    humanPlayer.drawnCardIdsThisMatch.Add(15);
+                }
+            }
 
             if (BattleUIManager.Instance != null)
             {

@@ -1368,7 +1368,7 @@ namespace MonsterCardGame.UI
             if (gm == null || chosenCard == null) return;
 
             if (MonsterCardGame.Audio.SoundManager.Instance != null)
-                MonsterCardGame.Audio.SoundManager.Instance.PlayCardPlay();
+                MonsterCardGame.Audio.SoundManager.Instance.PlayMonsterSummon(chosenCard);
 
             LogCombatMessage($"✅ Summoned [{chosenCard.name}] to Slot {slotIndex}.");
             DeselectHandCards();
@@ -1445,7 +1445,7 @@ namespace MonsterCardGame.UI
             }
 
             if (MonsterCardGame.Audio.SoundManager.Instance != null)
-                MonsterCardGame.Audio.SoundManager.Instance.PlayCardAttack();
+                MonsterCardGame.Audio.SoundManager.Instance.PlayMonsterSkill(monster != null ? monster.data : null);
 
             LogCombatMessage(msg);
             if (monster != null)

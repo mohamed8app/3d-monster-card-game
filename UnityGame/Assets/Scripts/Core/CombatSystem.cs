@@ -466,7 +466,8 @@ namespace MonsterCardGame.Core
                      act.Contains("Bubble") || act.Contains("Purging Flame") || act.Contains("Energy Surge") ||
                      act.Contains("Hastening Breeze") || act.Contains("Arcane Time Warp") ||
                      act.Contains("Total Eclipse") || act.Contains("Destructive Ion Cannon") ||
-                     act.Contains("Grand Mana Blast") || act.Contains("Grand Thunderstorm"));
+                     act.Contains("Grand Mana Blast") || act.Contains("Grand Thunderstorm") ||
+                     act.Contains("Hell of Annihilation"));
         }
 
         private bool HasEmptyFlankSlot(PlayerState player)
@@ -625,6 +626,10 @@ namespace MonsterCardGame.Core
 
                 if (ActivateMonsterAbility(player, opponent, slot, out string msg))
                 {
+                    if (MonsterCardGame.Audio.SoundManager.Instance != null)
+                    {
+                        MonsterCardGame.Audio.SoundManager.Instance.TryPlayMonsterSignatureClip(m.data, "skill");
+                    }
                     if (BattleUIManager.Instance != null)
                     {
                         BattleUIManager.Instance.LogCombatMessage(msg);
@@ -769,8 +774,17 @@ namespace MonsterCardGame.Core
             // --- FIRE ---
             if (act.Contains("Hell of Annihilation"))
             {
-                foreach (var es in enemies)
-                    DealSpellOrSkillDamage(es.slotIndex, es.currentMonster, 25 + bonusEff, m, opponent, player, false, showVfx);
+                int dmg = 25 + bonusEff;
+                if (enemies.Count > 0)
+                {
+                    foreach (var es in enemies)
+                        DealSpellOrSkillDamage(es.slotIndex, es.currentMonster, dmg, m, opponent, player, false, showVfx);
+                }
+                else
+                {
+                    opponent.TakeLeaderDamage(dmg);
+                    if (showVfx) SpawnLeaderStatusVfx(oppIsHuman, $"-{dmg} 🔥", new Color(1f, 0.45f, 0.15f));
+                }
             }
             else if (act.Contains("Volcanic Eruption"))
             {
