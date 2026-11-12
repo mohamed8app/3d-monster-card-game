@@ -22,7 +22,7 @@ namespace MonsterCardGame.Data
             level = Mathf.Clamp(lvl, 1, 3);
             envLevel = level;
             buffedElement = elem;
-            id = 9988 + GetElementIndex(elem);
+            id = 440 + GetElementIndex(elem);
 
             SetLevelStats(level);
             SetupMatrix(elem);

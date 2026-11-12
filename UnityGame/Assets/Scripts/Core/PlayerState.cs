@@ -26,6 +26,7 @@ namespace MonsterCardGame.Core
         public int freeSkillBonus = 0;
 
         [Header("Card Collections")]
+        public int maxHandSize = 10;
         public List<CardData> deck = new List<CardData>();
         public List<CardData> hand = new List<CardData>();
         public List<CardData> graveyard = new List<CardData>();
@@ -33,11 +34,39 @@ namespace MonsterCardGame.Core
         [Header("6 Board Slots")]
         public BoardSlot[] slots = new BoardSlot[6];
 
+        // Non-repeating & escalating pity draw state
+        public readonly HashSet<int> drawnCardIdsThisMatch = new HashSet<int>();
+        private readonly Dictionary<int, int> cardTurnsWaiting = new Dictionary<int, int>();
+        private int consecutiveNonMonsterDraws = 0;
+        private int consecutiveMonsterDraws = 0;
+
+        public Func<PlayerState, List<CardData>> onDeckExhaustedRefill;
+        public Func<int, float> getCardDrawWeightMultiplier;
+        public Action<int> onCardDrawnCallback;
+
         public bool IsAlive => currentHp > 0;
 
         public void InitializeDeck(List<CardData> initialDeck)
         {
-            deck = new List<CardData>(initialDeck);
+            deck = new List<CardData>();
+            cardTurnsWaiting.Clear();
+            drawnCardIdsThisMatch.Clear();
+            consecutiveNonMonsterDraws = 0;
+            consecutiveMonsterDraws = 0;
+
+            var uniqueIds = new HashSet<int>();
+            if (initialDeck != null)
+            {
+                foreach (var c in initialDeck)
+                {
+                    if (c != null && uniqueIds.Add(c.id))
+                    {
+                        deck.Add(c);
+                        cardTurnsWaiting[c.id] = 0;
+                    }
+                }
+            }
+
             ShuffleDeck();
             hand.Clear();
             graveyard.Clear();
@@ -51,6 +80,30 @@ namespace MonsterCardGame.Core
             denyDrawSacTurns = 0;
             teamImmuneTurns = 0;
             freeSkillBonus = 0;
+        }
+
+        public void AddRefillCardsToDeck(List<CardData> refillCards)
+        {
+            if (refillCards == null || refillCards.Count == 0) return;
+
+            var existingInDeck = new HashSet<int>();
+            foreach (var c in deck)
+            {
+                if (c != null) existingInDeck.Add(c.id);
+            }
+
+            foreach (var c in refillCards)
+            {
+                if (c != null && existingInDeck.Add(c.id))
+                {
+                    deck.Add(c);
+                    if (!cardTurnsWaiting.ContainsKey(c.id))
+                    {
+                        cardTurnsWaiting[c.id] = 0;
+                    }
+                }
+            }
+            ShuffleDeck();
         }
 
         public void ShuffleDeck()
@@ -94,25 +147,57 @@ namespace MonsterCardGame.Core
 
         public bool DrawCard()
         {
+            if (deck.Count == 0 && onDeckExhaustedRefill != null)
+            {
+                var refill = onDeckExhaustedRefill.Invoke(this);
+                AddRefillCardsToDeck(refill);
+            }
+
             if (deck.Count > 0)
             {
-                var card = deck[0];
-                deck.RemoveAt(0);
+                int chosenIndex = SelectWeightedNextCardIndex();
+                var card = deck[chosenIndex];
+                deck.RemoveAt(chosenIndex);
+                cardTurnsWaiting.Remove(card.id);
 
-                if (hand.Count < 10)
+                // Escalate wait counters for all remaining cards in deck so unseen cards keep rising in chance
+                for (int i = 0; i < deck.Count; i++)
+                {
+                    var rem = deck[i];
+                    if (rem != null)
+                    {
+                        cardTurnsWaiting[rem.id] = cardTurnsWaiting.TryGetValue(rem.id, out int cur) ? cur + 1 : 1;
+                    }
+                }
+
+                drawnCardIdsThisMatch.Add(card.id);
+                if (card.cardType == CardType.Monster)
+                {
+                    consecutiveNonMonsterDraws = 0;
+                    consecutiveMonsterDraws++;
+                }
+                else
+                {
+                    consecutiveNonMonsterDraws++;
+                    consecutiveMonsterDraws = 0;
+                }
+
+                onCardDrawnCallback?.Invoke(card.id);
+
+                if (hand.Count < maxHandSize)
                 {
                     hand.Add(card);
                     if (MonsterCardGame.Audio.SoundManager.Instance != null)
                     {
                         MonsterCardGame.Audio.SoundManager.Instance.PlayCardDraw();
                     }
-                    Debug.Log($"[{playerName}] drew card #{card.name} ({card.cardType})");
+                    Debug.Log($"[{playerName}] drew card #{card.name} ({card.cardType}) | Deck left: {deck.Count}");
                     return true;
                 }
                 else
                 {
                     graveyard.Add(card);
-                    Debug.Log($"[{playerName}] Hand is full! Burned card: {card.name}");
+                    Debug.Log($"[{playerName}] Hand is full ({maxHandSize})! Moved card {card.name} to graveyard.");
                     return false;
                 }
             }
@@ -124,6 +209,76 @@ namespace MonsterCardGame.Core
                 Debug.LogWarning($"[{playerName}] Out of cards! Took {fatigueDmg} HP fatigue damage.");
                 return false;
             }
+        }
+
+        private int SelectWeightedNextCardIndex()
+        {
+            if (deck.Count <= 1) return 0;
+
+            bool isOpeningDraw = hand.Count < 6;
+            int openingMonsters = 0;
+            int openingLowCost = 0;
+            if (isOpeningDraw)
+            {
+                foreach (var hc in hand)
+                {
+                    if (hc == null) continue;
+                    if (hc.cardType == CardType.Monster) openingMonsters++;
+                    if (hc.cost <= 3) openingLowCost++;
+                }
+            }
+
+            float[] weights = new float[deck.Count];
+            float totalWeight = 0f;
+
+            for (int i = 0; i < deck.Count; i++)
+            {
+                var c = deck[i];
+                if (c == null)
+                {
+                    weights[i] = 0f;
+                    continue;
+                }
+
+                int waited = cardTurnsWaiting.TryGetValue(c.id, out int w) ? w : 0;
+                float waitBoost = 1.0f + waited * 0.40f;
+                float pityBoost = getCardDrawWeightMultiplier != null ? Mathf.Max(0.1f, getCardDrawWeightMultiplier(c.id)) : 1.0f;
+                float patternBoost = 1.0f;
+
+                if (isOpeningDraw)
+                {
+                    if (openingMonsters < 3 && c.cardType == CardType.Monster)
+                        patternBoost *= 3.2f;
+                    if (openingLowCost < 2 && c.cost <= 3)
+                        patternBoost *= 3.0f;
+                }
+                else
+                {
+                    if (c.cardType == CardType.Monster && consecutiveNonMonsterDraws >= 2)
+                        patternBoost *= 3.5f + (consecutiveNonMonsterDraws - 2) * 2.5f;
+                    else if (c.cardType != CardType.Monster && consecutiveMonsterDraws >= 4)
+                        patternBoost *= 1.8f;
+                }
+
+                // Strongly suppress already-drawn IDs within the match if any un-drawn card remains
+                float uniqueBoost = drawnCardIdsThisMatch.Contains(c.id) ? 0.01f : 1.0f;
+
+                float wVal = Mathf.Max(0.01f, waitBoost * pityBoost * patternBoost * uniqueBoost);
+                weights[i] = wVal;
+                totalWeight += wVal;
+            }
+
+            if (totalWeight <= 0f) return UnityEngine.Random.Range(0, deck.Count);
+
+            float roll = UnityEngine.Random.Range(0f, totalWeight);
+            float cumulative = 0f;
+            for (int i = 0; i < deck.Count; i++)
+            {
+                cumulative += weights[i];
+                if (roll <= cumulative) return i;
+            }
+
+            return deck.Count - 1;
         }
 
         public bool SacrificeCard(CardData cardToSacrifice)

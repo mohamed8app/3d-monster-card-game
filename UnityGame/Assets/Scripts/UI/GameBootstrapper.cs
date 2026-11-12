@@ -511,7 +511,7 @@ namespace MonsterCardGame.UI
                 new Color(1f, 0.88f, 0.48f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(276, 24));
             AddTextShadow(lhTxt);
 
-            ui.combatLogText = CreateText(logPanel.transform, "CombatLogText", "Match started with 500 HP and 10,000 tactical cards...", 11,
+            ui.combatLogText = CreateText(logPanel.transform, "CombatLogText", "Match started with 500 HP and 452 balanced tactical cards...", 11,
                 new Color(0.90f, 0.94f, 0.98f), TextAnchor.UpperLeft, new Vector2(0, -14), new Vector2(282, 160));
             ui.combatLogText.horizontalOverflow = HorizontalWrapMode.Wrap;
             ui.combatLogText.verticalOverflow = VerticalWrapMode.Truncate;

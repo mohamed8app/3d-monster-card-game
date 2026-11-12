@@ -313,7 +313,7 @@ namespace MonsterCardGame.UI
                 }
                 if (Mathf.Max(maxCap, power) > 8) crystals += "+";
 
-                playerPowerText.text = $"[ {crystals} ]  Power: {power}  |  Mana: {maxCap} (∞)";
+                playerPowerText.text = $"[ {crystals} ]  Power: {power}  |  Mana: {maxCap} (∞)  |  Deck: {gm.humanPlayer.deck.Count}";
             }
 
             // 3. Turn Indicator
@@ -476,6 +476,13 @@ namespace MonsterCardGame.UI
                 Destroy(child.gameObject);
             }
 
+            var layout = playerHandContainer.GetComponent<HorizontalLayoutGroup>();
+            if (layout != null)
+            {
+                int handCount = gm.humanPlayer.hand != null ? gm.humanPlayer.hand.Count : 0;
+                layout.spacing = handCount >= 8 ? 10f : (handCount >= 7 ? 18f : 30f);
+            }
+
             var mainCanvas = GetComponentInParent<Canvas>();
             foreach (var card in gm.humanPlayer.hand)
             {
@@ -502,7 +509,7 @@ namespace MonsterCardGame.UI
             int handCount = gm.aiPlayer.hand.Count;
             if (enemyHandCountText != null)
             {
-                enemyHandCountText.text = $"🎴 Enemy Hand: {handCount} Hidden Cards";
+                enemyHandCountText.text = $"🎴 Enemy Hand: {handCount}  |  Deck: {gm.aiPlayer.deck.Count}";
             }
 
             for (int i = 0; i < handCount; i++)
@@ -595,6 +602,11 @@ namespace MonsterCardGame.UI
                 {
                     artImg.sprite = customArt;
                     artImg.color = Color.white;
+                    if (MonsterArtLoader.HasStandby25DAssets(card))
+                    {
+                        var handStandby = artObj.AddComponent<MonsterStandbyAnimator>();
+                        handStandby.Configure(card, false);
+                    }
                 }
                 else
                 {
@@ -667,59 +679,120 @@ namespace MonsterCardGame.UI
             }
             else if (card.cardType == CardType.Spell)
             {
-                if (customArt != null)
+                Sprite scrollSprite = MonsterArtLoader.GetSpellScrollSprite();
+                var cardImg = cardObj.GetComponent<Image>();
+
+                if (scrollSprite != null && cardImg != null)
                 {
-                    var artObj = new GameObject("CardArt");
-                    artObj.transform.SetParent(cardObj.transform, false);
-                    var rectArt = artObj.AddComponent<RectTransform>();
-                    rectArt.anchorMin = Vector2.zero;
-                    rectArt.anchorMax = Vector2.one;
-                    rectArt.sizeDelta = Vector2.zero;
-                    rectArt.anchoredPosition = Vector2.zero;
-                    var artImg = artObj.AddComponent<Image>();
-                    artImg.sprite = customArt;
-                    artImg.color = Color.white;
-                    artImg.raycastTarget = false;
+                    cardImg.sprite = scrollSprite;
+                    cardImg.color = Color.white;
+                    cardImg.preserveAspect = false;
+                    outline.enabled = false;
+
+                    // Top-Center Cost Number inside the Sapphire Scroll Medallion
+                    var txtCost = GameBootstrapper.CreateText(cardObj.transform, "CostText", card.cost.ToString(), 14,
+                        new Color(1f, 0.96f, 0.72f), TextAnchor.MiddleCenter, new Vector2(0f, -9.5f), new Vector2(28f, 22f));
+                    txtCost.rectTransform.anchorMin = new Vector2(0.5f, 1f);
+                    txtCost.rectTransform.anchorMax = new Vector2(0.5f, 1f);
+                    txtCost.rectTransform.anchoredPosition = new Vector2(0f, -9.5f);
+                    txtCost.fontStyle = FontStyle.Bold;
+                    txtCost.raycastTarget = false;
+                    GameBootstrapper.AddTextShadow(txtCost);
+
+                    // Full-parchment antique grimoire spell manuscript filling the open scroll
+                    if (customArt != null)
+                    {
+                        var artObj = new GameObject("CardArt");
+                        artObj.transform.SetParent(cardObj.transform, false);
+                        var rectArt = artObj.AddComponent<RectTransform>();
+                        rectArt.anchorMin = new Vector2(0.5f, 0.5f);
+                        rectArt.anchorMax = new Vector2(0.5f, 0.5f);
+                        rectArt.sizeDelta = new Vector2(94f, 114f);
+                        rectArt.anchoredPosition = new Vector2(0f, 4f);
+                        var artImg = artObj.AddComponent<Image>();
+                        artImg.sprite = customArt;
+                        artImg.preserveAspect = true;
+                        artImg.color = Color.white;
+                        artImg.raycastTarget = false;
+                    }
+                    else
+                    {
+                        var runeTxt = GameBootstrapper.CreateText(cardObj.transform, "SpellIdCenter", $"🔮\n#{card.name}", 20,
+                            new Color(0.24f, 0.14f, 0.34f), TextAnchor.MiddleCenter, new Vector2(0f, 10f), new Vector2(94f, 64f));
+                        runeTxt.fontStyle = FontStyle.Bold;
+                        runeTxt.raycastTarget = false;
+                    }
+
+                    // Clean antique sepia ink inscription tucked cleanly above lower wood roller
+                    var txtName = GameBootstrapper.CreateText(cardObj.transform, "NameText", $"#{card.name} • T{Mathf.Max(1, card.tier_num)}", 10,
+                        new Color(0.20f, 0.10f, 0.04f), TextAnchor.MiddleCenter, new Vector2(0f, -57f), new Vector2(94f, 13f));
+                    txtName.fontStyle = FontStyle.Bold;
+                    txtName.raycastTarget = false;
+
+                    string shortRole = string.IsNullOrEmpty(card.role)
+                        ? "Tactical Spell"
+                        : card.role.Replace(" Spell", "").Trim();
+                    var txtAction = GameBootstrapper.CreateText(cardObj.transform, "ActionText", shortRole, 9,
+                        new Color(0.32f, 0.16f, 0.07f), TextAnchor.MiddleCenter, new Vector2(0f, -65.5f), new Vector2(94f, 12f));
+                    txtAction.fontStyle = FontStyle.Bold;
+                    txtAction.raycastTarget = false;
                 }
-
-                var costCircle = GameBootstrapper.CreateCirclePanel(cardObj.transform, "CostCircle", new Color(0.10f, 0.28f, 0.65f, 0.96f),
-                    new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-18, -18), new Vector2(32, 32));
-                var costOutline = costCircle.AddComponent<Outline>();
-                costOutline.effectColor = new Color(0.95f, 0.75f, 0.35f, 1f);
-                costOutline.effectDistance = new Vector2(1.5f, 1.5f);
-                var txtCost = GameBootstrapper.CreateText(costCircle.transform, "CostText", card.cost.ToString(), 16,
-                    new Color(1f, 0.95f, 0.70f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(32, 32));
-                txtCost.fontStyle = FontStyle.Bold;
-                txtCost.raycastTarget = false;
-
-                if (customArt == null)
+                else
                 {
-                    var iconObj = GameBootstrapper.CreateText(cardObj.transform, "SpellIdCenter", card.name, 26,
-                        new Color(1f, 0.9f, 0.35f), TextAnchor.MiddleCenter, new Vector2(0, 26), new Vector2(124, 42));
-                    iconObj.fontStyle = FontStyle.Bold;
-                    iconObj.raycastTarget = false;
+                    if (customArt != null)
+                    {
+                        var artObj = new GameObject("CardArt");
+                        artObj.transform.SetParent(cardObj.transform, false);
+                        var rectArt = artObj.AddComponent<RectTransform>();
+                        rectArt.anchorMin = Vector2.zero;
+                        rectArt.anchorMax = Vector2.one;
+                        rectArt.sizeDelta = Vector2.zero;
+                        rectArt.anchoredPosition = Vector2.zero;
+                        var artImg = artObj.AddComponent<Image>();
+                        artImg.sprite = customArt;
+                        artImg.color = Color.white;
+                        artImg.raycastTarget = false;
+                    }
+
+                    var costCircle = GameBootstrapper.CreateCirclePanel(cardObj.transform, "CostCircle", new Color(0.10f, 0.28f, 0.65f, 0.96f),
+                        new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-18, -18), new Vector2(32, 32));
+                    var costOutline = costCircle.AddComponent<Outline>();
+                    costOutline.effectColor = new Color(0.95f, 0.75f, 0.35f, 1f);
+                    costOutline.effectDistance = new Vector2(1.5f, 1.5f);
+                    var txtCost = GameBootstrapper.CreateText(costCircle.transform, "CostText", card.cost.ToString(), 16,
+                        new Color(1f, 0.95f, 0.70f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(32, 32));
+                    txtCost.fontStyle = FontStyle.Bold;
+                    txtCost.raycastTarget = false;
+
+                    if (customArt == null)
+                    {
+                        var iconObj = GameBootstrapper.CreateText(cardObj.transform, "SpellIdCenter", card.name, 26,
+                            new Color(1f, 0.9f, 0.35f), TextAnchor.MiddleCenter, new Vector2(0, 26), new Vector2(124, 42));
+                        iconObj.fontStyle = FontStyle.Bold;
+                        iconObj.raycastTarget = false;
+                    }
+
+                    var namePanel = GameBootstrapper.CreatePanel(cardObj.transform, "NamePlate", new Color(0.18f, 0.12f, 0.28f, 0.92f),
+                        new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -10), new Vector2(130, 22));
+                    var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", $"{card.name} • T{Mathf.Max(1, card.tier_num)}", 12,
+                        new Color(1f, 0.9f, 0.4f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(126, 22));
+                    txtName.fontStyle = FontStyle.Bold;
+                    txtName.raycastTarget = false;
+
+                    var descPanel = GameBootstrapper.CreatePanel(cardObj.transform, "DescPanel", new Color(0.06f, 0.05f, 0.10f, 0.85f),
+                        new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -44), new Vector2(130, 42));
+                    var txtDesc = GameBootstrapper.CreateText(descPanel.transform, "DescText", card.description, 11,
+                        new Color(0.92f, 0.92f, 0.96f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(126, 40));
+                    txtDesc.fontStyle = FontStyle.Bold;
+                    txtDesc.raycastTarget = false;
+
+                    var actionBadge = GameBootstrapper.CreatePanel(cardObj.transform, "ActionBadge", new Color(0.45f, 0.20f, 0.65f, 0.95f),
+                        new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -74), new Vector2(124, 20));
+                    var txtAction = GameBootstrapper.CreateText(actionBadge.transform, "ActionText", string.IsNullOrEmpty(card.role) ? "🔮 Tactical Spell" : card.role, 10,
+                        Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(120, 18));
+                    txtAction.fontStyle = FontStyle.Bold;
+                    txtAction.raycastTarget = false;
                 }
-
-                var namePanel = GameBootstrapper.CreatePanel(cardObj.transform, "NamePlate", new Color(0.18f, 0.12f, 0.28f, 0.92f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -10), new Vector2(130, 22));
-                var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", $"{card.name} • T{Mathf.Max(1, card.tier_num)}", 12,
-                    new Color(1f, 0.9f, 0.4f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(126, 22));
-                txtName.fontStyle = FontStyle.Bold;
-                txtName.raycastTarget = false;
-
-                var descPanel = GameBootstrapper.CreatePanel(cardObj.transform, "DescPanel", new Color(0.06f, 0.05f, 0.10f, 0.85f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -44), new Vector2(130, 42));
-                var txtDesc = GameBootstrapper.CreateText(descPanel.transform, "DescText", card.description, 11,
-                    new Color(0.92f, 0.92f, 0.96f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(126, 40));
-                txtDesc.fontStyle = FontStyle.Bold;
-                txtDesc.raycastTarget = false;
-
-                var actionBadge = GameBootstrapper.CreatePanel(cardObj.transform, "ActionBadge", new Color(0.45f, 0.20f, 0.65f, 0.95f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -74), new Vector2(124, 20));
-                var txtAction = GameBootstrapper.CreateText(actionBadge.transform, "ActionText", string.IsNullOrEmpty(card.role) ? "🔮 Tactical Spell" : card.role, 10,
-                    Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(120, 18));
-                txtAction.fontStyle = FontStyle.Bold;
-                txtAction.raycastTarget = false;
             }
             else if (card.cardType == CardType.Environment)
             {
@@ -788,22 +861,99 @@ namespace MonsterCardGame.UI
             detailCardArt.gameObject.SetActive(true);
 
             var numTr = detailCardArt.transform.Find("DetailBigNumber");
-            if (customArt != null)
+            var spellSymTr = detailCardArt.transform.Find("InspectorSpellSymbol");
+            var detailStandby = detailCardArt.GetComponent<MonsterStandbyAnimator>();
+
+            if (data.cardType == CardType.Spell)
+            {
+                if (detailStandby != null) detailStandby.ClearStandby();
+                Sprite scrollSprite = MonsterArtLoader.GetSpellScrollSprite();
+                if (scrollSprite != null)
+                {
+                    detailCardArt.sprite = scrollSprite;
+                    detailCardArt.color = Color.white;
+                    detailCardArt.preserveAspect = true;
+
+                    if (customArt != null)
+                    {
+                        Image symImg;
+                        RectTransform symRect;
+                        if (spellSymTr == null)
+                        {
+                            var symObj = new GameObject("InspectorSpellSymbol");
+                            symObj.transform.SetParent(detailCardArt.transform, false);
+                            symRect = symObj.AddComponent<RectTransform>();
+                            symImg = symObj.AddComponent<Image>();
+                            symImg.raycastTarget = false;
+                        }
+                        else
+                        {
+                            spellSymTr.gameObject.SetActive(true);
+                            symRect = spellSymTr.GetComponent<RectTransform>();
+                            symImg = spellSymTr.GetComponent<Image>();
+                        }
+                        if (symRect != null)
+                        {
+                            symRect.anchorMin = new Vector2(0.5f, 0.5f);
+                            symRect.anchorMax = new Vector2(0.5f, 0.5f);
+                            symRect.sizeDelta = new Vector2(126f, 168f);
+                            symRect.anchoredPosition = new Vector2(0f, -3f);
+                        }
+                        if (symImg != null)
+                        {
+                            symImg.sprite = customArt;
+                            symImg.preserveAspect = true;
+                            symImg.color = Color.white;
+                        }
+                        if (numTr != null) numTr.gameObject.SetActive(false);
+                        return;
+                    }
+                    else
+                    {
+                        if (spellSymTr != null) spellSymTr.gameObject.SetActive(false);
+                    }
+                }
+            }
+            else
+            {
+                if (spellSymTr != null) spellSymTr.gameObject.SetActive(false);
+                detailCardArt.preserveAspect = false;
+            }
+
+            if (customArt != null && data.cardType != CardType.Spell)
             {
                 detailCardArt.sprite = customArt;
                 detailCardArt.color = Color.white;
+                if (MonsterArtLoader.HasStandby25DAssets(data))
+                {
+                    if (detailStandby == null) detailStandby = detailCardArt.gameObject.AddComponent<MonsterStandbyAnimator>();
+                    detailStandby.Configure(data, true);
+                }
+                else if (detailStandby != null)
+                {
+                    detailStandby.ClearStandby();
+                }
                 if (numTr != null) numTr.gameObject.SetActive(false);
                 return;
             }
+            if (detailStandby != null) detailStandby.ClearStandby();
 
-            detailCardArt.sprite = null;
-            detailCardArt.color = MonsterArtLoader.GetEnvironmentAtmosphereColor(data.element);
+            bool hasScrollShown = (data.cardType == CardType.Spell && detailCardArt.sprite != null);
+            if (!hasScrollShown)
+            {
+                detailCardArt.sprite = null;
+                detailCardArt.color = MonsterArtLoader.GetEnvironmentAtmosphereColor(data.element);
+            }
+
+            Color textCol = hasScrollShown
+                ? new Color(0.22f, 0.12f, 0.05f)
+                : MonsterArtLoader.GetElementColor(data.element);
 
             Text numTxt;
             if (numTr == null)
             {
                 numTxt = GameBootstrapper.CreateText(detailCardArt.transform, "DetailBigNumber", data.name, 46,
-                    MonsterArtLoader.GetElementColor(data.element), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(240, 120));
+                    textCol, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(240, 120));
                 numTxt.fontStyle = FontStyle.Bold;
                 numTxt.raycastTarget = false;
             }
@@ -814,7 +964,7 @@ namespace MonsterCardGame.UI
                 if (numTxt != null)
                 {
                     numTxt.text = data.name;
-                    numTxt.color = MonsterArtLoader.GetElementColor(data.element);
+                    numTxt.color = textCol;
                 }
             }
         }

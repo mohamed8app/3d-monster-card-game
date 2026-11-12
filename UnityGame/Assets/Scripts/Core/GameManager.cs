@@ -35,9 +35,20 @@ namespace MonsterCardGame.Core
         [Header("Match Statistics")]
         public int playerSpellsCastCount = 0;
 
-        [Header("Database (10,000 Cards: 7,200 Monsters + 2,788 Spells + 12 Environments)")]
+        [Header("Deck & Pity Draw Rules")]
+        public int defaultDeckSize = 50;
+        public int openingHandCount = 6;
+
+        [Header("Database (452 Cards: 240 Monsters + 200 Spells + 12 Environments)")]
         public TextAsset monstersJsonFile;
         public List<MonsterData> allMonsters = new List<MonsterData>();
+
+        // Persistent Pity Tracker so cards not drawn yet climb in probability across draws & matches
+        private const string PityPrefsKey = "DeckGame_CardPityStats_v1";
+        private readonly Dictionary<int, int> cardSeenCount = new Dictionary<int, int>();
+        private readonly Dictionary<int, int> cardMissedDraws = new Dictionary<int, int>();
+        private readonly List<int> allCatalogIds = new List<int>();
+        private int pityDirtyCounter = 0;
 
         private void Awake()
         {
@@ -47,12 +58,20 @@ namespace MonsterCardGame.Core
 
         private void OnDestroy()
         {
+            SaveCardPityStats();
             if (Instance == this) Instance = null;
+        }
+
+        private void OnApplicationQuit()
+        {
+            SaveCardPityStats();
         }
 
         private void Start()
         {
             LoadMonsterDatabase();
+            BuildCatalogIdIndex();
+            LoadCardPityStats();
             StartGame();
         }
 
@@ -103,12 +122,13 @@ namespace MonsterCardGame.Core
                         {
                             c.cardType = CardType.Spell;
                             c.name = c.id.ToString();
+                            SpellDatabase.NormalizeSpellMetadata(c);
                             allSpells.Add(c);
                         }
                     }
 
                     SpellDatabase.SetSpellsFromDatabase(allSpells);
-                    Debug.Log($"✅ Loaded 10,000-Card Database: {allMonsters.Count} Monsters + {allSpells.Count} Tactical Spells!");
+                    Debug.Log($"✅ Loaded 452-Card Balanced Database: {allMonsters.Count} Monsters + {allSpells.Count} Tactical Spells!");
                     return;
                 }
             }
@@ -135,171 +155,141 @@ namespace MonsterCardGame.Core
             }
         }
 
-        private List<CardData> GetCustomArtPriorityCards()
-        {
-            var result = new List<CardData>();
-            HashSet<int> customArtIds = MonsterArtLoader.GetAvailableCustomArtCardIds();
-            if (customArtIds == null || customArtIds.Count == 0) return result;
-
-            var addedIds = new HashSet<int>();
-
-            // 1. Prioritize all monsters that have custom artwork files
-            if (allMonsters != null)
-            {
-                foreach (var m in allMonsters)
-                {
-                    if (m != null && customArtIds.Contains(m.id) && addedIds.Add(m.id))
-                    {
-                        result.Add(m);
-                    }
-                }
-            }
-
-            // 2. Also include any spells that have custom artwork files
-            var allSpells = SpellDatabase.GetAllSpells();
-            if (allSpells != null)
-            {
-                foreach (var sp in allSpells)
-                {
-                    if (sp != null && customArtIds.Contains(sp.id) && addedIds.Add(sp.id))
-                    {
-                        result.Add(sp);
-                    }
-                }
-            }
-
-            // Showcase elemental variety: prioritize distinct elements first (Ice, Water, Fire)
-            var curatedFirst = new int[] { 1201, 1194, 611, 599, 15, 13 };
-            var sortedResult = new List<CardData>();
-            foreach (int preferredId in curatedFirst)
-            {
-                var match = result.Find(c => c != null && c.id == preferredId);
-                if (match != null)
-                {
-                    sortedResult.Add(match);
-                    result.Remove(match);
-                }
-            }
-            sortedResult.AddRange(result);
-            return sortedResult;
-        }
-
         public void StartGame()
         {
-            var deckA = GenerateDeck(30);
-            var deckB = GenerateDeck(30);
+            var deckA = GenerateDeck(defaultDeckSize);
+            var deckB = GenerateDeck(defaultDeckSize);
 
             humanPlayer.InitializeDeck(deckA);
             aiPlayer.InitializeDeck(deckB);
 
-            for (int i = 0; i < 5; i++)
+            humanPlayer.onDeckExhaustedRefill = RefillPlayerDeck;
+            humanPlayer.getCardDrawWeightMultiplier = GetCardPityWeight;
+            humanPlayer.onCardDrawnCallback = RecordCardDrawnForPity;
+
+            aiPlayer.onDeckExhaustedRefill = RefillPlayerDeck;
+            aiPlayer.getCardDrawWeightMultiplier = GetCardPityWeight;
+            aiPlayer.onCardDrawnCallback = null;
+
+            // Draw 5 pre-turn cards; StartTurn() draws the 6th card on Turn 1 -> 6 random opening cards
+            int preTurnDraws = Mathf.Max(0, openingHandCount - 1);
+            for (int i = 0; i < preTurnDraws; i++)
             {
                 humanPlayer.DrawCard();
                 aiPlayer.DrawCard();
             }
 
-            // Automatically detect ALL cards/monsters that have custom artwork and prioritize them in the opening hand & top of deck
-            List<CardData> priorityArtCards = GetCustomArtPriorityCards();
-
             isPlayerTurn = true;
             currentTurn = 1;
             activeEnvironment = null;
 
-            int maxPriorityCost = 0;
-            for (int i = 0; i < Mathf.Min(priorityArtCards.Count, 6); i++)
-            {
-                if (priorityArtCards[i] != null && priorityArtCards[i].cost > maxPriorityCost)
-                {
-                    maxPriorityCost = priorityArtCards[i].cost;
-                }
-            }
+            // Fair starting Mana & Power = 3 so early random Monsters & Spells (Cost 1-3) are playable on Turn 1
+            humanPlayer.manaCapacity = 3;
+            humanPlayer.currentPower = 3;
+            aiPlayer.manaCapacity = 3;
+            aiPlayer.currentPower = 3;
 
-            if (maxPriorityCost > 0)
-            {
-                humanPlayer.manaCapacity = Mathf.Max(humanPlayer.manaCapacity, maxPriorityCost);
-                humanPlayer.currentPower = humanPlayer.manaCapacity;
-            }
-
-            Debug.Log($"🎲 Epic Battle Started (Unlimited Mana & Power ∞)! Custom Art Priority Cards Found: {priorityArtCards.Count}");
+            Debug.Log($"🎲 Epic Battle Started! Decks: {defaultDeckSize} unique cards each | Opening Hand: {openingHandCount} | Unlimited Scaling & Unseen Pity Active.");
 
             StartTurn();
-
-            if (priorityArtCards.Count > 0)
-            {
-                // Place up to 5 custom-art cards directly in the opening hand, and any remaining at top of deck
-                int handSlotsForArt = Mathf.Min(priorityArtCards.Count, 5);
-                for (int i = 0; i < handSlotsForArt; i++)
-                {
-                    CardData artCard = priorityArtCards[i];
-                    humanPlayer.hand.RemoveAll(c => c != null && c.id == artCard.id);
-                    if (i < humanPlayer.hand.Count)
-                    {
-                        humanPlayer.hand[i] = artCard;
-                    }
-                    else
-                    {
-                        humanPlayer.hand.Add(artCard);
-                    }
-                }
-
-                // Put any additional custom-art cards (6th+) at the very top of the player's draw deck
-                for (int i = priorityArtCards.Count - 1; i >= handSlotsForArt; i--)
-                {
-                    CardData artCard = priorityArtCards[i];
-                    humanPlayer.deck.RemoveAll(c => c != null && c.id == artCard.id);
-                    humanPlayer.deck.Insert(0, artCard);
-                }
-
-                // Equip AI player with custom-art monsters too so they appear on both battle lines
-                if (priorityArtCards.Count >= 2 && aiPlayer != null && aiPlayer.hand != null && aiPlayer.hand.Count >= 2)
-                {
-                    aiPlayer.hand[0] = priorityArtCards[0]; // #1201 Ice Titan
-                    aiPlayer.hand[1] = priorityArtCards[1]; // #1194 Water Beast
-                    aiPlayer.manaCapacity = Mathf.Max(aiPlayer.manaCapacity, maxPriorityCost);
-                    aiPlayer.currentPower = aiPlayer.manaCapacity;
-                }
-            }
-
-            // Always place Fire Environment card in hand slot 5 (6th card) so the user can easily test activating & upgrading Fire
-            var fireEnvCard = new EnvironmentCardData("Fire", 1);
-            if (humanPlayer.hand.Count > 5) humanPlayer.hand[5] = fireEnvCard;
-            else humanPlayer.hand.Add(fireEnvCard);
 
             if (BattleUIManager.Instance != null)
             {
                 BattleUIManager.Instance.UpdateUI();
-                if (priorityArtCards.Count > 0)
+                if (humanPlayer.hand != null && humanPlayer.hand.Count > 0)
                 {
-                    BattleUIManager.Instance.ShowCardDetails(priorityArtCards[0]);
+                    BattleUIManager.Instance.ShowCardDetails(humanPlayer.hand[0]);
                 }
             }
         }
 
-        public List<CardData> GenerateDeck(int count)
+        private List<CardData> RefillPlayerDeck(PlayerState player)
+        {
+            if (player == null) return new List<CardData>();
+
+            var exclude = new HashSet<int>(player.drawnCardIdsThisMatch);
+            foreach (var h in player.hand)
+            {
+                if (h != null) exclude.Add(h.id);
+            }
+            foreach (var s in player.slots)
+            {
+                if (s != null && s.IsOccupied) exclude.Add(s.currentMonster.data.id);
+            }
+
+            var refill = GenerateDeck(defaultDeckSize, exclude);
+            if (refill.Count < 10)
+            {
+                // All 452 cards have been seen in this marathon match — reset match cycle excluding only hand & board
+                player.drawnCardIdsThisMatch.Clear();
+                var activeOnly = new HashSet<int>();
+                foreach (var h in player.hand) if (h != null) activeOnly.Add(h.id);
+                foreach (var s in player.slots) if (s != null && s.IsOccupied) activeOnly.Add(s.currentMonster.data.id);
+                refill = GenerateDeck(defaultDeckSize, activeOnly);
+            }
+
+            if (BattleUIManager.Instance != null && refill.Count > 0)
+            {
+                BattleUIManager.Instance.LogCombatMessage($"🔄 [{player.playerName}] Deck cycled — {refill.Count} fresh unseen cards deployed!");
+            }
+            return refill;
+        }
+
+        public List<CardData> GenerateDeck(int count, HashSet<int> excludeIds = null)
         {
             var deck = new List<CardData>();
-            if (allMonsters == null || allMonsters.Count == 0) return deck;
+            if (allMonsters == null || allMonsters.Count == 0 || count <= 0) return deck;
 
-            // 1. 18 Random Monsters out of 7,200 (60% of deck)
-            int monsterCount = Mathf.Min(18, count);
-            for (int i = 0; i < monsterCount; i++)
+            var usedIds = excludeIds != null ? new HashSet<int>(excludeIds) : new HashSet<int>();
+
+            int monsterTarget = Mathf.RoundToInt(count * 0.60f); // 30 Monsters out of 50
+            int spellTarget = Mathf.RoundToInt(count * 0.34f);   // 17 Spells out of 50
+            int envTarget = Mathf.Max(0, count - monsterTarget - spellTarget); // 3 Environments out of 50
+
+            // 1. Stratified Monster selection without replacement (balanced early/mid/late costs + escalating unseen pity)
+            int earlyCount = Mathf.RoundToInt(monsterTarget * 0.35f);
+            int midCount = Mathf.RoundToInt(monsterTarget * 0.40f);
+            int lateCount = Mathf.Max(0, monsterTarget - earlyCount - midCount);
+
+            var earlyPool = allMonsters.FindAll(m => m != null && m.cost <= 3);
+            var midPool = allMonsters.FindAll(m => m != null && m.cost >= 4 && m.cost <= 5);
+            var latePool = allMonsters.FindAll(m => m != null && m.cost >= 6);
+
+            int pickedMonsters = 0;
+            pickedMonsters += PickWeightedWithoutReplacement(earlyPool, earlyCount, usedIds, m => m.id, CloneMonsterCard, deck);
+            pickedMonsters += PickWeightedWithoutReplacement(midPool, midCount, usedIds, m => m.id, CloneMonsterCard, deck);
+            pickedMonsters += PickWeightedWithoutReplacement(latePool, lateCount, usedIds, m => m.id, CloneMonsterCard, deck);
+
+            if (pickedMonsters < monsterTarget)
             {
-                var randomMonster = allMonsters[UnityEngine.Random.Range(0, allMonsters.Count)];
-                deck.Add(randomMonster);
+                PickWeightedWithoutReplacement(allMonsters, monsterTarget - pickedMonsters, usedIds, m => m.id, CloneMonsterCard, deck);
             }
 
-            // 2. 10 Intermediary Tactical Spells out of 2,788 (33.3% of deck)
-            for (int i = 0; i < 10; i++)
+            // 2. Diverse Spells without replacement
+            var spellPool = SpellDatabase.GetAllSpells();
+            if (spellPool != null && spellPool.Count > 0)
             {
-                deck.Add(SpellDatabase.GetRandomSpell());
+                PickWeightedWithoutReplacement(spellPool, spellTarget, usedIds, s => s.id, CloneSpellCard, deck);
             }
 
-            // 3. 2 Global Environment Cards out of 12 (6.7% of deck)
-            for (int i = 0; i < 2; i++)
+            // 3. Global Environment Cards without replacement
+            var envPool = EnvironmentCardData.GetAllEnvironments();
+            if (envPool != null && envPool.Count > 0)
             {
-                deck.Add(EnvironmentCardData.GetRandomEnvironment());
+                PickWeightedWithoutReplacement(envPool, envTarget, usedIds, e => e.id, e => new EnvironmentCardData(e.element, 1), deck);
             }
 
+            // Top up to requested count from any remaining unseen monsters/spells if a pool ran dry during marathon refills
+            if (deck.Count < count)
+            {
+                PickWeightedWithoutReplacement(allMonsters, count - deck.Count, usedIds, m => m.id, CloneMonsterCard, deck);
+            }
+            if (deck.Count < count && spellPool != null)
+            {
+                PickWeightedWithoutReplacement(spellPool, count - deck.Count, usedIds, s => s.id, CloneSpellCard, deck);
+            }
+
+            // Final Fisher-Yates shuffle
             for (int i = 0; i < deck.Count; i++)
             {
                 int r = UnityEngine.Random.Range(i, deck.Count);
@@ -309,6 +299,226 @@ namespace MonsterCardGame.Core
             }
 
             return deck;
+        }
+
+        private int PickWeightedWithoutReplacement<T>(
+            List<T> sourcePool,
+            int targetCount,
+            HashSet<int> usedIds,
+            Func<T, int> idSelector,
+            Func<T, CardData> cloneFactory,
+            List<CardData> destination)
+        {
+            if (sourcePool == null || sourcePool.Count == 0 || targetCount <= 0) return 0;
+
+            var candidates = new List<T>();
+            foreach (var item in sourcePool)
+            {
+                if (item == null) continue;
+                int id = idSelector(item);
+                if (!usedIds.Contains(id)) candidates.Add(item);
+            }
+
+            int added = 0;
+            while (added < targetCount && candidates.Count > 0)
+            {
+                float totalWeight = 0f;
+                for (int i = 0; i < candidates.Count; i++)
+                {
+                    totalWeight += GetCardPityWeight(idSelector(candidates[i]));
+                }
+
+                int pickedIdx = candidates.Count - 1;
+                if (totalWeight > 0f)
+                {
+                    float roll = UnityEngine.Random.Range(0f, totalWeight);
+                    float acc = 0f;
+                    for (int i = 0; i < candidates.Count; i++)
+                    {
+                        acc += GetCardPityWeight(idSelector(candidates[i]));
+                        if (roll <= acc)
+                        {
+                            pickedIdx = i;
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    pickedIdx = UnityEngine.Random.Range(0, candidates.Count);
+                }
+
+                var chosen = candidates[pickedIdx];
+                candidates.RemoveAt(pickedIdx);
+                int chosenId = idSelector(chosen);
+                if (usedIds.Add(chosenId))
+                {
+                    var cloned = cloneFactory(chosen);
+                    if (cloned != null)
+                    {
+                        destination.Add(cloned);
+                        added++;
+                    }
+                }
+            }
+            return added;
+        }
+
+        private static MonsterData CloneMonsterCard(MonsterData src)
+        {
+            return new MonsterData
+            {
+                id = src.id,
+                name = src.id.ToString(),
+                cardType = CardType.Monster,
+                card_type = "monster",
+                element = src.element,
+                group = src.group,
+                group_en = src.group_en,
+                role = src.role,
+                tier = src.tier,
+                tier_title = src.tier_title,
+                tier_num = src.tier_num,
+                cost = src.cost,
+                atk = src.atk,
+                def = src.def,
+                passives_text = src.passives_text,
+                active_skill = src.active_skill,
+                passives = src.passives != null ? new List<string>(src.passives) : new List<string>(),
+                active_skills = src.active_skills != null ? new List<string>(src.active_skills) : new List<string>(),
+                description = src.description,
+                p_score = src.p_score,
+                a_score = src.a_score,
+                win_rate = src.win_rate
+            };
+        }
+
+        private static CardData CloneSpellCard(CardData proto)
+        {
+            return new CardData
+            {
+                id = proto.id,
+                name = proto.id.ToString(),
+                cardType = CardType.Spell,
+                card_type = "spell",
+                element = proto.element,
+                group = proto.group,
+                role = proto.role,
+                tier = proto.tier_title,
+                tier_title = proto.tier_title,
+                tier_num = proto.tier_num,
+                cost = proto.cost,
+                spellType = proto.spellType,
+                spellPower = proto.spellPower,
+                active_skill = proto.active_skill,
+                description = proto.description
+            };
+        }
+
+        private void BuildCatalogIdIndex()
+        {
+            allCatalogIds.Clear();
+            var seen = new HashSet<int>();
+            if (allMonsters != null)
+            {
+                foreach (var m in allMonsters)
+                {
+                    if (m != null && seen.Add(m.id)) allCatalogIds.Add(m.id);
+                }
+            }
+            var spells = SpellDatabase.GetAllSpells();
+            if (spells != null)
+            {
+                foreach (var s in spells)
+                {
+                    if (s != null && seen.Add(s.id)) allCatalogIds.Add(s.id);
+                }
+            }
+            var envs = EnvironmentCardData.GetAllEnvironments();
+            foreach (var e in envs)
+            {
+                if (e != null && seen.Add(e.id)) allCatalogIds.Add(e.id);
+            }
+        }
+
+        public float GetCardPityWeight(int cardId)
+        {
+            int seen = cardSeenCount.TryGetValue(cardId, out int sc) ? sc : 0;
+            int missed = cardMissedDraws.TryGetValue(cardId, out int md) ? md : 0;
+
+            if (seen == 0)
+            {
+                // Unseen cards start at 5x baseline weight and climb every single missed draw
+                return 5.0f + missed * 1.0f;
+            }
+
+            return Mathf.Max(0.12f, (1.0f / (1.0f + seen * 1.5f)) + missed * 0.12f);
+        }
+
+        private void RecordCardDrawnForPity(int drawnId)
+        {
+            cardSeenCount[drawnId] = (cardSeenCount.TryGetValue(drawnId, out int curSeen) ? curSeen : 0) + 1;
+            cardMissedDraws[drawnId] = 0;
+
+            for (int i = 0; i < allCatalogIds.Count; i++)
+            {
+                int id = allCatalogIds[i];
+                if (id == drawnId) continue;
+                int prev = cardMissedDraws.TryGetValue(id, out int m) ? m : 0;
+                if (prev < 300) cardMissedDraws[id] = prev + 1;
+            }
+
+            pityDirtyCounter++;
+            if (pityDirtyCounter >= 6)
+            {
+                pityDirtyCounter = 0;
+                SaveCardPityStats();
+            }
+        }
+
+        private void LoadCardPityStats()
+        {
+            cardSeenCount.Clear();
+            cardMissedDraws.Clear();
+
+            string raw = PlayerPrefs.GetString(PityPrefsKey, string.Empty);
+            if (string.IsNullOrEmpty(raw)) return;
+
+            string[] entries = raw.Split(';');
+            foreach (string entry in entries)
+            {
+                if (string.IsNullOrEmpty(entry)) continue;
+                string[] parts = entry.Split(':');
+                if (parts.Length >= 3
+                    && int.TryParse(parts[0], out int id)
+                    && int.TryParse(parts[1], out int seen)
+                    && int.TryParse(parts[2], out int missed))
+                {
+                    cardSeenCount[id] = Mathf.Max(0, seen);
+                    cardMissedDraws[id] = Mathf.Clamp(missed, 0, 300);
+                }
+            }
+        }
+
+        private void SaveCardPityStats()
+        {
+            if (allCatalogIds.Count == 0 && cardSeenCount.Count == 0 && cardMissedDraws.Count == 0) return;
+
+            var sb = new System.Text.StringBuilder(2048);
+            var keys = new HashSet<int>(cardSeenCount.Keys);
+            foreach (int k in cardMissedDraws.Keys) keys.Add(k);
+
+            foreach (int id in keys)
+            {
+                int seen = cardSeenCount.TryGetValue(id, out int sc) ? sc : 0;
+                int missed = cardMissedDraws.TryGetValue(id, out int md) ? md : 0;
+                if (seen == 0 && missed == 0) continue;
+                if (sb.Length > 0) sb.Append(';');
+                sb.Append(id).Append(':').Append(seen).Append(':').Append(missed);
+            }
+
+            PlayerPrefs.SetString(PityPrefsKey, sb.ToString());
+            PlayerPrefs.Save();
         }
 
         public void StartTurn()
@@ -374,6 +584,11 @@ namespace MonsterCardGame.Core
             if (caster == humanPlayer)
             {
                 playerSpellsCastCount++;
+            }
+
+            if (MonsterCardGame.Audio.SoundManager.Instance != null)
+            {
+                MonsterCardGame.Audio.SoundManager.Instance.PlaySpellCast(spellCard);
             }
 
             if (BattleUIManager.Instance != null)

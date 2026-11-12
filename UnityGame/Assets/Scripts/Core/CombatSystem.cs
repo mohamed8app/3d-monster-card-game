@@ -1451,10 +1451,12 @@ namespace MonsterCardGame.Core
 
                     if (attackerSlotView != null)
                     {
+                        attackerSlotView.SetStandbyPaused(true);
                         yield return BattleAnimations.AnimateCardAttack(attackerSlotView.transform, targetPos, () =>
                         {
                             ApplyDamageImpact(attacker, attackerMonster, atkPower, slotIdx, defender, defenderSlot, defenderSlotView, defenderLeaderTransform, isDirectToLeader);
                         });
+                        attackerSlotView.SetStandbyPaused(false);
                     }
                     else
                     {

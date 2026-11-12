@@ -7,9 +7,9 @@ namespace MonsterCardGame.Data
     [Serializable]
     public enum CardType
     {
-        Monster = 0,        // Field Monster Card occupying a tactical slot (1 to 7200)
-        Spell = 1,          // Instant Intermediary Tactical Spell Card (7201 to 9988)
-        Environment = 2     // Global Battlefield Weather Card (9989 to 10000)
+        Monster = 0,        // Field Monster Card occupying a tactical slot (1 to 240: 20 per Element)
+        Spell = 1,          // Instant Intermediary Tactical Spell Card (241 to 440: 40 per School)
+        Environment = 2     // Global Battlefield Weather Card (441 to 452: 12 Elements)
     }
 
     [Serializable]
@@ -26,7 +26,7 @@ namespace MonsterCardGame.Data
         ExecuteStrongest = 8,
         ArcaneBlast = 9,
 
-        // 5 Intermediary Spell Specializations (2,788 Cards - 20 Tactical Templates):
+        // 5 Intermediary Spell Specializations (200 Cards - 20 Tactical Templates, 10 Cards Each):
         // 1. Link & Synergy Spell
         LinkWingsStrike = 10,
         CopySupportPassive = 11,

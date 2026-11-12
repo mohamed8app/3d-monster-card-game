@@ -35,6 +35,7 @@ namespace MonsterCardGame.UI
         private RectTransform hpBarFillRect;
         private Image hpBarFillImage;
         private CardPulseEffect pulseEffect;
+        private MonsterStandbyAnimator standbyAnimator;
         private GameObject auraRoot;
         private Image auraGlowImage;
         private Image auraRuneRingImage;
@@ -279,11 +280,18 @@ namespace MonsterCardGame.UI
                     tokenArtImage.sprite = customArt;
                     tokenArtImage.color = Color.white;
                     tokenArtImage.preserveAspect = false;
+                    if (standbyAnimator == null)
+                    {
+                        standbyAnimator = tokenArtImage.gameObject.GetComponent<MonsterStandbyAnimator>()
+                            ?? tokenArtImage.gameObject.AddComponent<MonsterStandbyAnimator>();
+                    }
+                    standbyAnimator.Configure(data, false);
                 }
                 else
                 {
                     tokenArtImage.sprite = null;
                     tokenArtImage.color = bgCol;
+                    standbyAnimator?.ClearStandby();
                 }
             }
 
@@ -617,6 +625,7 @@ namespace MonsterCardGame.UI
             tokenArtImage = artObj.AddComponent<Image>();
             tokenArtImage.color = new Color(0.08f, 0.10f, 0.16f, 0.96f);
             tokenArtImage.raycastTarget = false;
+            standbyAnimator = artObj.AddComponent<MonsterStandbyAnimator>();
 
             // Central Monster ID Text (shown when no art image exists)
             tokenNameText = GameBootstrapper.CreateText(fieldCardToken.transform, "MonsterIdText", "0", 34,
@@ -680,6 +689,14 @@ namespace MonsterCardGame.UI
             }
         }
 
+        public void SetStandbyPaused(bool paused)
+        {
+            if (standbyAnimator != null)
+            {
+                standbyAnimator.SetStandbyPaused(paused);
+            }
+        }
+
         public void ClearDisplay()
         {
             currentCardData = null;
@@ -688,6 +705,7 @@ namespace MonsterCardGame.UI
             isAbilityReady = false;
             isSigilHovered = false;
             isSelectedOnBoard = false;
+            standbyAnimator?.ClearStandby();
             if (auraRoot != null)
             {
                 auraRoot.SetActive(false);

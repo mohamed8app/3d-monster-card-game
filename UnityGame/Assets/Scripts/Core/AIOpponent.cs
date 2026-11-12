@@ -59,19 +59,45 @@ namespace MonsterCardGame.Core
             if (aiPlayer.hand.Count < 2 || aiPlayer.denyDrawSacTurns > 0)
                 return;
 
-            CardData bestSacrifice = null;
-            int highestCost = -1;
+            // Count affordable monsters & check whether AI actually needs mana or is overflowing hand
+            int affordableMonsters = 0;
+            bool hasHighCostMonster = false;
+            int emptySlots = 0;
+            foreach (var s in aiPlayer.slots)
+            {
+                if (s != null && !s.IsOccupied) emptySlots++;
+            }
+
+            CardData unplayableHighCost = null;
+            CardData extraNonMonster = null;
+            int highestUnplayableCost = -1;
 
             foreach (var card in aiPlayer.hand)
             {
-                if (card.cost > aiPlayer.currentPower + 1 && card.cost > highestCost)
+                if (card == null) continue;
+                if (card.cardType == CardType.Monster)
                 {
-                    highestCost = card.cost;
-                    bestSacrifice = card;
+                    if (card.cost <= aiPlayer.currentPower) affordableMonsters++;
+                    else hasHighCostMonster = true;
+                }
+                else if (card.cost > aiPlayer.currentPower + 1)
+                {
+                    extraNonMonster = card;
+                }
+
+                if (card.cost > aiPlayer.currentPower + 2 && card.cost > highestUnplayableCost)
+                {
+                    highestUnplayableCost = card.cost;
+                    unplayableHighCost = card;
                 }
             }
 
-            if (bestSacrifice == null && (aiPlayer.hand.Count >= 4 || aiPlayer.manaCapacity < 10))
+            // Only sacrifice when AI needs mana to play its hand or has plenty of cards (>= 6), instead of throwing away monsters every turn
+            bool needsMana = (hasHighCostMonster && affordableMonsters == 0) || (aiPlayer.manaCapacity < 8 && aiPlayer.hand.Count >= 5);
+            if (!needsMana && aiPlayer.hand.Count < 7) return;
+
+            CardData bestSacrifice = unplayableHighCost ?? extraNonMonster;
+            if (bestSacrifice == null && aiPlayer.hand.Count >= 5)
             {
                 bestSacrifice = aiPlayer.hand[aiPlayer.hand.Count - 1];
             }

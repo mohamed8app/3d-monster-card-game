@@ -56,6 +56,7 @@
     <Compile Include="Assets\Scripts\Utils\MonsterArtLoader.cs" />
     <Compile Include="Assets\Scripts\UI\GameBootstrapper.cs" />
     <Compile Include="Assets\Scripts\Utils\ArabicFixer.cs" />
+    <Compile Include="Assets\Scripts\UI\MonsterStandbyAnimator.cs" />
     <Compile Include="Assets\Scripts\UI\DraggableCard.cs" />
     <Compile Include="Assets\Scripts\Data\SpellDatabase.cs" />
     <Compile Include="Assets\Scripts\UI\CardPulseEffect.cs" />
@@ -75,6 +76,7 @@
     <Compile Include="Assets\Scripts\Core\CombatSystem.cs" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Assets\Resources\Shaders\MonsterStandby25D.shader" />
     <None Include="Assets\StreamingAssets\Environments\README_VIDEOS.txt" />
   </ItemGroup>
   <ItemGroup>

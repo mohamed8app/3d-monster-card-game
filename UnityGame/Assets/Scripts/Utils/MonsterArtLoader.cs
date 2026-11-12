@@ -15,6 +15,9 @@ namespace MonsterCardGame.Utils
         private static readonly Dictionary<string, Texture2D> textureCache = new Dictionary<string, Texture2D>();
         private static readonly Dictionary<string, Sprite> spriteCache = new Dictionary<string, Sprite>();
         private static readonly Dictionary<string, Sprite> inspectorSpriteCache = new Dictionary<string, Sprite>();
+        private static readonly Dictionary<string, List<Texture2D>> standbyFramesCache = new Dictionary<string, List<Texture2D>>();
+        private static readonly Dictionary<string, Texture2D> depthTextureCache = new Dictionary<string, Texture2D>();
+        private static readonly HashSet<string> missingTextureKeys = new HashSet<string>();
         private static readonly string[] SupportedExtensions = { ".png", ".jpg", ".jpeg", ".webp" };
         private static readonly string[] SubfolderCandidates = { "", "Monsters", "Spells", "Environments" };
 
@@ -39,7 +42,9 @@ namespace MonsterCardGame.Utils
             Texture2D tex = LoadCardTexture(key);
             if (tex != null)
             {
-                Sprite closeUp = CreateFocusedSpriteFromTexture(tex, 0.02f, 0.06f, 0.96f, 0.92f);
+                Sprite closeUp = (data != null && data.cardType == CardType.Spell)
+                    ? Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f)
+                    : CreateFocusedSpriteFromTexture(tex, 0.02f, 0.06f, 0.96f, 0.92f);
                 if (closeUp != null)
                 {
                     spriteCache[key] = closeUp;
@@ -63,7 +68,9 @@ namespace MonsterCardGame.Utils
             Texture2D tex = LoadCardTexture(key);
             if (tex != null)
             {
-                Sprite showcase = CreateFocusedSpriteFromTexture(tex, 0.02f, 0.22f, 0.96f, 0.75f);
+                Sprite showcase = (data != null && data.cardType == CardType.Spell)
+                    ? Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f)
+                    : CreateFocusedSpriteFromTexture(tex, 0.02f, 0.22f, 0.96f, 0.75f);
                 if (showcase != null)
                 {
                     inspectorSpriteCache[key] = showcase;
@@ -157,13 +164,26 @@ namespace MonsterCardGame.Utils
 
         private static Texture2D LoadCardTexture(string key)
         {
+            return LoadTextureByVariantKey(key, true);
+        }
+
+        private static Texture2D LoadTextureByVariantKey(string key, bool allowPrefixVariants)
+        {
+            if (string.IsNullOrEmpty(key)) return null;
+
             if (textureCache.TryGetValue(key, out Texture2D cachedTex) && cachedTex != null)
             {
                 return cachedTex;
             }
+            if (missingTextureKeys.Contains(key))
+            {
+                return null;
+            }
 
             string[] baseDirs = GetSearchDirectories();
-            string[] fileVariants = { key, $"monster_{key}", $"spell_{key}", $"card_{key}" };
+            string[] fileVariants = allowPrefixVariants
+                ? new[] { key, $"monster_{key}", $"spell_{key}", $"card_{key}" }
+                : new[] { key };
 
             foreach (string baseDir in baseDirs)
             {
@@ -207,6 +227,7 @@ namespace MonsterCardGame.Utils
                 Texture2D resTex = Resources.Load<Texture2D>(resPath);
                 if (resTex != null)
                 {
+                    resTex.wrapMode = TextureWrapMode.Clamp;
                     resTex.filterMode = FilterMode.Trilinear;
                     resTex.anisoLevel = 16;
                     resTex.mipMapBias = -0.65f;
@@ -215,7 +236,64 @@ namespace MonsterCardGame.Utils
                 }
             }
 
+            missingTextureKeys.Add(key);
             return null;
+        }
+
+        /// <summary>
+        /// Loads standby idle frame sequence ([key, key_idle_1, key_idle_2, ...]) if available.
+        /// </summary>
+        public static List<Texture2D> GetStandbyFrameTextures(CardData data)
+        {
+            string key = ResolveCardIdKey(data);
+            if (string.IsNullOrEmpty(key)) return null;
+
+            if (standbyFramesCache.TryGetValue(key, out var cachedList) && cachedList != null)
+            {
+                return cachedList;
+            }
+
+            var frames = new List<Texture2D>();
+            Texture2D baseTex = LoadCardTexture(key);
+            if (baseTex != null)
+            {
+                frames.Add(baseTex);
+                for (int idx = 1; idx <= 12; idx++)
+                {
+                    Texture2D idleTex = LoadTextureByVariantKey($"{key}_idle_{idx}", false);
+                    if (idleTex == null) break;
+                    frames.Add(idleTex);
+                }
+            }
+
+            standbyFramesCache[key] = frames;
+            return frames;
+        }
+
+        /// <summary>
+        /// Loads optional grayscale depth map (key_depth) for 2.5D parallax standby motion.
+        /// </summary>
+        public static Texture2D GetMonsterDepthTexture(CardData data)
+        {
+            string key = ResolveCardIdKey(data);
+            if (string.IsNullOrEmpty(key)) return null;
+
+            if (depthTextureCache.TryGetValue(key, out Texture2D cached))
+            {
+                return cached;
+            }
+
+            Texture2D depthTex = LoadTextureByVariantKey($"{key}_depth", false);
+            depthTextureCache[key] = depthTex;
+            return depthTex;
+        }
+
+        public static bool HasStandby25DAssets(CardData data)
+        {
+            if (data == null || data.cardType != CardType.Monster) return false;
+            if (GetMonsterDepthTexture(data) != null) return true;
+            var frames = GetStandbyFrameTextures(data);
+            return frames != null && frames.Count > 1;
         }
 
         public static Sprite GetMonsterSprite(CardData data)
@@ -343,6 +421,7 @@ namespace MonsterCardGame.Utils
         }
 
         private static Sprite _cardBackSprite;
+        private static Sprite _spellScrollSprite;
         private static Sprite _playerAvatarSprite;
         private static Sprite _enemyAvatarSprite;
 
@@ -351,6 +430,13 @@ namespace MonsterCardGame.Utils
             if (_cardBackSprite != null) return _cardBackSprite;
             _cardBackSprite = LoadSpriteByKey("card_back");
             return _cardBackSprite;
+        }
+
+        public static Sprite GetSpellScrollSprite()
+        {
+            if (_spellScrollSprite != null) return _spellScrollSprite;
+            _spellScrollSprite = LoadSpriteByKey("card_scroll_spell");
+            return _spellScrollSprite;
         }
 
         public static Sprite GetPlayerAvatarSprite()

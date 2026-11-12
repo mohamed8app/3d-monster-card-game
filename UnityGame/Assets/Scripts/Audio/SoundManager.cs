@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using MonsterCardGame.Data;
 
 namespace MonsterCardGame.Audio
 {
@@ -27,15 +28,19 @@ namespace MonsterCardGame.Audio
 
         [Header("Audio Channels")]
         private AudioSource sfxSource;
+        private AudioSource spellSfxSource;
         private AudioSource ambienceSourceA;
         private AudioSource ambienceSourceB;
         private bool isUsingSourceA = true;
 
         [Header("Audio Settings")]
         [Range(0f, 1f)] public float sfxVolume = 0.85f;
+        [Range(0f, 1f)] public float spellSfxVolume = 0.95f;
         [Range(0f, 1f)] public float ambienceVolume = 0f; // Disabled per user request: only video audio and card SFX play!
 
         private Dictionary<string, AudioClip> sfxClips = new Dictionary<string, AudioClip>();
+        private Dictionary<string, AudioClip> spellClips = new Dictionary<string, AudioClip>();
+        private Dictionary<string, AudioClip> monsterClips = new Dictionary<string, AudioClip>();
         private Dictionary<string, AudioClip> ambienceClips = new Dictionary<string, AudioClip>();
 
         private Coroutine crossFadeCoroutine;
@@ -60,6 +65,12 @@ namespace MonsterCardGame.Audio
             sfxSource = gameObject.AddComponent<AudioSource>();
             sfxSource.playOnAwake = false;
             sfxSource.spatialBlend = 0f;
+
+            // Dedicated unpitched source so Spell audio retains crisp natural fidelity even alongside hit/attack SFX
+            spellSfxSource = gameObject.AddComponent<AudioSource>();
+            spellSfxSource.playOnAwake = false;
+            spellSfxSource.spatialBlend = 0f;
+            spellSfxSource.pitch = 1f;
 
             ambienceSourceA = gameObject.AddComponent<AudioSource>();
             ambienceSourceA.loop = true;
@@ -113,7 +124,31 @@ namespace MonsterCardGame.Audio
                 if (clip != null) ambienceClips[name] = clip;
             }
 
-            Debug.Log($"🔊 [SoundManager] Loaded {sfxClips.Count} SFX and {ambienceClips.Count} Ambience clips.");
+            AudioClip[] loadedSpellClips = Resources.LoadAll<AudioClip>("Audio/SFX/Spells");
+            if (loadedSpellClips != null)
+            {
+                foreach (var sc in loadedSpellClips)
+                {
+                    if (sc != null)
+                    {
+                        spellClips[sc.name.Trim().ToLowerInvariant()] = sc;
+                    }
+                }
+            }
+
+            AudioClip[] loadedMonsterClips = Resources.LoadAll<AudioClip>("Audio/SFX/Monsters");
+            if (loadedMonsterClips != null)
+            {
+                foreach (var mc in loadedMonsterClips)
+                {
+                    if (mc != null)
+                    {
+                        monsterClips[mc.name.Trim().ToLowerInvariant()] = mc;
+                    }
+                }
+            }
+
+            Debug.Log($"🔊 [SoundManager] Loaded {sfxClips.Count} SFX, {spellClips.Count} Spell SFX, {monsterClips.Count} Monster SFX, and {ambienceClips.Count} Ambience clips.");
         }
 
         #region Card SFX Playback with Natural Pitch Shifting
@@ -136,6 +171,90 @@ namespace MonsterCardGame.Audio
         public void PlayCardDeath() => PlaySFX("card_death", 0.05f);
         public void PlayHpDamage() => PlaySFX("hp_damage", 0.04f);
         public void PlayTurnEnd() => PlaySFX("turn_end", 0.02f);
+
+        /// <summary>
+        /// Plays the signature Spell cast sound matching the exact card ID (e.g. spell_241..spell_401)
+        /// or falls back to its tactical spell category sound.
+        /// </summary>
+        public void PlaySpellCast(CardData spellCard)
+        {
+            if (spellCard == null)
+            {
+                PlayCardPlay();
+                return;
+            }
+
+            AudioClip clip = null;
+            string idKey = $"spell_{spellCard.id}";
+            if (!spellClips.TryGetValue(idKey, out clip) && !string.IsNullOrEmpty(spellCard.name))
+            {
+                spellClips.TryGetValue($"spell_{spellCard.name.Trim().ToLowerInvariant()}", out clip);
+            }
+
+            if (clip == null)
+            {
+                string role = (spellCard.role ?? "").ToLowerInvariant();
+                if (role.Contains("link")) spellClips.TryGetValue("spell_241", out clip);
+                else if (role.Contains("position") || role.Contains("swap")) spellClips.TryGetValue("spell_281", out clip);
+                else if (role.Contains("convert") || role.Contains("trade")) spellClips.TryGetValue("spell_321", out clip);
+                else if (role.Contains("activate") || role.Contains("support")) spellClips.TryGetValue("spell_361", out clip);
+                else if (role.Contains("pierce") || role.Contains("destroy")) spellClips.TryGetValue("spell_401", out clip);
+            }
+
+            if (clip != null && spellSfxSource != null)
+            {
+                spellSfxSource.pitch = 1f;
+                spellSfxSource.PlayOneShot(clip, spellSfxVolume);
+            }
+            else
+            {
+                PlayCardPlay();
+            }
+        }
+
+        public bool TryPlayMonsterSignatureClip(CardData monsterCard, string suffix)
+        {
+            if (monsterCard == null || string.IsNullOrEmpty(suffix)) return false;
+
+            AudioClip clip = null;
+            string idKey = $"monster_{monsterCard.id}_{suffix}";
+            if (!monsterClips.TryGetValue(idKey, out clip) && !string.IsNullOrEmpty(monsterCard.name))
+            {
+                monsterClips.TryGetValue($"monster_{monsterCard.name.Trim().ToLowerInvariant()}_{suffix}", out clip);
+            }
+
+            if (clip != null && spellSfxSource != null)
+            {
+                spellSfxSource.pitch = 1f;
+                spellSfxSource.PlayOneShot(clip, spellSfxVolume);
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Plays the signature battlefield entrance sound for a summoned monster (e.g. monster_15_summon)
+        /// or falls back to the generic card summon SFX.
+        /// </summary>
+        public void PlayMonsterSummon(CardData monsterCard)
+        {
+            if (!TryPlayMonsterSignatureClip(monsterCard, "summon"))
+            {
+                PlayCardPlay();
+            }
+        }
+
+        /// <summary>
+        /// Plays the signature active skill sound for a monster (e.g. monster_15_skill)
+        /// or falls back to the generic attack/ability SFX.
+        /// </summary>
+        public void PlayMonsterSkill(CardData monsterCard)
+        {
+            if (!TryPlayMonsterSignatureClip(monsterCard, "skill"))
+            {
+                PlayCardAttack();
+            }
+        }
 
         #endregion
 
