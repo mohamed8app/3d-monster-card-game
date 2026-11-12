@@ -309,6 +309,7 @@ namespace MonsterCardGame.Core
                 owner.slots[slot].ClearSlot();
             }
             owner.graveyard.Add(deadM.data);
+            owner.RecordMonsterDeath(deadM.data.id, GameManager.Instance != null ? GameManager.Instance.currentTurn : 1);
 
             if (deadM.silencedTurns <= 0)
             {

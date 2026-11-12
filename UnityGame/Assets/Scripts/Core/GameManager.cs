@@ -233,32 +233,78 @@ namespace MonsterCardGame.Core
         {
             if (player == null) return new List<CardData>();
 
-            var exclude = new HashSet<int>(player.drawnCardIdsThisMatch);
-            foreach (var h in player.hand)
+            player.waveNumber++;
+            var waveCards = new List<CardData>();
+            var activeHandAndBoard = new HashSet<int>();
+            foreach (var h in player.hand) if (h != null) activeHandAndBoard.Add(h.id);
+            foreach (var s in player.slots) if (s != null && s.IsOccupied) activeHandAndBoard.Add(s.currentMonster.data.id);
+
+            var waveUsedIds = new HashSet<int>(activeHandAndBoard);
+
+            // 1. Exciting ~20% Veteran Comeback quota from monsters that actually fought and died earlier in this match
+            int monsterQuotaTotal = Mathf.RoundToInt(defaultDeckSize * 0.60f);
+            int maxFallenQuota = Mathf.Max(1, Mathf.RoundToInt(monsterQuotaTotal * 0.22f)); // up to ~6 comeback veterans per 50-card wave
+            var fallenCandidates = new List<MonsterData>();
+            if (allMonsters != null && player.fallenMonsterDeathCount.Count > 0)
             {
-                if (h != null) exclude.Add(h.id);
-            }
-            foreach (var s in player.slots)
-            {
-                if (s != null && s.IsOccupied) exclude.Add(s.currentMonster.data.id);
+                foreach (var m in allMonsters)
+                {
+                    if (m != null && !waveUsedIds.Contains(m.id)
+                        && player.fallenMonsterDeathCount.TryGetValue(m.id, out int dc) && dc > 0)
+                    {
+                        fallenCandidates.Add(m);
+                    }
+                }
             }
 
-            var refill = GenerateDeck(defaultDeckSize, exclude);
-            if (refill.Count < 10)
+            int comebackCount = 0;
+            if (fallenCandidates.Count > 0)
             {
-                // All 452 cards have been seen in this marathon match — reset match cycle excluding only hand & board
+                int targetComeback = Mathf.Min(maxFallenQuota, fallenCandidates.Count);
+                comebackCount = PickWeightedWithoutReplacement(
+                    fallenCandidates,
+                    targetComeback,
+                    waveUsedIds,
+                    m => m.id,
+                    CloneMonsterCard,
+                    waveCards,
+                    id => player.GetFallenComebackWeight(id, currentTurn) * UnityEngine.Random.Range(0.55f, 1.65f));
+            }
+
+            // 2. Remaining ~80%+ slots prioritize strictly NEVER-DRAWN-YET cards in this match (with escalating global pity)
+            int remainingSlots = Mathf.Max(0, defaultDeckSize - waveCards.Count);
+            var excludeForFresh = new HashSet<int>(player.drawnCardIdsThisMatch);
+            foreach (int id in waveUsedIds) excludeForFresh.Add(id);
+
+            var freshBatch = GenerateDeck(remainingSlots, excludeForFresh);
+            if (freshBatch.Count < remainingSlots)
+            {
+                // All cards in the 452-card catalog have appeared at least once this match -> cycle unseen frontier cleanly
                 player.drawnCardIdsThisMatch.Clear();
-                var activeOnly = new HashSet<int>();
-                foreach (var h in player.hand) if (h != null) activeOnly.Add(h.id);
-                foreach (var s in player.slots) if (s != null && s.IsOccupied) activeOnly.Add(s.currentMonster.data.id);
-                refill = GenerateDeck(defaultDeckSize, activeOnly);
+                foreach (var c in waveCards) if (c != null) player.drawnCardIdsThisMatch.Add(c.id);
+                var cycleExclude = new HashSet<int>(waveUsedIds);
+                foreach (var c in freshBatch) if (c != null) cycleExclude.Add(c.id);
+                var extra = GenerateDeck(remainingSlots - freshBatch.Count, cycleExclude);
+                freshBatch.AddRange(extra);
             }
 
-            if (BattleUIManager.Instance != null && refill.Count > 0)
+            waveCards.AddRange(freshBatch);
+
+            // Final Fisher-Yates shuffle so comeback veterans & fresh unseen cards interleave unpredictably
+            for (int i = 0; i < waveCards.Count; i++)
             {
-                BattleUIManager.Instance.LogCombatMessage($"🔄 [{player.playerName}] Deck cycled — {refill.Count} fresh unseen cards deployed!");
+                int r = UnityEngine.Random.Range(i, waveCards.Count);
+                var temp = waveCards[i];
+                waveCards[i] = waveCards[r];
+                waveCards[r] = temp;
             }
-            return refill;
+
+            if (BattleUIManager.Instance != null && waveCards.Count > 0)
+            {
+                BattleUIManager.Instance.LogCombatMessage(
+                    $"🌊 [{player.playerName}] Endless Wave #{player.waveNumber}: +{waveCards.Count} shuffled cards ({comebackCount} fallen veterans + {waveCards.Count - comebackCount} fresh unseen)!");
+            }
+            return waveCards;
         }
 
         public List<CardData> GenerateDeck(int count, HashSet<int> excludeIds = null)
@@ -333,7 +379,8 @@ namespace MonsterCardGame.Core
             HashSet<int> usedIds,
             Func<T, int> idSelector,
             Func<T, CardData> cloneFactory,
-            List<CardData> destination)
+            List<CardData> destination,
+            Func<int, float> customWeightSelector = null)
         {
             if (sourcePool == null || sourcePool.Count == 0 || targetCount <= 0) return 0;
 
@@ -345,13 +392,15 @@ namespace MonsterCardGame.Core
                 if (!usedIds.Contains(id)) candidates.Add(item);
             }
 
+            Func<int, float> weightFn = customWeightSelector ?? GetCardPityWeight;
+
             int added = 0;
             while (added < targetCount && candidates.Count > 0)
             {
                 float totalWeight = 0f;
                 for (int i = 0; i < candidates.Count; i++)
                 {
-                    totalWeight += GetCardPityWeight(idSelector(candidates[i]));
+                    totalWeight += Mathf.Max(0.01f, weightFn(idSelector(candidates[i])));
                 }
 
                 int pickedIdx = candidates.Count - 1;
@@ -361,7 +410,7 @@ namespace MonsterCardGame.Core
                     float acc = 0f;
                     for (int i = 0; i < candidates.Count; i++)
                     {
-                        acc += GetCardPityWeight(idSelector(candidates[i]));
+                        acc += Mathf.Max(0.01f, weightFn(idSelector(candidates[i])));
                         if (roll <= acc)
                         {
                             pickedIdx = i;

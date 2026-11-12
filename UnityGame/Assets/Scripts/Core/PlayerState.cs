@@ -34,11 +34,16 @@ namespace MonsterCardGame.Core
         [Header("6 Board Slots")]
         public BoardSlot[] slots = new BoardSlot[6];
 
-        // Non-repeating & escalating pity draw state
+        // Non-repeating, escalating pity & fallen-comeback endless draw state
         public readonly HashSet<int> drawnCardIdsThisMatch = new HashSet<int>();
+        public readonly Dictionary<int, int> fallenMonsterDeathCount = new Dictionary<int, int>();
+        public readonly Dictionary<int, int> fallenMonsterDeathTurn = new Dictionary<int, int>();
+        public readonly Dictionary<int, int> revivedFromDeathCount = new Dictionary<int, int>();
         private readonly Dictionary<int, int> cardTurnsWaiting = new Dictionary<int, int>();
         private int consecutiveNonMonsterDraws = 0;
         private int consecutiveMonsterDraws = 0;
+        private string lastDrawnElement = "";
+        public int waveNumber = 1;
 
         public Func<PlayerState, List<CardData>> onDeckExhaustedRefill;
         public Func<int, float> getCardDrawWeightMultiplier;
@@ -46,13 +51,37 @@ namespace MonsterCardGame.Core
 
         public bool IsAlive => currentHp > 0;
 
+        public void RecordMonsterDeath(int monsterId, int turnNumber)
+        {
+            fallenMonsterDeathCount[monsterId] = (fallenMonsterDeathCount.TryGetValue(monsterId, out int c) ? c : 0) + 1;
+            fallenMonsterDeathTurn[monsterId] = turnNumber;
+        }
+
+        public float GetFallenComebackWeight(int monsterId, int turnNumber)
+        {
+            if (!fallenMonsterDeathCount.TryGetValue(monsterId, out int deaths) || deaths <= 0)
+                return 0f;
+
+            int deathTurn = fallenMonsterDeathTurn.TryGetValue(monsterId, out int dt) ? dt : 0;
+            if (turnNumber - deathTurn < 2)
+                return 0.03f; // Brief cooldown right after dying
+
+            int revives = revivedFromDeathCount.TryGetValue(monsterId, out int rc) ? rc : 0;
+            return Mathf.Max(0.25f, (0.95f + Mathf.Min(deaths, 3) * 0.20f) / (1.0f + revives * 0.85f));
+        }
+
         public void InitializeDeck(List<CardData> initialDeck)
         {
             deck = new List<CardData>();
             cardTurnsWaiting.Clear();
             drawnCardIdsThisMatch.Clear();
+            fallenMonsterDeathCount.Clear();
+            fallenMonsterDeathTurn.Clear();
+            revivedFromDeathCount.Clear();
             consecutiveNonMonsterDraws = 0;
             consecutiveMonsterDraws = 0;
+            lastDrawnElement = "";
+            waveNumber = 1;
 
             var uniqueIds = new HashSet<int>();
             if (initialDeck != null)
@@ -170,7 +199,17 @@ namespace MonsterCardGame.Core
                     }
                 }
 
+                bool wasFallenVeteran = card.cardType == CardType.Monster
+                    && drawnCardIdsThisMatch.Contains(card.id)
+                    && fallenMonsterDeathCount.TryGetValue(card.id, out int dc) && dc > 0;
+
+                if (wasFallenVeteran)
+                {
+                    revivedFromDeathCount[card.id] = (revivedFromDeathCount.TryGetValue(card.id, out int rc) ? rc : 0) + 1;
+                }
+
                 drawnCardIdsThisMatch.Add(card.id);
+                lastDrawnElement = card.element ?? "";
                 if (card.cardType == CardType.Monster)
                 {
                     consecutiveNonMonsterDraws = 0;
@@ -190,6 +229,10 @@ namespace MonsterCardGame.Core
                     if (MonsterCardGame.Audio.SoundManager.Instance != null)
                     {
                         MonsterCardGame.Audio.SoundManager.Instance.PlayCardDraw();
+                    }
+                    if (wasFallenVeteran && MonsterCardGame.UI.BattleUIManager.Instance != null)
+                    {
+                        MonsterCardGame.UI.BattleUIManager.Instance.LogCombatMessage($"🔥💀 [{playerName}] Comeback Draw! Fallen Monster #{card.name} returned for a rematch!");
                     }
                     Debug.Log($"[{playerName}] drew card #{card.name} ({card.cardType}) | Deck left: {deck.Count}");
                     return true;
@@ -228,6 +271,7 @@ namespace MonsterCardGame.Core
                 }
             }
 
+            int turnNow = GameManager.Instance != null ? GameManager.Instance.currentTurn : 1;
             float[] weights = new float[deck.Count];
             float totalWeight = 0f;
 
@@ -241,7 +285,7 @@ namespace MonsterCardGame.Core
                 }
 
                 int waited = cardTurnsWaiting.TryGetValue(c.id, out int w) ? w : 0;
-                float waitBoost = 1.0f + waited * 0.40f;
+                float waitBoost = 1.0f + waited * 0.45f;
                 float pityBoost = getCardDrawWeightMultiplier != null ? Mathf.Max(0.1f, getCardDrawWeightMultiplier(c.id)) : 1.0f;
                 float patternBoost = 1.0f;
 
@@ -258,12 +302,36 @@ namespace MonsterCardGame.Core
                         patternBoost *= 3.5f + (consecutiveNonMonsterDraws - 2) * 2.5f;
                     else if (c.cardType != CardType.Monster && consecutiveMonsterDraws >= 4)
                         patternBoost *= 1.8f;
+
+                    // Soft element diversity so players don't pull monotonous elemental streaks
+                    if (!string.IsNullOrEmpty(lastDrawnElement) && c.element == lastDrawnElement)
+                        patternBoost *= 0.55f;
+
+                    // Dynamic excitement curve: as Mana scales, high-tier bosses gain dramatic presence while mixed tiers stay in play
+                    if (c.cardType == CardType.Monster && c.tier_num >= 4 && manaCapacity >= 5)
+                        patternBoost *= 1.0f + Mathf.Min(0.75f, (manaCapacity - 4) * 0.12f);
                 }
 
-                // Strongly suppress already-drawn IDs within the match if any un-drawn card remains
-                float uniqueBoost = drawnCardIdsThisMatch.Contains(c.id) ? 0.01f : 1.0f;
+                // Match novelty vs Fallen Veteran comeback mix:
+                // Never-drawn-yet cards surge; dead veterans retain ~15-22% thrilling comeback weight; other repeats stay suppressed
+                float stateFactor;
+                if (!drawnCardIdsThisMatch.Contains(c.id))
+                {
+                    stateFactor = 2.8f + Mathf.Min(3.0f, turnNow * 0.06f);
+                }
+                else if (c.cardType == CardType.Monster && fallenMonsterDeathCount.TryGetValue(c.id, out int dCount) && dCount > 0)
+                {
+                    stateFactor = 0.65f * GetFallenComebackWeight(c.id, turnNow);
+                }
+                else
+                {
+                    stateFactor = 0.08f;
+                }
 
-                float wVal = Mathf.Max(0.01f, waitBoost * pityBoost * patternBoost * uniqueBoost);
+                // Stochastic chaos jitter prevents deterministic sorted order while honoring probability ratios
+                float chaosJitter = UnityEngine.Random.Range(0.55f, 1.65f);
+
+                float wVal = Mathf.Max(0.01f, waitBoost * pityBoost * patternBoost * stateFactor * chaosJitter);
                 weights[i] = wVal;
                 totalWeight += wVal;
             }
