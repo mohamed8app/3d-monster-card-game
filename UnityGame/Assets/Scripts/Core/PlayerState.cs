@@ -14,8 +14,8 @@ namespace MonsterCardGame.Core
         public int shield = 0;
 
         [Header("Resources (Unlimited Mana & Power ∞)")]
-        public int manaCapacity = 1;
-        public int currentPower = 1;
+        public int manaCapacity = 0;
+        public int currentPower = 0;
         public bool hasSacrificedThisTurn = false;
         public int fatigueCount = 0;
         public int monstersSummonedTotal = 0;
@@ -101,8 +101,8 @@ namespace MonsterCardGame.Core
             graveyard.Clear();
             currentHp = maxHp;
             shield = 0;
-            manaCapacity = 1;
-            currentPower = 1;
+            manaCapacity = 0;
+            currentPower = 0;
             fatigueCount = 0;
             monstersSummonedTotal = 0;
             hasSacrificedThisTurn = false;
@@ -146,20 +146,20 @@ namespace MonsterCardGame.Core
             }
         }
 
-        public void StartTurn(int turnNumber)
+        public void StartTurn(int turnNumber, bool skipDraw = false)
         {
             // 1. Recharge Power equal to current Mana Capacity (Unlimited ∞)
             currentPower = manaCapacity;
             hasSacrificedThisTurn = false;
 
-            // 2. Check Total Eclipse effect (denies draw & sacrifice for 1 turn)
+            // 2. Check Total Eclipse effect (denies draw & sacrifice for 1 turn) or explicit Turn-1 skip
             if (denyDrawSacTurns > 0)
             {
                 denyDrawSacTurns--;
                 hasSacrificedThisTurn = true;
                 Debug.Log($"🌑 [{playerName}] is under Total Eclipse—cannot draw or sacrifice this turn!");
             }
-            else
+            else if (!skipDraw)
             {
                 DrawCard();
             }

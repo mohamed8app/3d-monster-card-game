@@ -284,9 +284,10 @@ def load_database(json_path: str) -> Tuple[Dict[int, CardProto], List[CardProto]
                         break
                 else:
                     env_elem = ELEMENTS[(cid - 441) % len(ELEMENTS)]
+            env_cost = int(c.get("cost", 1))
             proto = CardProto(
-                cid, "env", env_elem, "Environment", 3, 2, 0, 0,
-                (), frozenset(), (), 0, False, 0, 0, f"{env_elem} (+30% Ally / -20% Counter)"
+                cid, "env", env_elem, "Environment", 3, env_cost, 0, 0,
+                (), frozenset(), (), 0, False, 0, 0, f"{env_elem} (+30% Ally / -20% Counter | Draw +1)"
             )
             by_id[cid] = proto
             envs.append(proto)
@@ -297,7 +298,7 @@ def load_database(json_path: str) -> Tuple[Dict[int, CardProto], List[CardProto]
         for idx, el in enumerate(ELEMENTS, start=1):
             if el not in existing_elems:
                 cid = 440 + idx
-                proto = CardProto(cid, "env", el, "Environment", 3, 2, 0, 0, (), frozenset(), (), 0, False, 0, 0, f"{el} Environment")
+                proto = CardProto(cid, "env", el, "Environment", 3, 1, 0, 0, (), frozenset(), (), 0, False, 0, 0, f"{el} Environment")
                 by_id[cid] = proto
                 envs.append(proto)
 
@@ -402,7 +403,8 @@ class SimPlayer:
         "deck", "hand", "graveyard", "slots",
         "drawn_ids", "fallen_deaths", "fallen_turn", "revived_counts",
         "turns_waiting", "non_monster_streak", "monster_streak", "last_elem", "wave_num",
-        "played_ids", "drawn_ever_ids", "card_dmg", "card_kills", "comebacks"
+        "played_ids", "drawn_ever_ids", "card_dmg", "card_kills", "comebacks",
+        "salvations", "multipliers", "turn_deaths", "turn_clutch", "card_excite", "card_stall"
     )
 
     def __init__(self, name: str):
@@ -410,8 +412,8 @@ class SimPlayer:
         self.hp = 500
         self.max_hp = 500
         self.shield = 0
-        self.mana_cap = 3
-        self.power = 3
+        self.mana_cap = 0
+        self.power = 0
         self.sacrificed_turn = False
         self.deny_turns = 0
         self.team_immune_turns = 0
@@ -431,12 +433,18 @@ class SimPlayer:
         self.last_elem = ""
         self.wave_num = 1
 
-        # Telemetry for per-card win rates (only real catalog IDs <= 452)
+        # Telemetry for per-card win rates & pacing (only real catalog IDs <= 452)
         self.played_ids: set = set()
         self.drawn_ever_ids: set = set()
         self.card_dmg: Dict[int, int] = {}
         self.card_kills: Dict[int, int] = {}
         self.comebacks = 0
+        self.salvations = 0
+        self.multipliers = 0
+        self.turn_deaths = 0
+        self.turn_clutch = False
+        self.card_excite: Dict[int, int] = {}
+        self.card_stall: Dict[int, int] = {}
 
     def take_leader_damage(self, dmg: int) -> None:
         if dmg <= 0 or self.team_immune_turns > 0:
@@ -723,6 +731,8 @@ class BattleEngine:
         if not m.salvation_used and m.has_p_raw("Shield of Salvation"):
             m.salvation_used = True
             m.cur_def = 10
+            owner.salvations += 1
+            owner.turn_clutch = True
             return True
         for adj in (slot - 1, slot + 1):
             if 0 <= adj < 6:
@@ -730,6 +740,8 @@ class BattleEngine:
                 if ally is not None and not ally.salvation_used and ally.has_p_raw("Shield of Salvation"):
                     ally.salvation_used = True
                     m.cur_def = 5
+                    owner.salvations += 1
+                    owner.turn_clutch = True
                     return True
         return False
 
@@ -744,6 +756,8 @@ class BattleEngine:
     ) -> bool:
         if self.try_salvation(owner, slot, dead_m):
             return False
+
+        owner.turn_deaths += 1
 
         if 0 <= slot < 6 and owner.slots[slot] is dead_m:
             owner.slots[slot] = None
@@ -1273,12 +1287,159 @@ class BattleEngine:
             m.add_bonus_def(15 + bonus)
             m.bonus_atk += 5
 
-    def execute_active_skills(self, player: SimPlayer, opp: SimPlayer, turn_num: int, rng: random.Random) -> None:
+    _SYNERGY_PASSIVES = frozenset({
+        "Arcane Echo", "Arcane Overflow", "Spell Multiplier",
+        "Mana Recovery", "Supercharge", "Nourishing Roots",
+    })
+    _POST_BUFF_SPELLS = frozenset({
+        ST_CLEANSE_FORTIFY, ST_DIST_SHIELD_WINGS, ST_COPY_SUPPORT_PASSIVE,
+        ST_LINK_CENTER_TWIN, ST_ELEMENTAL_SYNERGY_SHIELD, ST_SWAP_WING_CENTER,
+        ST_TELEPORT_WEAKEST, ST_CONVERT_DEF_ATK, ST_DOUBLE_STRIKE_CENTER,
+    })
+
+    def _score_summon_slot(self, player: SimPlayer, opp: SimPlayer, card: CardProto, slot: int) -> float:
+        pt = card.passive_tags
+        score = 0.0
+        # Role baseline preference
+        if card.role == "Pure Shield":
+            score += 4.0 if slot in CENTER_SLOTS else (1.5 if slot in (0, 5) else 0.0)
+        elif card.role == "Attacker":
+            score += 4.0 if slot in FLANK_SLOTS else 0.0
+        else:
+            score += 3.0 if slot in CENTER_SLOTS else 1.5
+
+        # Slot-specific passive bonuses
+        if "Granite Armor" in pt and slot in CENTER_SLOTS:
+            score += card.def_stat * 0.8 + 18.0
+        if "Ice Structure" in pt and slot in CENTER_SLOTS:
+            score += 12.0
+        if "Pure Radiance" in pt and slot in CENTER_SLOTS:
+            score += 10.0
+        if ("Flank Strike" in pt or "Swift Speed" in pt) and slot in FLANK_SLOTS:
+            score += 14.0
+        if "Fire Blaze" in pt:
+            for adj in (slot - 1, slot + 1):
+                if 0 <= adj < 6 and player.slots[adj] is not None:
+                    score += 8.0
+
+        opp_m = opp.slots[slot]
+        if opp_m is None:
+            # Open lane: favor immediate burst & attackers
+            if "Quick Charge" in pt:
+                score += 32.0 + card.atk
+            elif card.role == "Attacker" or card.atk >= 14:
+                score += 11.0
+        else:
+            opp_atk = opp_m.base_atk + opp_m.bonus_atk
+            if "Light of Truth" in pt and opp_m.silenced_turns == 0:
+                score += 22.0 + opp_atk + len(opp_m.proto.passive_tags) * 6.0
+            if "Tidal Bounce" in pt and opp_atk < 14 and not opp_m.has_steadfast:
+                score += 28.0 + opp_m.proto.cost * 3.0
+            if (
+                card.role == "Pure Shield"
+                or "Flint Skin" in pt
+                or "Auto-Freeze Attacker" in pt
+                or "Poison Thorns" in pt
+                or "Burning Embers" in pt
+            ):
+                score += opp_atk * 1.35
+            elif card.def_stat <= opp_atk and "Quick Charge" not in pt:
+                score -= 9.0
+        return score
+
+    def _choose_best_slot(self, player: SimPlayer, opp: SimPlayer, card: CardProto) -> int:
+        best_slot = -1
+        best_score = -1e9
+        for s in range(6):
+            if player.slots[s] is None:
+                sc = self._score_summon_slot(player, opp, card, s)
+                if sc > best_score:
+                    best_score = sc
+                    best_slot = s
+        return best_slot
+
+    def _should_play_env(self, active: SimPlayer, other: SimPlayer, env_card: CardProto, active_env: Optional[str], env_turns: int) -> bool:
+        if active_env == env_card.element and env_turns >= 2:
+            return False
+        buffed, debuffed = ENV_MATRIX[env_card.element]
+        score = 0.0
+        for s in active.slots:
+            if s is not None:
+                if s.proto.element == buffed:
+                    score += 2.2
+                elif s.proto.element in debuffed:
+                    score -= 2.0
+        for hc in active.hand:
+            if hc.card_type == "monster" and hc.cost <= active.power:
+                if hc.element == buffed:
+                    score += 1.4
+                elif hc.element in debuffed:
+                    score -= 1.0
+        for es in other.slots:
+            if es is not None:
+                if es.proto.element in debuffed:
+                    score += 1.8
+                elif es.proto.element == buffed:
+                    score -= 1.8
+        return score >= (0.6 if active_env is None else 1.2)
+
+    def _should_cast_spell(self, caster: SimPlayer, opp: SimPlayer, sp: CardProto) -> bool:
+        st = sp.spell_type
+        if st == ST_SUPPORT_BATTERY_HEAL:
+            wounded = any(s is not None and s.cur_def < s.max_def - 4 for s in caster.slots)
+            needs_battery = caster.power >= sp.cost and any(
+                c is not sp and c.cost > caster.power - sp.cost and c.cost <= caster.power - sp.cost + 2
+                for c in caster.hand
+            )
+            if caster.hp > caster.max_hp * 0.82 and not wounded and not needs_battery:
+                return False
+        elif st == ST_REVIVE_GRAVEYARD:
+            has_dead = any(g.card_type == "monster" for g in caster.graveyard)
+            if not has_dead and caster.hp > caster.max_hp * 0.85:
+                return False
+        elif st in (ST_CLEANSE_FORTIFY, ST_DIST_SHIELD_WINGS, ST_LINK_CENTER_TWIN):
+            if not any(s is not None and s.is_alive for s in caster.slots):
+                return False
+        elif st == ST_COPY_SUPPORT_PASSIVE:
+            allies = [s for s in caster.slots if s is not None and s.is_alive]
+            if len(allies) < 2 and caster.hp > caster.max_hp * 0.85:
+                return False
+        elif st in (ST_SWAP_WING_CENTER, ST_DOUBLE_STRIKE_CENTER, ST_CONVERT_DEF_ATK):
+            if not any(s is not None and s.is_alive for s in caster.slots):
+                return False
+        return True
+
+    def _score_active_skill(self, player: SimPlayer, opp: SimPlayer, m: SimMonster, act0: str) -> int:
+        # Higher score runs first when mana is shared across multiple monsters
+        if opp.hp <= 50 and ("Ion Cannon" in act0 or "Mana Blast" in act0 or "Thermal" in act0):
+            return 100
+        if "Resurrection" in act0 and any(g.card_type == "monster" for g in player.graveyard):
+            return 90
+        if ("Mountain Shield" in act0 or "Iron Dome" in act0) and player.hp < 220:
+            return 85
+        if "Total Eclipse" in act0:
+            return 80
+        if "Soul Reap" in act0 or "Fissure" in act0 or "Annihilation" in act0 or "Grand Mana Blast" in act0 or "Ion Cannon" in act0:
+            return 75
+        if "Time Warp" in act0 or "Double" in act0 or "Hastening Breeze" in act0:
+            return 70
+        if "Absolute Sun" in act0 or "Nectar" in act0:
+            return 65 if player.hp < player.max_hp * 0.80 else 25
+        return 40
+
+    def execute_active_skills(self, player: SimPlayer, opp: SimPlayer, turn_num: int, rng: random.Random, acted: Optional[List[int]] = None) -> None:
         if player.power <= 0:
             return
+        candidates = []
         for slot in range(6):
             m = player.slots[slot]
             if m is None or not m.is_alive or m.silenced_turns > 0 or m.frozen_turns > 0 or m.used_active_turn or not m.proto.actives:
+                continue
+            candidates.append((self._score_active_skill(player, opp, m, m.proto.actives[0]), slot, m))
+        candidates.sort(key=lambda x: x[0], reverse=True)
+
+        for _, slot, m in candidates:
+            if not m.is_alive:
                 continue
             act0 = m.proto.actives[0]
             opp_m = opp.slots[slot]
@@ -1297,12 +1458,17 @@ class BattleEngine:
             player.power -= cost
             bonus = player.free_skill_bonus
             player.free_skill_bonus = 0
+            if m.proto.cid <= 452 and acted is not None:
+                acted.append(m.proto.cid)
             if m.has_p("Mana Recovery"):
                 player.power += 1
             for s in player.slots:
                 if s is not None and s.has_p("Arcane Echo"):
                     s.bonus_atk += 3
             reps = 2 if (m.has_p("Spell Multiplier") and rng.random() < 0.50) else 1
+            if reps == 2:
+                player.multipliers += 1
+                player.turn_clutch = True
             for _ in range(reps):
                 self.resolve_active_skill(act0, slot, m, player, opp, bonus, turn_num, rng)
             if player.power <= 0:
@@ -1324,6 +1490,8 @@ class BattleEngine:
                     val += 8
                 if s.has_p("Spell Multiplier") and reps == 1 and rng.random() < 0.50:
                     reps = 2
+                    caster.multipliers += 1
+                    caster.turn_clutch = True
                 if s.has_p("Mana Recovery"):
                     caster.power += 1
 
@@ -1334,7 +1502,8 @@ class BattleEngine:
 
             if st == ST_ARCANE_PIERCING_SHOT:
                 if enemies:
-                    tgt = max(enemies, key=lambda e: e.base_atk)
+                    # Snipe enemy blocking strongest ready ally, or highest ATK threat
+                    tgt = max(enemies, key=lambda e: (1 if (caster.slots[e.slot] is not None and caster.slots[e.slot].can_attack) else 0, e.base_atk + e.bonus_atk))
                     self.deal_spell_skill_dmg(tgt.slot, tgt, val, None, opp, caster, turn_num, ignore_immunity=True, spell_cid=sp.cid)
                 else:
                     opp.take_leader_damage(val)
@@ -1366,14 +1535,16 @@ class BattleEngine:
                 wing_atk = sum(al.base_atk + al.bonus_atk for al in allies if al.slot in FLANK_SLOTS)
                 dmg = val + int(round(wing_atk * 0.45))
                 if enemies:
-                    tgt = max(enemies, key=lambda e: e.base_atk)
+                    tgt = max(enemies, key=lambda e: e.base_atk + e.bonus_atk)
                     self.deal_spell_skill_dmg(tgt.slot, tgt, dmg, None, opp, caster, turn_num, spell_cid=sp.cid)
                 else:
                     opp.take_leader_damage(dmg)
                     caster.card_dmg[sp.cid] = caster.card_dmg.get(sp.cid, 0) + dmg
             elif st == ST_COPY_SUPPORT_PASSIVE:
                 if allies:
-                    donor, rec = allies[0], allies[-1]
+                    donor = max(allies, key=lambda a: len(a.proto.passive_tags))
+                    others = [a for a in allies if a is not donor]
+                    rec = max(others, key=lambda a: a.base_atk + a.cur_def) if others else donor
                     if rec.extra_passives is None:
                         rec.extra_passives = set()
                     rec.extra_passives.update(donor.proto.passive_tags)
@@ -1390,19 +1561,40 @@ class BattleEngine:
                     caster.shield += val
             elif st == ST_SWAP_WING_CENTER:
                 if len(allies) >= 2:
-                    m1, m2 = allies[0], allies[-1]
-                    s1, s2 = m1.slot, m2.slot
-                    caster.slots[s1], caster.slots[s2] = m2, m1
-                    m2.slot, m1.slot = s1, s2
-                    m1.add_bonus_def(val)
-                    m2.add_bonus_def(val // 2)
+                    # Smart swap: move high-ATK ready ally to open enemy lane, or protect weakest ally
+                    open_lane_ally = max(
+                        allies,
+                        key=lambda a: (1 if opp.slots[a.slot] is None else 0, a.base_atk + a.bonus_atk),
+                    )
+                    wounded = min(allies, key=lambda a: a.cur_def)
+                    if opp.slots[wounded.slot] is None and opp.slots[open_lane_ally.slot] is not None and open_lane_ally is not wounded:
+                        m1, m2 = open_lane_ally, wounded
+                    else:
+                        m1 = max(allies, key=lambda a: a.cur_def)
+                        m2 = wounded if wounded is not m1 else allies[-1]
+                    if m1 is not m2:
+                        s1, s2 = m1.slot, m2.slot
+                        caster.slots[s1], caster.slots[s2] = m2, m1
+                        m2.slot, m1.slot = s1, s2
+                        m1.add_bonus_def(val)
+                        m2.add_bonus_def(val // 2)
+                    else:
+                        m1.add_bonus_def(val)
                 elif len(allies) == 1:
                     allies[0].add_bonus_def(val)
                 else:
                     caster.heal_leader(val, opp)
             elif st in (ST_PULL_CENTER_WING, ST_PUSH_CENTER_OPEN):
                 if enemies:
-                    es = enemies[0]
+                    # Prioritize displacing enemy blocking our strongest ready attacker
+                    es = max(
+                        enemies,
+                        key=lambda e: (
+                            1 if (caster.slots[e.slot] is not None and caster.slots[e.slot].can_attack) else 0,
+                            0 if e.has_steadfast else 1,
+                            e.base_atk + e.bonus_atk,
+                        ),
+                    )
                     if not es.has_steadfast:
                         for ws in FLANK_SLOTS:
                             if opp.slots[ws] is None:
@@ -1416,17 +1608,18 @@ class BattleEngine:
                     caster.card_dmg[sp.cid] = caster.card_dmg.get(sp.cid, 0) + val
             elif st == ST_TELEPORT_WEAKEST:
                 if allies:
-                    am = allies[0]
+                    am = max(allies, key=lambda a: a.base_atk + a.bonus_atk)
                     am.bonus_atk += max(4, val // 2)
                     am.can_attack = True
                     if enemies:
-                        self.deal_spell_skill_dmg(enemies[0].slot, enemies[0], val // 2, am, opp, caster, turn_num)
+                        tgt = min(enemies, key=lambda e: e.cur_def)
+                        self.deal_spell_skill_dmg(tgt.slot, tgt, val // 2, am, opp, caster, turn_num)
                 else:
                     opp.take_leader_damage(val)
                     caster.card_dmg[sp.cid] = caster.card_dmg.get(sp.cid, 0) + val
             elif st == ST_CONVERT_DEF_ATK:
                 if allies:
-                    am = allies[0]
+                    am = max(allies, key=lambda a: (1 if opp.slots[a.slot] is None else 0, a.cur_def))
                     conv = min(max(0, am.cur_def - 6), val // 2)
                     am.cur_def -= conv
                     am.bonus_atk += val
@@ -1436,11 +1629,12 @@ class BattleEngine:
                     caster.card_dmg[sp.cid] = caster.card_dmg.get(sp.cid, 0) + val
             elif st in (ST_INVERT_ENEMY_STATS, ST_SIPHON_DEF_ATK):
                 if enemies:
-                    es = enemies[0]
+                    es = max(enemies, key=lambda e: e.cur_def)
                     self.deal_spell_skill_dmg(es.slot, es, val, None, opp, caster, turn_num, spell_cid=sp.cid)
                     if allies:
-                        allies[0].bonus_atk += val // 2
-                        allies[0].add_bonus_def(val // 3)
+                        al = max(allies, key=lambda a: a.base_atk + a.bonus_atk)
+                        al.bonus_atk += val // 2
+                        al.add_bonus_def(val // 3)
                 else:
                     opp.take_leader_damage(val)
                     caster.card_dmg[sp.cid] = caster.card_dmg.get(sp.cid, 0) + val
@@ -1448,11 +1642,15 @@ class BattleEngine:
                 caster.power += 1
                 caster.free_skill_bonus += val // 2
                 if allies:
-                    allies[0].bonus_atk += val // 2
-                    allies[0].add_bonus_def(val // 2)
+                    al = max(allies, key=lambda a: 1 if a.proto.actives else 0)
+                    al.bonus_atk += val // 2
+                    al.add_bonus_def(val // 2)
             elif st == ST_DOUBLE_STRIKE_CENTER:
                 if allies:
-                    am = allies[0]
+                    am = max(
+                        allies,
+                        key=lambda a: (1 if opp.slots[a.slot] is None else 0, 1 if a.can_attack else 0, a.base_atk + a.bonus_atk),
+                    )
                     am.can_attack = True
                     am.double_strike = True
                     am.bonus_atk += val // 2
@@ -1581,7 +1779,7 @@ class BattleEngine:
                         att.bonus_atk += 0  # +1 current power
                         attacker.power += 1
 
-    def play_match(self, rng: random.Random, max_turns: int = 80, verbose: bool = False) -> Tuple[int, int, SimPlayer, SimPlayer, List[str]]:
+    def play_match(self, rng: random.Random, max_turns: int = 80, verbose: bool = False) -> Tuple[int, int, SimPlayer, SimPlayer, List[str], dict]:
         log: Optional[List[str]] = [] if verbose else None
         p1 = SimPlayer("اللاعب أ")
         p2 = SimPlayer("اللاعب ب")
@@ -1598,20 +1796,47 @@ class BattleEngine:
         turn_num = 1
         is_p1 = True
 
+        # Excitement & Boredom Pacing Telemetry
+        half_turns = 0
+        dead_turns = 0
+        stall_turns = 0
+        explosive_turns = 0
+        lead_changes = 0
+        prev_leader = 0
+        p1_trailed_deep = False
+        p2_trailed_deep = False
+
         while turn_num <= max_turns and p1.hp > 0 and p2.hp > 0:
+            half_turns += 1
             active = p1 if is_p1 else p2
             other = p2 if is_p1 else p1
+
+            p1.turn_deaths = 0
+            p2.turn_deaths = 0
+            p1.turn_clutch = False
+            p2.turn_clutch = False
+            hp1_start = p1.hp
+            hp2_start = p2.hp
+            actions_taken = 0
+            acted_cids: List[int] = []
 
             if other.team_immune_turns > 0:
                 other.team_immune_turns -= 1
 
             active.power = active.mana_cap
+            if turn_num == 2 and not is_p1:
+                active.power += 1  # تعويض +1 لمرة واحدة فقط في أول جولة للاعب الثاني دون زيادة دائمة للمانا
+                if log is not None:
+                    log.append(f"  [دور {turn_num}] {active.name} حصل على تعويض الجولة الأولى (+1 طاقة مؤقتة)")
             active.sacrificed_turn = False
             if active.deny_turns > 0:
                 active.deny_turns -= 1
                 active.sacrificed_turn = True
             else:
-                self.draw_card(active, turn_num, rng, log)
+                if not (turn_num == 1 and is_p1):
+                    self.draw_card(active, turn_num, rng, log)
+                elif log is not None:
+                    log.append(f"  [دور {turn_num}] {active.name} يتخطى سحب الدور الأول (قاعدة التوازن)")
 
             for s in active.slots:
                 if s is not None:
@@ -1621,41 +1846,71 @@ class BattleEngine:
             if p1.hp <= 0 or p2.hp <= 0:
                 break
 
-            # 1. DecideSacrifice (exact smart AIOpponent heuristic)
-            if len(active.hand) >= 2 and not active.sacrificed_turn:
+            # 1. Smart Sacrifice (guarantees ramp from 0 mana & smart mana growth)
+            if len(active.hand) >= 2 and not active.sacrificed_turn and active.mana_cap < 10:
                 aff_m = sum(1 for c in active.hand if c.card_type == "monster" and c.cost <= active.power)
                 has_hi = any(c.card_type == "monster" and c.cost > active.power for c in active.hand)
-                needs_mana = (has_hi and aff_m == 0) or (active.mana_cap < 8 and len(active.hand) >= 5)
-                if needs_mana or len(active.hand) >= 7:
+                needs_mana = (active.mana_cap == 0) or (has_hi and aff_m == 0) or (active.mana_cap < 7 and len(active.hand) >= 5)
+                if needs_mana or len(active.hand) >= 8:
                     hi_card = max((c for c in active.hand if c.cost > active.power + 2), key=lambda x: x.cost, default=None)
                     if hi_card is None:
+                        hi_card = next((c for c in active.hand if c.card_type == "env" and not self._should_play_env(active, other, c, active_env, env_turns)), None)
+                    if hi_card is None:
                         hi_card = next((c for c in active.hand if c.card_type != "monster" and c.cost > active.power + 1), None)
-                    if hi_card is None and len(active.hand) >= 5:
-                        hi_card = active.hand[-1]
+                    if hi_card is None and (needs_mana or len(active.hand) >= 6):
+                        hi_card = max(active.hand, key=lambda x: x.cost)
                     if hi_card is not None:
                         active.hand.remove(hi_card)
                         active.graveyard.append(hi_card)
                         active.mana_cap += 1
                         active.power += 1
                         active.sacrificed_turn = True
+                        if log is not None:
+                            log.append(f"  [دور {turn_num}] {active.name} ضحّى بـ #{hi_card.cid} -> المانا: {active.mana_cap} | نقاط الاستدعاء: {active.power}")
 
-            # 2. DecideEnvironment
+            # 2. Smart Environment Activation (Cantrip: draws +1 card & shifts weather when net beneficial)
             for c in list(active.hand):
-                if c.card_type == "env" and c.cost <= active.power:
+                if c.card_type == "env" and c.cost <= active.power and self._should_play_env(active, other, c, active_env, env_turns):
                     active.power -= c.cost
                     active.hand.remove(c)
                     active.played_ids.add(c.cid)
+                    acted_cids.append(c.cid)
+                    actions_taken += 1
                     active_env = c.element
                     env_turns = 4
+                    self.draw_card(active, turn_num, rng, log)
                     if log is not None:
-                        log.append(f"  [دور {turn_num}] {active.name} غيّر البيئة -> {ELEM_AR.get(active_env, active_env)}")
+                        log.append(f"  [دور {turn_num}] {active.name} غيّر البيئة تكتيكياً (+سحب ورقة) -> {ELEM_AR.get(active_env, active_env)}")
                     break
 
-            # 3. DecideSpells
-            playable_spells = [c for c in active.hand if c.card_type == "spell" and c.cost <= active.power]
-            for sp in playable_spells:
-                if sp.cost <= active.power:
+            # 3A. Combo Ordering: Summon Spell-Synergy / Mana-Gen Enablers BEFORE casting spells!
+            has_playable_spells = any(c.card_type == "spell" and c.cost <= active.power for c in active.hand)
+            if has_playable_spells:
+                synergy_hand = [
+                    c for c in active.hand
+                    if c.card_type == "monster" and c.cost <= active.power and (c.passive_tags & self._SYNERGY_PASSIVES)
+                ]
+                synergy_hand.sort(key=lambda c: c.cost)
+                for sm in synergy_hand:
+                    if sm.cost <= active.power:
+                        slot = self._choose_best_slot(active, other, sm)
+                        if slot != -1:
+                            self.summon_monster(active, other, sm, slot, turn_num)
+                            actions_taken += 1
+                            acted_cids.append(sm.cid)
+                            if log is not None:
+                                log.append(f"  [دور {turn_num}] {active.name} استدعى ممهّد كومبو #{sm.cid} @خانة {slot}")
+
+            # 3B. Pre-Summon / Offensive / Draw / Lane-Clearing Spells
+            pre_spells = [
+                c for c in active.hand
+                if c.card_type == "spell" and c.cost <= active.power and c.spell_type not in self._POST_BUFF_SPELLS
+            ]
+            for sp in pre_spells:
+                if sp.cost <= active.power and sp in active.hand and self._should_cast_spell(active, other, sp):
                     self.cast_spell(active, other, sp, turn_num, rng)
+                    actions_taken += 1
+                    acted_cids.append(sp.cid)
                     if log is not None:
                         log.append(f"  [دور {turn_num}] {active.name} ألقى تعويذة #{sp.cid} ({sp.role})")
                     if p1.hp <= 0 or p2.hp <= 0:
@@ -1663,28 +1918,95 @@ class BattleEngine:
             if p1.hp <= 0 or p2.hp <= 0:
                 break
 
-            # 4. DecideSummons
+            # 4. Smart Tactical Monster Summons (Counter-Lane + Quick Charge Sniping)
             playable_monsters = [c for c in active.hand if c.card_type == "monster"]
-            playable_monsters.sort(key=lambda c: (c.cost + c.atk + c.def_stat), reverse=True)
+            playable_monsters.sort(
+                key=lambda c: (1 if "Quick Charge" in c.passive_tags else 0, c.cost + c.atk + c.def_stat),
+                reverse=True,
+            )
             for mcard in playable_monsters:
                 if mcard.cost <= active.power:
-                    pref = SHIELD_SLOTS if mcard.role == "Pure Shield" else (ATTACK_SLOTS if mcard.role == "Attacker" else BALANCED_SLOTS)
-                    slot = next((s for s in pref if active.slots[s] is None), -1)
+                    slot = self._choose_best_slot(active, other, mcard)
                     if slot != -1:
                         self.summon_monster(active, other, mcard, slot, turn_num)
+                        actions_taken += 1
+                        acted_cids.append(mcard.cid)
                         if log is not None:
                             log.append(
                                 f"  [دور {turn_num}] {active.name} استدعى #{mcard.cid} "
                                 f"({ELEM_AR.get(mcard.element, mcard.element)}، تكلفة {mcard.cost}، {mcard.atk}/{mcard.def_stat}) @خانة {slot}"
                             )
 
-            # 5. ExecuteActiveSkills
-            self.execute_active_skills(active, other, turn_num, rng)
+            # 4B. Post-Summon Ally-Buff Spells (now all summoned allies get buffed!)
+            post_spells = [c for c in active.hand if c.card_type == "spell" and c.cost <= active.power]
+            for sp in post_spells:
+                if sp.cost <= active.power and sp in active.hand and self._should_cast_spell(active, other, sp):
+                    self.cast_spell(active, other, sp, turn_num, rng)
+                    actions_taken += 1
+                    acted_cids.append(sp.cid)
+                    if log is not None:
+                        log.append(f"  [دور {turn_num}] {active.name} ألقى تعويذة تعزيز #{sp.cid} ({sp.role})")
+                    if p1.hp <= 0 or p2.hp <= 0:
+                        break
             if p1.hp <= 0 or p2.hp <= 0:
                 break
 
-            # 6. ExecuteCombatPhase
+            # 5. Prioritized Active Skills
+            pwr_before_sk = active.power
+            self.execute_active_skills(active, other, turn_num, rng, acted_cids)
+            if active.power < pwr_before_sk or any(s is not None and s.used_active_turn for s in active.slots):
+                actions_taken += 1
+            if p1.hp <= 0 or p2.hp <= 0:
+                break
+
+            # 6. Execute Combat Phase
             self.execute_combat_phase(active, other, active_env, turn_num, rng)
+
+            # Evaluate Excitement & Boredom for this Turn
+            hp_swing = abs(p1.hp - hp1_start) + abs(p2.hp - hp2_start)
+            total_deaths = p1.turn_deaths + p2.turn_deaths
+            had_clutch = p1.turn_clutch or p2.turn_clutch
+            board_cnt = sum(1 for s in p1.slots if s is not None) + sum(1 for s in p2.slots if s is not None)
+
+            is_explosive = (total_deaths >= 2) or (hp_swing >= 45) or had_clutch
+            is_dead = (actions_taken == 0) and (hp_swing == 0) and (total_deaths == 0)
+            is_stall = (not is_dead) and (board_cnt >= 2) and (total_deaths == 0) and (hp_swing < 10)
+
+            if is_explosive:
+                explosive_turns += 1
+                for cid in set(acted_cids):
+                    active.card_excite[cid] = active.card_excite.get(cid, 0) + 1
+                if log is not None:
+                    log.append(f"    🔥 [لحظة إثارة!] ضرر/تغير: {hp_swing} | وفيات: {total_deaths}")
+            elif is_dead:
+                dead_turns += 1
+                for hc in active.hand:
+                    if hc.cid <= 452 and hc.cost > active.power:
+                        active.card_stall[hc.cid] = active.card_stall.get(hc.cid, 0) + 1
+                if log is not None:
+                    log.append(f"    💤 [دور ميت] لا لعب متاح (مانا {active.power})")
+            elif is_stall:
+                stall_turns += 1
+                for s in active.slots:
+                    if s is not None and s.proto.cid <= 452:
+                        active.card_stall[s.proto.cid] = active.card_stall.get(s.proto.cid, 0) + 1
+                if log is not None:
+                    log.append(f"    🧊 [جمود لوحة] تبادل ضعيف بدون سقوط وحوش")
+
+            # Lead Swing / Comeback Tracking
+            if turn_num >= 3:
+                if p2.hp - p1.hp >= 75:
+                    p1_trailed_deep = True
+                if p1.hp - p2.hp >= 75:
+                    p2_trailed_deep = True
+                cur_leader = 1 if p1.hp > p2.hp + 15 else (2 if p2.hp > p1.hp + 15 else prev_leader)
+                if prev_leader != 0 and cur_leader != 0 and cur_leader != prev_leader:
+                    lead_changes += 1
+                    if log is not None:
+                        log.append(f"    🔄 [انقلاب الصدارة!] ({p1.hp} ضد {p2.hp})")
+                if cur_leader != 0:
+                    prev_leader = cur_leader
+
             if p1.hp <= 0 or p2.hp <= 0:
                 break
 
@@ -1707,11 +2029,42 @@ class BattleEngine:
         else:
             winner = 0
 
+        turns_taken = min(turn_num, max_turns)
+        comeback_win = 1 if ((winner == 1 and p1_trailed_deep) or (winner == 2 and p2_trailed_deep)) else 0
+        winner_hp = p1.hp if winner == 1 else (p2.hp if winner == 2 else 0)
+        nail_biter = 1 if (winner != 0 and winner_hp <= 90) else 0
+        blowout = 1 if (winner != 0 and turns_taken <= 7) else 0
+
+        if winner == 1 and (comeback_win or nail_biter):
+            bonus_e = 2 if comeback_win else 1
+            for cid in p1.played_ids:
+                p1.card_excite[cid] = p1.card_excite.get(cid, 0) + bonus_e
+        elif winner == 2 and (comeback_win or nail_biter):
+            bonus_e = 2 if comeback_win else 1
+            for cid in p2.played_ids:
+                p2.card_excite[cid] = p2.card_excite.get(cid, 0) + bonus_e
+
+        mstats = {
+            "half_turns": max(1, half_turns),
+            "dead_turns": dead_turns,
+            "stall_turns": stall_turns,
+            "explosive_turns": explosive_turns,
+            "lead_changes": lead_changes,
+            "comeback_win": comeback_win,
+            "nail_biter": nail_biter,
+            "blowout": blowout,
+            "salvations": p1.salvations + p2.salvations,
+            "multipliers": p1.multipliers + p2.multipliers,
+        }
+
         if log is not None:
             winner_lbl = "اللاعب أ" if winner == 1 else ("اللاعب ب" if winner == 2 else "تعادل")
-            log.append(f"=== نهاية المعركة (الأدوار: {min(turn_num, max_turns)}) | الفائز: {winner_lbl} | الصحة: {p1.hp} ضد {p2.hp} ===")
+            log.append(
+                f"=== نهاية المعركة (الأدوار: {turns_taken}) | الفائز: {winner_lbl} | الصحة: {p1.hp} ضد {p2.hp} "
+                f"| متفجرة: {explosive_turns} • ميتة: {dead_turns} • جمود: {stall_turns} • انقلابات: {lead_changes} ==="
+            )
 
-        return winner, min(turn_num, max_turns), p1, p2, (log or [])
+        return winner, turns_taken, p1, p2, (log or []), mstats
 
 
 # ==============================================================================
@@ -1743,17 +2096,40 @@ def _run_chunk(task_args: Tuple[int, int]) -> dict:
     d_wins: Dict[int, int] = {}
     dmg_sum: Dict[int, int] = {}
     kill_sum: Dict[int, int] = {}
+    excite_sum: Dict[int, int] = {}
+    stall_sum: Dict[int, int] = {}
 
     w1 = w2 = draws = 0
     total_turns = 0
     total_waves = 0
     total_comebacks = 0
+    half_turns = 0
+    dead_turns = 0
+    stall_turns = 0
+    explosive_turns = 0
+    lead_changes = 0
+    comeback_wins = 0
+    nail_biters = 0
+    blowouts = 0
+    salvations = 0
+    multipliers = 0
 
     for _ in range(count):
-        winner, turns, p1, p2, _ = eng.play_match(rng)
+        winner, turns, p1, p2, _, ms = eng.play_match(rng)
         total_turns += turns
         total_waves += max(0, p1.wave_num - 1) + max(0, p2.wave_num - 1)
         total_comebacks += p1.comebacks + p2.comebacks
+        half_turns += ms["half_turns"]
+        dead_turns += ms["dead_turns"]
+        stall_turns += ms["stall_turns"]
+        explosive_turns += ms["explosive_turns"]
+        lead_changes += ms["lead_changes"]
+        comeback_wins += ms["comeback_win"]
+        nail_biters += ms["nail_biter"]
+        blowouts += ms["blowout"]
+        salvations += ms["salvations"]
+        multipliers += ms["multipliers"]
+
         if winner == 1:
             w1 += 1
         elif winner == 2:
@@ -1794,12 +2170,25 @@ def _run_chunk(task_args: Tuple[int, int]) -> dict:
             kill_sum[cid] = kill_sum.get(cid, 0) + v
         for cid, v in p2.card_kills.items():
             kill_sum[cid] = kill_sum.get(cid, 0) + v
+        for cid, v in p1.card_excite.items():
+            excite_sum[cid] = excite_sum.get(cid, 0) + v
+        for cid, v in p2.card_excite.items():
+            excite_sum[cid] = excite_sum.get(cid, 0) + v
+        for cid, v in p1.card_stall.items():
+            stall_sum[cid] = stall_sum.get(cid, 0) + v
+        for cid, v in p2.card_stall.items():
+            stall_sum[cid] = stall_sum.get(cid, 0) + v
 
     return {
         "n": count, "w1": w1, "w2": w2, "draws": draws,
         "turns": total_turns, "waves": total_waves, "comebacks": total_comebacks,
+        "half_turns": half_turns, "dead_turns": dead_turns, "stall_turns": stall_turns,
+        "explosive_turns": explosive_turns, "lead_changes": lead_changes,
+        "comeback_wins": comeback_wins, "nail_biters": nail_biters, "blowouts": blowouts,
+        "salvations": salvations, "multipliers": multipliers,
         "pm": p_matches, "pw": p_wins, "nmm": nm_matches, "nmw": nm_wins,
         "dm": d_matches, "dw": d_wins, "dmg": dmg_sum, "kills": kill_sum,
+        "cexcite": excite_sum, "cstall": stall_sum,
     }
 
 
@@ -1809,7 +2198,7 @@ def _run_chunk(task_args: Tuple[int, int]) -> dict:
 class SimulatorApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("⚔️ Full-Rules Card Battle Simulator (Up to 1,000,000 Matches)")
+        self.title("⚔️ محاكي معارك الكروت الكامل (حتى 1,000,000 معركة)")
         self.geometry("1420x860")
         self.configure(bg="#0F172A")
 
@@ -1837,6 +2226,16 @@ class SimulatorApp(tk.Tk):
         self.total_turns = 0
         self.total_waves = 0
         self.total_comebacks = 0
+        self.half_turns = 0
+        self.dead_turns = 0
+        self.stall_turns = 0
+        self.explosive_turns = 0
+        self.lead_changes = 0
+        self.comeback_wins = 0
+        self.nail_biters = 0
+        self.blowouts = 0
+        self.salvations = 0
+        self.multipliers = 0
         self.pm: Dict[int, int] = {}
         self.pw: Dict[int, int] = {}
         self.nmm: Dict[int, int] = {}
@@ -1845,6 +2244,8 @@ class SimulatorApp(tk.Tk):
         self.dw: Dict[int, int] = {}
         self.dmg: Dict[int, int] = {}
         self.kills: Dict[int, int] = {}
+        self.cexcite: Dict[int, int] = {}
+        self.cstall: Dict[int, int] = {}
 
     def _setup_styles(self) -> None:
         style = ttk.Style(self)
@@ -1860,44 +2261,44 @@ class SimulatorApp(tk.Tk):
         top.pack(fill="x", padx=10, pady=(10, 6))
 
         tk.Label(
-            top, text="⚔️ Full-Rules Card Battle Simulator (452 Cards • Unlimited Waves • Real Passives & Skills)",
+            top, text="⚔️ محاكي المعارك بالقواعد الكاملة (452 بطاقة • موجات لا نهائية • المهارات الكامنة والنشطة)",
             bg="#1E293B", fg="#F8FAFC", font=("Segoe UI", 13, "bold")
         ).grid(row=0, column=0, columnspan=10, sticky="w", pady=(0, 8))
 
-        tk.Label(top, text="Battles:", bg="#1E293B", fg="#CBD5E1", font=("Segoe UI", 10)).grid(row=1, column=0, sticky="w")
+        tk.Label(top, text="عدد المعارك:", bg="#1E293B", fg="#CBD5E1", font=("Segoe UI", 10)).grid(row=1, column=0, sticky="w")
         self.battles_var = tk.StringVar(value="10000")
         battles_entry = tk.Entry(top, textvariable=self.battles_var, width=12, bg="#0F172A", fg="#38BDF8", insertbackground="#38BDF8", font=("Segoe UI", 10, "bold"))
         battles_entry.grid(row=1, column=1, padx=(4, 8))
 
-        for col_i, (lbl, val) in enumerate([("1K", "1000"), ("10K", "10000"), ("100K", "100000"), ("500K", "500000"), ("1M", "1000000")], start=2):
+        for col_i, (lbl, val) in enumerate([("1 ألف", "1000"), ("10 آلاف", "10000"), ("100 ألف", "100000"), ("500 ألف", "500000"), ("1 مليون", "1000000")], start=2):
             tk.Button(
                 top, text=lbl, bg="#334155", fg="#F1F5F9", relief="flat", padx=8,
                 command=lambda v=val: self.battles_var.set(v)
             ).grid(row=1, column=col_i, padx=2)
 
-        tk.Label(top, text="CPU Cores:", bg="#1E293B", fg="#CBD5E1", font=("Segoe UI", 10)).grid(row=1, column=7, padx=(14, 4))
+        tk.Label(top, text="الأنوية (CPU):", bg="#1E293B", fg="#CBD5E1", font=("Segoe UI", 10)).grid(row=1, column=7, padx=(14, 4))
         max_cpu = max(1, (os.cpu_count() or 4))
         self.workers_var = tk.IntVar(value=max(1, max_cpu - 1))
         tk.Spinbox(top, from_=1, to=max_cpu, textvariable=self.workers_var, width=4, bg="#0F172A", fg="#F8FAFC").grid(row=1, column=8, padx=4)
 
         self.endless_var = tk.BooleanVar(value=True)
         tk.Checkbutton(
-            top, text="Endless Waves (>50 + Comebacks)", variable=self.endless_var,
+            top, text="موجات لا نهائية (>50 + عودة الأبطال)", variable=self.endless_var,
             bg="#1E293B", fg="#A7F3D0", selectcolor="#0F172A", activebackground="#1E293B", font=("Segoe UI", 9, "bold")
         ).grid(row=1, column=9, padx=(12, 4))
 
         btn_frame = tk.Frame(top, bg="#1E293B")
         btn_frame.grid(row=2, column=0, columnspan=10, sticky="w", pady=(10, 0))
 
-        self.start_btn = tk.Button(btn_frame, text="▶ Start Simulation", bg="#16A34A", fg="#FFFFFF", font=("Segoe UI", 10, "bold"), relief="flat", padx=16, pady=5, command=self.start_sim)
+        self.start_btn = tk.Button(btn_frame, text="▶ بدء المحاكاة", bg="#16A34A", fg="#FFFFFF", font=("Segoe UI", 10, "bold"), relief="flat", padx=16, pady=5, command=self.start_sim)
         self.start_btn.pack(side="left", padx=(0, 8))
 
-        self.stop_btn = tk.Button(btn_frame, text="⏹ Stop", bg="#DC2626", fg="#FFFFFF", font=("Segoe UI", 10, "bold"), relief="flat", padx=14, pady=5, state="disabled", command=self.stop_sim)
+        self.stop_btn = tk.Button(btn_frame, text="⏹ إيقاف", bg="#DC2626", fg="#FFFFFF", font=("Segoe UI", 10, "bold"), relief="flat", padx=14, pady=5, state="disabled", command=self.stop_sim)
         self.stop_btn.pack(side="left", padx=(0, 8))
 
-        tk.Button(btn_frame, text="🔍 Test 1 Sample Match Log", bg="#0284C7", fg="#FFFFFF", font=("Segoe UI", 9, "bold"), relief="flat", padx=12, pady=5, command=self.run_sample_match).pack(side="left", padx=(0, 8))
-        tk.Button(btn_frame, text="📊 Export Excel (.xlsx)", bg="#7C3AED", fg="#FFFFFF", font=("Segoe UI", 9, "bold"), relief="flat", padx=12, pady=5, command=self.export_excel).pack(side="left", padx=(0, 8))
-        tk.Button(btn_frame, text="📄 Export CSV", bg="#475569", fg="#FFFFFF", font=("Segoe UI", 9, "bold"), relief="flat", padx=12, pady=5, command=self.export_csv).pack(side="left")
+        tk.Button(btn_frame, text="🔍 تجربة معركة واحدة (سجل مفصل)", bg="#0284C7", fg="#FFFFFF", font=("Segoe UI", 9, "bold"), relief="flat", padx=12, pady=5, command=self.run_sample_match).pack(side="left", padx=(0, 8))
+        tk.Button(btn_frame, text="📊 تصدير Excel (.xlsx)", bg="#7C3AED", fg="#FFFFFF", font=("Segoe UI", 9, "bold"), relief="flat", padx=12, pady=5, command=self.export_excel).pack(side="left", padx=(0, 8))
+        tk.Button(btn_frame, text="📄 تصدير CSV", bg="#475569", fg="#FFFFFF", font=("Segoe UI", 9, "bold"), relief="flat", padx=12, pady=5, command=self.export_csv).pack(side="left")
 
         # Progress & Telemetry
         prog_frame = tk.Frame(self, bg="#1E293B", pady=8, padx=14)
@@ -1907,40 +2308,47 @@ class SimulatorApp(tk.Tk):
         self.progress.pack(fill="x", pady=(0, 6))
 
         self.status_lbl = tk.Label(
-            prog_frame, text="Ready • Loaded 452 Cards (240 Monsters + 200 Spells + 12 Environments)",
+            prog_frame,
+            text=f"جاهز • تم تحميل {len(self.by_id)} بطاقة ({len(self.monsters)} وحش + {len(self.spells)} تعويذة + {len(self.envs)} بيئة)",
             bg="#1E293B", fg="#38BDF8", font=("Segoe UI", 10, "bold"), anchor="w"
         )
         self.status_lbl.pack(fill="x")
 
         self.summary_lbl = tk.Label(
-            prog_frame, text="Balance Summary: Run a simulation to compute real per-card Win Rates.",
+            prog_frame, text="ملخص التوازن: شغّل المحاكاة لحساب نسبة الفوز الحقيقية لكل بطاقة.",
             bg="#1E293B", fg="#CBD5E1", font=("Segoe UI", 9), anchor="w"
         )
         self.summary_lbl.pack(fill="x", pady=(2, 0))
+
+        self.pacing_lbl = tk.Label(
+            prog_frame, text="إيقاع المتعة والملل: سيظهر هنا تحليل الأدوار المتفجرة، الانقلابات، النهايات المتقاربة، الأدوار الميتة والجمود.",
+            bg="#1E293B", fg="#FDE68A", font=("Segoe UI", 9, "bold"), anchor="w"
+        )
+        self.pacing_lbl.pack(fill="x", pady=(2, 0))
 
         # Filters
         flt = tk.Frame(self, bg="#0F172A", pady=4, padx=10)
         flt.pack(fill="x")
 
-        tk.Label(flt, text="Type:", bg="#0F172A", fg="#CBD5E1").pack(side="left")
-        self.type_filter = ttk.Combobox(flt, values=["All", "monster", "spell", "env"], width=10, state="readonly")
-        self.type_filter.set("All")
+        tk.Label(flt, text="النوع:", bg="#0F172A", fg="#CBD5E1").pack(side="left")
+        self.type_filter = ttk.Combobox(flt, values=["الكل", "وحش", "تعويذة", "بيئة"], width=10, state="readonly")
+        self.type_filter.set("الكل")
         self.type_filter.pack(side="left", padx=(4, 12))
         self.type_filter.bind("<<ComboboxSelected>>", lambda _e: self.refresh_table())
 
-        tk.Label(flt, text="Element:", bg="#0F172A", fg="#CBD5E1").pack(side="left")
-        self.elem_filter = ttk.Combobox(flt, values=["All"] + ELEMENTS, width=12, state="readonly")
-        self.elem_filter.set("All")
+        tk.Label(flt, text="العنصر:", bg="#0F172A", fg="#CBD5E1").pack(side="left")
+        self.elem_filter = ttk.Combobox(flt, values=["الكل"] + [ELEM_AR[e] for e in ELEMENTS], width=12, state="readonly")
+        self.elem_filter.set("الكل")
         self.elem_filter.pack(side="left", padx=(4, 12))
         self.elem_filter.bind("<<ComboboxSelected>>", lambda _e: self.refresh_table())
 
-        tk.Label(flt, text="Status:", bg="#0F172A", fg="#CBD5E1").pack(side="left")
-        self.status_filter = ttk.Combobox(flt, values=["All", "OP (>55%)", "Balanced (45-55%)", "Weak (<45%)"], width=18, state="readonly")
-        self.status_filter.set("All")
+        tk.Label(flt, text="التوازن:", bg="#0F172A", fg="#CBD5E1").pack(side="left")
+        self.status_filter = ttk.Combobox(flt, values=["الكل", "قوي جداً (>55%)", "متوازن (45-55%)", "ضعيف (<45%)"], width=18, state="readonly")
+        self.status_filter.set("الكل")
         self.status_filter.pack(side="left", padx=(4, 12))
         self.status_filter.bind("<<ComboboxSelected>>", lambda _e: self.refresh_table())
 
-        tk.Label(flt, text="Search:", bg="#0F172A", fg="#CBD5E1").pack(side="left")
+        tk.Label(flt, text="بحث:", bg="#0F172A", fg="#CBD5E1").pack(side="left")
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", lambda *_: self.refresh_table())
         tk.Entry(flt, textvariable=self.search_var, width=22, bg="#1E293B", fg="#F8FAFC", insertbackground="#38BDF8").pack(side="left", padx=4)
@@ -1952,16 +2360,20 @@ class SimulatorApp(tk.Tk):
         tbl_wrap = tk.Frame(self, bg="#0F172A", padx=10, pady=6)
         tbl_wrap.pack(fill="both", expand=True)
 
-        cols = ("id", "type", "element", "role", "tier", "cost", "stats", "skills", "plays", "drawn", "winrate", "all_wr", "avg_dmg", "kills", "status")
+        cols = (
+            "id", "type", "element", "role", "tier", "cost", "stats", "skills",
+            "plays", "drawn", "winrate", "all_wr", "avg_dmg", "kills", "excite", "boredom", "status"
+        )
         self.tree = ttk.Treeview(tbl_wrap, columns=cols, show="headings")
 
         headers = {
-            "id": ("ID", 52), "type": ("Type", 68), "element": ("Element", 78),
-            "role": ("Role", 130), "tier": ("Tier", 44), "cost": ("Cost", 48),
-            "stats": ("ATK/DEF", 72), "skills": ("Passive + Active / Effect", 320),
-            "plays": ("Plays", 72), "drawn": ("Drawn", 72),
-            "winrate": ("WinRate %", 88), "all_wr": ("All-Play %", 82),
-            "avg_dmg": ("AvgDmg", 68), "kills": ("Kills", 64), "status": ("Balance", 112),
+            "id": ("المعرّف", 54), "type": ("النوع", 64), "element": ("العنصر", 74),
+            "role": ("الدور", 120), "tier": ("الفئة", 44), "cost": ("التكلفة", 50),
+            "stats": ("هجوم/دفاع", 74), "skills": ("الكامنة + النشطة / التأثير", 280),
+            "plays": ("المشاركات", 74), "drawn": ("السحب", 68),
+            "winrate": ("نسبة الفوز %", 86), "all_wr": ("الكل %", 74),
+            "avg_dmg": ("متوسط الضرر", 80), "kills": ("القتلى", 60),
+            "excite": ("زخم الحماس", 82), "boredom": ("جمود/تعطل", 82), "status": ("حالة التوازن", 114),
         }
         for c, (txt, w) in headers.items():
             self.tree.heading(c, text=txt, command=lambda col=c: self._sort_by(col))
@@ -1992,20 +2404,22 @@ class SimulatorApp(tk.Tk):
 
     def _classify(self, plays: int, wr: float) -> Tuple[str, str]:
         if plays < 10:
-            return "Pending", "pending"
+            return "قيد الانتظار", "pending"
         if wr > 55.0:
-            return f"OP (+{wr-50:.1f}%)", "op"
+            return f"قوي جداً (+{wr-50:.1f}%)", "op"
         if wr > 52.5:
-            return f"Strong (+{wr-50:.1f}%)", "strong"
+            return f"قوي (+{wr-50:.1f}%)", "strong"
         if wr >= 47.5:
-            return "Balanced", "balanced"
+            return "متوازن", "balanced"
         if wr >= 45.0:
-            return f"Slightly Low", "weak"
-        return f"Under ({wr-50:.1f}%)", "weak"
+            return "منخفض قليلاً", "weak"
+        return f"ضعيف ({wr-50:.1f}%)", "weak"
 
     def refresh_table(self) -> None:
-        tf = self.type_filter.get()
-        ef = self.elem_filter.get()
+        tf_raw = self.type_filter.get()
+        ef_raw = self.elem_filter.get()
+        tf = TYPE_FROM_AR.get(tf_raw, tf_raw)
+        ef = ELEM_FROM_AR.get(ef_raw, ef_raw)
         sf = self.status_filter.get()
         q = self.search_var.get().strip().lower()
 
@@ -2034,28 +2448,41 @@ class SimulatorApp(tk.Tk):
                 else:
                     bal_c += 1
 
-            if tf != "All" and proto.card_type != tf:
+            if tf not in ("الكل", "All") and proto.card_type != tf:
                 continue
-            if ef != "All" and proto.element != ef:
+            if ef not in ("الكل", "All") and proto.element != ef:
                 continue
-            if sf == "OP (>55%)" and not (plays >= 10 and wr > 55.0):
+            if sf in ("قوي جداً (>55%)", "OP (>55%)") and not (plays >= 10 and wr > 55.0):
                 continue
-            if sf == "Balanced (45-55%)" and not (plays >= 10 and 45.0 <= wr <= 55.0):
+            if sf in ("متوازن (45-55%)", "Balanced (45-55%)") and not (plays >= 10 and 45.0 <= wr <= 55.0):
                 continue
-            if sf == "Weak (<45%)" and not (plays >= 10 and wr < 45.0):
-                continue
-            if q and q not in str(cid) and q not in proto.element.lower() and q not in proto.role.lower() and q not in proto.summary_text.lower():
+            if sf in ("ضعيف (<45%)", "Weak (<45%)") and not (plays >= 10 and wr < 45.0):
                 continue
 
+            type_disp = TYPE_AR.get(proto.card_type, proto.card_type)
+            elem_disp = ELEM_AR.get(proto.element, proto.element)
+            role_disp = ROLE_AR.get(proto.role, proto.role)
+
+            if q:
+                haystack = " ".join((
+                    str(cid), proto.card_type, type_disp, proto.element, elem_disp,
+                    proto.role, role_disp, proto.summary_text
+                )).lower()
+                if q not in haystack:
+                    continue
+
             stats_str = f"{proto.atk}/{proto.def_stat}" if proto.card_type == "monster" else "-"
+            ex_rate = (self.cexcite.get(cid, 0) / max(1, all_p)) * 100.0 if all_p > 0 else 0.0
+            st_rate = (self.cstall.get(cid, 0) / max(1, max(all_p, dr))) * 100.0 if (all_p > 0 or dr > 0) else 0.0
             rows.append((
-                cid, proto.card_type, proto.element, proto.role, proto.tier_num, proto.cost,
-                stats_str, proto.summary_text, all_p, dr, wr, all_wr, avg_d, tot_k, st_lbl, tag
+                cid, type_disp, elem_disp, role_disp, proto.tier_num, proto.cost,
+                stats_str, proto.summary_text, all_p, dr, wr, all_wr, avg_d, tot_k, ex_rate, st_rate, st_lbl, tag
             ))
 
         key_idx = {
             "id": 0, "type": 1, "element": 2, "role": 3, "tier": 4, "cost": 5,
-            "plays": 8, "drawn": 9, "winrate": 10, "all_wr": 11, "avg_dmg": 12, "kills": 13, "status": 10
+            "plays": 8, "drawn": 9, "winrate": 10, "all_wr": 11, "avg_dmg": 12, "kills": 13,
+            "excite": 14, "boredom": 15, "status": 10,
         }.get(self.sort_col, 10)
         rows.sort(key=lambda r: r[key_idx], reverse=self.sort_desc)
 
@@ -2066,9 +2493,9 @@ class SimulatorApp(tk.Tk):
                 values=(
                     r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7],
                     f"{r[8]:,}", f"{r[9]:,}", f"{r[10]:.2f}%", f"{r[11]:.2f}%",
-                    f"{r[12]:.1f}", f"{r[13]:,}", r[14]
+                    f"{r[12]:.1f}", f"{r[13]:,}", f"{r[14]:.1f}%", f"{r[15]:.1f}%", r[16]
                 ),
-                tags=(r[15],)
+                tags=(r[17],)
             )
 
         if self.done_matches > 0:
@@ -2077,9 +2504,26 @@ class SimulatorApp(tk.Tk):
             p2_pct = self.w2 / self.done_matches * 100.0
             self.summary_lbl.config(
                 text=(
-                    f"Analyzed Cards (>=10 non-mirror plays): Balanced={bal_c} | OP(>55%)={op_c} | Weak(<45%)={weak_c}   •   "
-                    f"Avg Turns: {avg_t:.1f}   •   P1/P2 Split: {p1_pct:.1f}% / {p2_pct:.1f}%   •   "
-                    f"Endless Waves: {self.total_waves:,}   •   Fallen Comebacks: {self.total_comebacks:,}"
+                    f"البطاقات المحلّلة (≥10 مباريات بدون مرآة): متوازن={bal_c} | قوي جداً(>55%)={op_c} | ضعيف(<45%)={weak_c}   •   "
+                    f"متوسط الأدوار: {avg_t:.1f}   •   نسبة أ/ب: {p1_pct:.1f}% / {p2_pct:.1f}%   •   "
+                    f"الموجات اللانهائية: {self.total_waves:,}   •   عودات الأبطال: {self.total_comebacks:,}"
+                )
+            )
+            ht = max(1, self.half_turns)
+            dm = max(1, self.done_matches)
+            exp_pct = self.explosive_turns / ht * 100.0
+            dead_pct = self.dead_turns / ht * 100.0
+            stall_pct = self.stall_turns / ht * 100.0
+            cb_pct = self.comeback_wins / dm * 100.0
+            nb_pct = self.nail_biters / dm * 100.0
+            bo_pct = self.blowouts / dm * 100.0
+            avg_lc = self.lead_changes / dm
+            self.pacing_lbl.config(
+                text=(
+                    f"🔥 أدوار متفجرة: {exp_pct:.1f}%   •   🔄 انقلابات الصدارة: {avg_lc:.2f}/مباراة ({cb_pct:.1f}% فوز بعد تأخر)   •   "
+                    f"🏆 نهايات متقاربة (≤90HP): {nb_pct:.1f}%   •   💤 أدوار ميتة: {dead_pct:.1f}%   •   "
+                    f"🧊 جمود لوحة: {stall_pct:.1f}%   •   ⚡ حسم سريع (≤7 أدوار): {bo_pct:.1f}%   •   "
+                    f"🛡️ إنقاذ: {self.salvations:,} / تضاعف: {self.multipliers:,}"
                 )
             )
 
@@ -2091,7 +2535,7 @@ class SimulatorApp(tk.Tk):
             if n < 1 or n > 1_000_000:
                 raise ValueError()
         except ValueError:
-            messagebox.showerror("Invalid Count", "Please enter a battle count between 1 and 1,000,000.")
+            messagebox.showerror("عدد غير صالح", "يرجى إدخال عدد معارك بين 1 و 1,000,000.")
             return
 
         self.reset_stats()
@@ -2162,6 +2606,16 @@ class SimulatorApp(tk.Tk):
                     self.total_turns += payload["turns"]
                     self.total_waves += payload["waves"]
                     self.total_comebacks += payload["comebacks"]
+                    self.half_turns += payload["half_turns"]
+                    self.dead_turns += payload["dead_turns"]
+                    self.stall_turns += payload["stall_turns"]
+                    self.explosive_turns += payload["explosive_turns"]
+                    self.lead_changes += payload["lead_changes"]
+                    self.comeback_wins += payload["comeback_wins"]
+                    self.nail_biters += payload["nail_biters"]
+                    self.blowouts += payload["blowouts"]
+                    self.salvations += payload["salvations"]
+                    self.multipliers += payload["multipliers"]
                     self._merge_dict(self.pm, payload["pm"])
                     self._merge_dict(self.pw, payload["pw"])
                     self._merge_dict(self.nmm, payload["nmm"])
@@ -2170,9 +2624,11 @@ class SimulatorApp(tk.Tk):
                     self._merge_dict(self.dw, payload["dw"])
                     self._merge_dict(self.dmg, payload["dmg"])
                     self._merge_dict(self.kills, payload["kills"])
+                    self._merge_dict(self.cexcite, payload["cexcite"])
+                    self._merge_dict(self.cstall, payload["cstall"])
                     dirty = True
                 elif kind == "error":
-                    messagebox.showerror("Simulation Error", str(payload))
+                    messagebox.showerror("خطأ في المحاكاة", str(payload))
                 elif kind == "done":
                     self.is_running = False
                     self.start_btn.config(state="normal")
@@ -2187,9 +2643,9 @@ class SimulatorApp(tk.Tk):
             elapsed = max(0.01, time.perf_counter() - self.sim_start_time) if self.sim_start_time else 0.01
             rate = self.done_matches / elapsed
             rem_sec = max(0.0, (self.target_matches - self.done_matches) / max(1.0, rate))
-            state_txt = "Completed" if not self.is_running else "Running"
+            state_txt = "مكتمل" if not self.is_running else "جاري التشغيل"
             self.status_lbl.config(
-                text=f"{state_txt}: {self.done_matches:,} / {self.target_matches:,} ({pct:.1f}%)  •  Speed: {rate:,.0f} matches/s  •  ETA: {rem_sec:.1f}s"
+                text=f"{state_txt}: {self.done_matches:,} / {self.target_matches:,} ({pct:.1f}%)  •  السرعة: {rate:,.0f} معركة/ث  •  المتبقي: {rem_sec:.1f} ث"
             )
             self.refresh_table()
 
@@ -2198,16 +2654,23 @@ class SimulatorApp(tk.Tk):
     def run_sample_match(self) -> None:
         eng = BattleEngine(self.by_id, self.monsters, self.spells, self.envs, endless_waves=bool(self.endless_var.get()))
         rng = random.Random()
-        _, _, _, _, log = eng.play_match(rng, max_turns=80, verbose=True)
+        _, _, _, _, log, _ = eng.play_match(rng, max_turns=80, verbose=True)
 
         win = tk.Toplevel(self)
-        win.title("🔍 Live Sample Full-Rules Match Log")
+        win.title("🔍 سجل معركة تجريبية مباشر بالقواعد الكاملة")
         win.geometry("820x580")
         win.configure(bg="#0F172A")
         txt = scrolledtext.ScrolledText(win, bg="#0B1220", fg="#E2E8F0", font=("Consolas", 10))
         txt.pack(fill="both", expand=True, padx=10, pady=10)
         txt.insert("1.0", "\n".join(log))
         txt.config(state="disabled")
+
+    _EXPORT_HEADERS = [
+        "المعرّف", "النوع", "العنصر", "الدور", "الفئة", "التكلفة", "الهجوم", "الدفاع",
+        "المهارات الكامنة", "المهارات النشطة", "إجمالي المشاركات", "مباريات بدون مرآة", "انتصارات بدون مرآة",
+        "نسبة الفوز %", "نسبة الفوز الكلية %", "مرات السحب", "نسبة الفوز عند السحب %",
+        "متوسط الضرر", "إجمالي القتلى", "زخم_الحماس_%", "جمود_وتعطل_%", "حالة التوازن"
+    ]
 
     def _collect_export_rows(self) -> List[tuple]:
         out = []
@@ -2224,11 +2687,15 @@ class SimulatorApp(tk.Tk):
             dr_wr = (dr_w / dr * 100.0) if dr > 0 else 50.0
             avg_d = (self.dmg.get(cid, 0) / all_p) if all_p > 0 else 0.0
             kills = self.kills.get(cid, 0)
+            ex_rate = (self.cexcite.get(cid, 0) / max(1, all_p)) * 100.0 if all_p > 0 else 0.0
+            st_rate = (self.cstall.get(cid, 0) / max(1, max(all_p, dr))) * 100.0 if (all_p > 0 or dr > 0) else 0.0
             st_lbl, _ = self._classify(plays, wr)
             out.append((
-                cid, proto.card_type, proto.element, proto.role, proto.tier_num, proto.cost,
+                cid, TYPE_AR.get(proto.card_type, proto.card_type), ELEM_AR.get(proto.element, proto.element),
+                ROLE_AR.get(proto.role, proto.role), proto.tier_num, proto.cost,
                 proto.atk, proto.def_stat, " ; ".join(proto.passives), " ; ".join(proto.actives),
-                all_p, plays, wins, round(wr, 2), round(all_wr, 2), dr, round(dr_wr, 2), round(avg_d, 2), kills, st_lbl
+                all_p, plays, wins, round(wr, 2), round(all_wr, 2), dr, round(dr_wr, 2),
+                round(avg_d, 2), kills, round(ex_rate, 2), round(st_rate, 2), st_lbl
             ))
         return out
 
@@ -2238,48 +2705,36 @@ class SimulatorApp(tk.Tk):
             initialdir=DEFAULT_EXPORT_DIR,
             initialfile=f"card_winrates_{self.done_matches}.csv",
             defaultextension=".csv",
-            filetypes=[("CSV files", "*.csv")],
+            filetypes=[("ملفات CSV", "*.csv")],
         )
         if not path:
             return
-        headers = [
-            "ID", "Type", "Element", "Role", "Tier", "Cost", "ATK", "DEF",
-            "Passives", "Actives", "TotalPlays", "NonMirrorPlays", "NonMirrorWins",
-            "WinRate_Pct", "AllPlayWinRate_Pct", "DrawnMatches", "DrawnWinRate_Pct",
-            "AvgDamage", "TotalKills", "BalanceStatus"
-        ]
         with open(path, "w", newline="", encoding="utf-8-sig") as f:
             w = csv.writer(f)
-            w.writerow(headers)
+            w.writerow(self._EXPORT_HEADERS)
             w.writerows(self._collect_export_rows())
-        messagebox.showinfo("Exported", f"Saved CSV report to:\n{path}")
+        messagebox.showinfo("تم التصدير", f"تم حفظ تقرير CSV في:\n{path}")
 
     def export_excel(self) -> None:
         if not HAS_OPENPYXL:
-            messagebox.showwarning("openpyxl Missing", "openpyxl is not installed. Use Export CSV instead.")
+            messagebox.showwarning("مكتبة openpyxl غير موجودة", "مكتبة openpyxl غير مثبّتة. استخدم تصدير CSV بدلاً منها.")
             return
         os.makedirs(DEFAULT_EXPORT_DIR, exist_ok=True)
         path = filedialog.asksaveasfilename(
             initialdir=DEFAULT_EXPORT_DIR,
             initialfile=f"card_winrates_{self.done_matches}.xlsx",
             defaultextension=".xlsx",
-            filetypes=[("Excel files", "*.xlsx")],
+            filetypes=[("ملفات Excel", "*.xlsx")],
         )
         if not path:
             return
         wb = openpyxl.Workbook()
         ws = wb.active
-        ws.title = "Card Win Rates"
-        headers = [
-            "ID", "Type", "Element", "Role", "Tier", "Cost", "ATK", "DEF",
-            "Passives", "Actives", "TotalPlays", "NonMirrorPlays", "NonMirrorWins",
-            "WinRate_Pct", "AllPlayWinRate_Pct", "DrawnMatches", "DrawnWinRate_Pct",
-            "AvgDamage", "TotalKills", "BalanceStatus"
-        ]
-        ws.append(headers)
+        ws.title = "نسب فوز البطاقات"
+        ws.append(self._EXPORT_HEADERS)
         fill_hdr = PatternFill("solid", fgColor="0F172A")
         font_hdr = Font(bold=True, color="38BDF8")
-        for col_idx in range(1, len(headers) + 1):
+        for col_idx in range(1, len(self._EXPORT_HEADERS) + 1):
             cell = ws.cell(1, col_idx)
             cell.fill = fill_hdr
             cell.font = font_hdr
@@ -2290,7 +2745,7 @@ class SimulatorApp(tk.Tk):
 
         ws.freeze_panes = "A2"
         wb.save(path)
-        messagebox.showinfo("Exported", f"Saved Excel Win-Rate report to:\n{path}")
+        messagebox.showinfo("تم التصدير", f"تم حفظ تقرير Excel في:\n{path}")
 
 
 if __name__ == "__main__":

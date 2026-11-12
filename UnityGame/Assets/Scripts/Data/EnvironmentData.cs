@@ -35,7 +35,7 @@ namespace MonsterCardGame.Data
 
             if (level == 1)
             {
-                cost = 2; duration = 4; buffPct = 0.30f; debuffPct = 0.20f;
+                cost = 1; duration = 4; buffPct = 0.30f; debuffPct = 0.20f;
             }
             else if (level == 2)
             {

@@ -463,10 +463,10 @@ MONSTER_PROGRESSION_LADDER = [
     (2, 2, "Support",     0.22, 0.00),  # Slot 7
     (3, 3, "Attacker",    0.26, 0.00),  # Slot 8
     (3, 3, "Defender",    0.27, 0.00),  # Slot 9
-    (3, 3, "Pure Shield", 0.29, 0.00),  # Slot 10
-    (4, 4, "Support",     0.00, 0.29),  # Slot 11
-    (4, 4, "Attacker",    0.00, 0.29),  # Slot 12
-    (4, 4, "Defender",    0.00, 0.30),  # Slot 13
+    (3, 3, "Support",     0.27, 0.00),  # Slot 10 (Rebalanced from 0/56 Pure Shield to interactive 7/37 Support)
+    (4, 4, "Support",     0.00, 0.20),  # Slot 11
+    (4, 4, "Attacker",    0.00, 0.20),  # Slot 12
+    (4, 4, "Defender",    0.00, 0.21),  # Slot 13
     (5, 4, "Support",     0.20, 0.25),  # Slot 14 (Dark #174 -> old #5224 custom 2.5D art)
     (5, 5, "Attacker",    0.20, 0.24),  # Slot 15 (Fire #15 -> old #599, Arcane #235 -> old #7024 custom 2.5D art)
     (5, 5, "Support",     0.22, 0.24),  # Slot 16 (Water #36 -> old #1194 custom art)
@@ -512,7 +512,16 @@ def create_all_cards():
         for i in range(count):
             tier_num, cost, role, p_share, a_share = MONSTER_PROGRESSION_LADDER[i]
             tier_title = TIER_NAMES[tier_num]
-            q_budget = 16.0 + (cost * 14.0)
+            raw_budget = 16.0 + (cost * 14.0)
+            # Slightly reinforce no-passive Tier 4 and smooth oppressive Cost 6-8 stat ceilings
+            if tier_num == 4:
+                q_budget = raw_budget * 1.04
+            elif cost == 6:
+                q_budget = raw_budget * 0.96
+            elif cost >= 7:
+                q_budget = raw_budget * 0.93
+            else:
+                q_budget = raw_budget
 
             if tier_num == 1:
                 passive_str = "None (Basic stat-focused monster)"
@@ -721,7 +730,9 @@ def create_all_cards():
                 q_budget = 16.0 + (cost * 14.0)
                 sim_eval_score = round(q_budget * random.uniform(0.985, 1.015), 1)
                 win_rate = round(50.0 + random.uniform(-1.4, 1.4), 2)
-                effect_val = int(round(cost * 10 + tier_num * 2 + (tpl_idx % 4) + (step_idx % 2)))
+                # Smooth diminishing curve across Cost 1..7 (~12..15 up to ~52..55)
+                var_bump = ((tpl_idx % 3) + (step_idx % 2)) if cost <= 3 else (tpl_idx % 4)
+                effect_val = int(round(4.0 + cost * 8.3 - (cost * cost) * 0.21 + var_bump))
                 sp_effect = desc_template.format(val=effect_val)
                 tier_title = TIER_NAMES[tier_num]
                 full_sp_desc = f"📜 [{sp_role}]: {sp_effect}"
@@ -775,11 +786,11 @@ def create_all_cards():
 
     for env_idx, env_name, buff_el, debuff_els, env_desc in ENVIRONMENT_CARDS:
         win_rate = round(50.0 + random.uniform(-0.8, 0.8), 2)
-        env_passive_score = round(24.0 + (win_rate - 50.0) * 0.65, 1)
-        env_active_score = round(20.0 + (win_rate - 50.0) * 0.55, 1)
-        p_txt = f"Buffs {buff_el}: (+30% L1 | +40% L2 | +70% L3)"
+        env_passive_score = round(16.0 + (win_rate - 50.0) * 0.50, 1)
+        env_active_score = round(14.0 + (win_rate - 50.0) * 0.45, 1)
+        p_txt = f"Buffs {buff_el}: (+30% L1 | +40% L2 | +70% L3) & Cantrip: Draw 1"
         a_txt = f"Debuffs ({debuff_els}): (-20% L1 | -30% L2 | -50% L3)"
-        full_env_desc = f"🌍 [Global Battlefield Weather - 4 Turns]: {env_desc}"
+        full_env_desc = f"🌍 [Global Battlefield Weather - 4 Turns | Draw +1 Card]: {env_desc}"
 
         all_cards.append({
             "id": current_id,
@@ -794,7 +805,7 @@ def create_all_cards():
             "tier": "Stackable Weather (L1-L3)",
             "tier_title": "Stackable Weather (L1-L3)",
             "tier_num": 1,
-            "cost": 2,
+            "cost": 1,
             "atk": 0,
             "def": 0,
             "passives_text": p_txt,

@@ -92,12 +92,14 @@ namespace MonsterCardGame.Core
                 }
             }
 
-            // Only sacrifice when AI needs mana to play its hand or has plenty of cards (>= 6), instead of throwing away monsters every turn
-            bool needsMana = (hasHighCostMonster && affordableMonsters == 0) || (aiPlayer.manaCapacity < 8 && aiPlayer.hand.Count >= 5);
+            // Always sacrifice at 0 mana; otherwise sacrifice when AI needs mana to play its hand or has plenty of cards
+            bool needsMana = (aiPlayer.manaCapacity == 0)
+                || (hasHighCostMonster && affordableMonsters == 0)
+                || (aiPlayer.manaCapacity < 8 && aiPlayer.hand.Count >= 5);
             if (!needsMana && aiPlayer.hand.Count < 7) return;
 
             CardData bestSacrifice = unplayableHighCost ?? extraNonMonster;
-            if (bestSacrifice == null && aiPlayer.hand.Count >= 5)
+            if (bestSacrifice == null && (needsMana || aiPlayer.hand.Count >= 5) && aiPlayer.hand.Count > 0)
             {
                 bestSacrifice = aiPlayer.hand[aiPlayer.hand.Count - 1];
             }

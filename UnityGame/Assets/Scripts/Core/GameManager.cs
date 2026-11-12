@@ -171,7 +171,7 @@ namespace MonsterCardGame.Core
             aiPlayer.getCardDrawWeightMultiplier = GetCardPityWeight;
             aiPlayer.onCardDrawnCallback = null;
 
-            // Draw 5 pre-turn cards; StartTurn() draws the 6th card on Turn 1 -> 6 random opening cards
+            // Draw 5 opening cards each (Player 1 skips Turn 1 draw -> stays at 5; Player 2 draws on Turn 2 -> 6)
             int preTurnDraws = Mathf.Max(0, openingHandCount - 1);
             for (int i = 0; i < preTurnDraws; i++)
             {
@@ -183,41 +183,15 @@ namespace MonsterCardGame.Core
             currentTurn = 1;
             activeEnvironment = null;
 
-            // Fair starting Mana & Power = 7 so Card #15 (Cost 5) can be summoned + its Active Skill (Cost 2) tested immediately on Turn 1
-            humanPlayer.manaCapacity = 7;
-            humanPlayer.currentPower = 7;
-            aiPlayer.manaCapacity = 3;
-            aiPlayer.currentPower = 3;
+            // V1 Fair Starting Rule: Both players begin at 0 Mana Cap and 0 Power (Player 2 receives +1 temp Power once on Turn 2)
+            humanPlayer.manaCapacity = 0;
+            humanPlayer.currentPower = 0;
+            aiPlayer.manaCapacity = 0;
+            aiPlayer.currentPower = 0;
 
-            Debug.Log($"🎲 Epic Battle Started! Decks: {defaultDeckSize} unique cards each | Opening Hand: {openingHandCount} | Unlimited Scaling & Unseen Pity Active.");
+            Debug.Log($"🎲 Epic Battle Started! Decks: {defaultDeckSize} unique cards each | Opening Hand: {preTurnDraws} | V1 Fair Start (0/0, P2 +1 Power on Turn 2).");
 
             StartTurn();
-
-            // Place Monster Card #15 (Dragon) directly into opening hand slot 0 for immediate battle & skill audio testing without duplicating IDs
-            if (allMonsters != null)
-            {
-                var dragonProto = allMonsters.Find(m => m != null && m.id == 15);
-                if (dragonProto != null && !humanPlayer.hand.Exists(c => c != null && c.id == 15))
-                {
-                    humanPlayer.deck.RemoveAll(c => c != null && c.id == 15);
-                    if (humanPlayer.hand.Count > 0)
-                    {
-                        var displaced = humanPlayer.hand[0];
-                        if (displaced != null)
-                        {
-                            humanPlayer.drawnCardIdsThisMatch.Remove(displaced.id);
-                            humanPlayer.deck.Add(displaced);
-                            humanPlayer.ShuffleDeck();
-                        }
-                        humanPlayer.hand[0] = CloneMonsterCard(dragonProto);
-                    }
-                    else
-                    {
-                        humanPlayer.hand.Add(CloneMonsterCard(dragonProto));
-                    }
-                    humanPlayer.drawnCardIdsThisMatch.Add(15);
-                }
-            }
 
             if (BattleUIManager.Instance != null)
             {
@@ -607,7 +581,13 @@ namespace MonsterCardGame.Core
                 otherPlayer.teamImmuneTurns--;
             }
 
-            activePlayer.StartTurn(currentTurn);
+            // V1 Fair Starting Rule: P1 skips Turn 1 draw; P2 gets a one-time +1 Power bonus on Turn 2 only
+            bool skipTurnDraw = (currentTurn == 1 && isPlayerTurn);
+            activePlayer.StartTurn(currentTurn, skipTurnDraw);
+            if (currentTurn == 2 && !isPlayerTurn)
+            {
+                activePlayer.currentPower += 1;
+            }
 
             if (CombatSystem.Instance != null)
             {
@@ -1136,6 +1116,9 @@ namespace MonsterCardGame.Core
                     BattleUIManager.Instance.LogCombatMessage($"🌍 [{player.playerName}] shifted battlefield weather to [{activeEnvironment.name}] (Level 1)! Buffs {activeEnvironment.buffedElement} by +30%.");
                 }
             }
+
+            // Cantrip: Environment cards grant +1 card draw so shifting weather never costs card advantage
+            player.DrawCard();
 
             if (BattleUIManager.Instance != null)
             {
