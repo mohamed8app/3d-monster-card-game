@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 r"""
-Mathematically Balanced 452-Card & Monster Database Generator (100% English In-Game + Arabic Monster Abilities Column in Excel)
-- 240 Monsters (20 progressive, balanced monsters per Element across 12 Elements)
-- 200 Diverse Intermediary Tactical Spell Cards (40 per Category across 5 Categories, 10 progressive tiers per template)
-- 12 Global Environment Weather Cards
+Mathematically Balanced 450-Card & Monster Database Generator (10 Elements × 10 Tribes)
+- 240 Monsters (24 per Element across 10 Pure Elements; 24 per Tribe across 10 Mythic Fantasy Tribes)
+- 200 Diverse Intermediary Tactical Spell Cards (40 per Category across 5 Categories)
+- 10 Symmetric Global Environment Weather Cards (1 per Element, Cost 1 + Cantrip Draw)
 Exports:
 1. D:/deck game/Data/قاعدة_بيانات_الوحوش_والكروت.xlsx
 2. D:/deck game/UnityGame/Assets/Resources/cards_10000.json
@@ -14,6 +14,7 @@ import json
 import os
 import random
 import re
+from collections import Counter
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -26,21 +27,76 @@ UNITY_RES_DIR = os.path.join(BASE_DIR, "UnityGame", "Assets", "Resources")
 CARDS_10K_JSON_PATH = os.path.join(UNITY_RES_DIR, "cards_10000.json")
 UNITY_MONSTERS_JSON_PATH = os.path.join(UNITY_RES_DIR, "monsters_150.json")
 
-# 12 Monster Elements (20 progressive balanced monsters per element = 240 monsters total)
+# 10 Pure Elements (24 progressive balanced monsters per Element = 240 monsters total)
 ELEMENTS_CONFIG = [
-    ("Fire", "Fire", "🔥", "E63946", 20),
-    ("Water", "Water", "💧", "0077B6", 20),
-    ("Ice", "Ice", "❄️", "48CAE4", 20),
-    ("Electric", "Electric", "⚡", "FFB703", 20),
-    ("Air", "Air", "🌪️", "8ECAE6", 20),
-    ("Earth", "Earth", "🪨", "8D6E63", 20),
-    ("Forest", "Forest", "🌿", "2D6A4F", 20),
-    ("Light", "Light", "✨", "FFD166", 20),
-    ("Dark", "Dark", "🌑", "4A4E69", 20),
-    ("Mecha", "Mecha", "⚙️", "6C757D", 20),
-    ("Ghosts", "Ghosts", "👻", "7209B7", 20),
-    ("Arcane", "Arcane", "🔮", "560BAD", 20),
+    ("Fire",     "Fire",     "🔥", "E63946", 24),
+    ("Water",    "Water",    "💧", "0077B6", 24),
+    ("Ice",      "Ice",      "❄️", "48CAE4", 24),
+    ("Electric", "Electric", "⚡", "FFB703", 24),
+    ("Air",      "Air",      "🌪️", "8ECAE6", 24),
+    ("Earth",    "Earth",    "🪨", "8D6E63", 24),
+    ("Nature",   "Nature",   "🌿", "2D6A4F", 24),
+    ("Light",    "Light",    "✨", "FFD166", 24),
+    ("Dark",     "Dark",     "🌑", "4A4E69", 24),
+    ("Arcane",   "Arcane",   "🔮", "560BAD", 24),
 ]
+
+# 10 Ancient Fantasy Monster Tribes (24 monsters per Tribe = 240 monsters total)
+TRIBES_CONFIG = [
+    ("Beasts",     "🐺 Beasts",     "حيوانات (برية، زواحف، تنانين)", "D97706"),
+    ("Ghosts",     "👻 Ghosts",     "أشباح (أطياف وأموات أحياء)",     "6D28D9"),
+    ("Dwarves",    "⛏️ Dwarves",    "أقزام (حدادة وتصنيع روني)",     "B45309"),
+    ("Elves",      "🏹 Elves",      "إلف (رماة وحراس الغابات)",      "15803D"),
+    ("Warriors",   "⚔️ Warriors",   "محاربون (فرسان وقتلة)",         "B91C1C"),
+    ("Giants",     "🗿 Giants",     "عمالقة (غالم وتيتان)",          "57534E"),
+    ("Insects",    "🕷️ Insects",    "حشرات (عناكب وعقارب)",          "4D7C0F"),
+    ("Mages",      "🧙 Mages",      "سحرة (مشعوذون وكهنة)",          "4338CA"),
+    ("Demons",     "👹 Demons",     "شياطين (وحوش الهاوية)",         "7F1D1D"),
+    ("Celestials", "👼 Celestials", "ملائكة (حراس سماويون)",         "CA8A04"),
+]
+
+# Exact Element -> 24 Monster IDs mapping (preserves all 11 existing custom artwork IDs 1,4,15,21,36,47,61,87,123,174,235!)
+ELEMENT_ID_SLOTS = {
+    "Fire":     list(range(1, 21))    + list(range(181, 185)),
+    "Water":    list(range(21, 41))   + list(range(185, 189)),
+    "Ice":      list(range(41, 61))   + list(range(189, 193)),
+    "Electric": list(range(61, 81))   + list(range(193, 197)),
+    "Air":      list(range(81, 101))  + list(range(197, 201)),
+    "Earth":    list(range(101, 121)) + list(range(201, 205)),
+    "Nature":   list(range(121, 141)) + list(range(205, 209)),
+    "Light":    list(range(141, 161)) + list(range(209, 213)),
+    "Dark":     list(range(161, 181)) + list(range(213, 217)),
+    "Arcane":   list(range(221, 241)) + list(range(217, 221)),
+}
+
+# Exact 10x10 Thematic Tribe Counts per Element (Each Element = 24, Each Tribe = 24; 0 Light Demons, 0 Dark Celestials)
+TRIBE_COUNTS_BY_ELEMENT = {
+    "Fire":     {"Demons": 5, "Beasts": 3, "Dwarves": 3, "Warriors": 3, "Ghosts": 2, "Giants": 2, "Insects": 2, "Mages": 2, "Elves": 1, "Celestials": 1},
+    "Water":    {"Celestials": 4, "Elves": 3, "Warriors": 3, "Beasts": 2, "Ghosts": 2, "Dwarves": 2, "Giants": 2, "Insects": 2, "Mages": 2, "Demons": 2},
+    "Ice":      {"Giants": 4, "Ghosts": 3, "Mages": 3, "Celestials": 3, "Beasts": 2, "Dwarves": 2, "Elves": 2, "Warriors": 2, "Demons": 2, "Insects": 1},
+    "Electric": {"Beasts": 3, "Dwarves": 3, "Insects": 3, "Mages": 3, "Ghosts": 2, "Elves": 2, "Warriors": 2, "Giants": 2, "Demons": 2, "Celestials": 2},
+    "Air":      {"Celestials": 5, "Beasts": 3, "Elves": 3, "Mages": 3, "Ghosts": 2, "Warriors": 2, "Giants": 2, "Insects": 2, "Dwarves": 1, "Demons": 1},
+    "Earth":    {"Dwarves": 5, "Giants": 5, "Warriors": 3, "Insects": 3, "Beasts": 2, "Ghosts": 2, "Demons": 2, "Elves": 1, "Mages": 1, "Celestials": 0},
+    "Nature":   {"Elves": 5, "Insects": 5, "Beasts": 2, "Ghosts": 2, "Dwarves": 2, "Warriors": 2, "Giants": 2, "Celestials": 2, "Mages": 1, "Demons": 1},
+    "Light":    {"Celestials": 6, "Warriors": 4, "Elves": 3, "Mages": 3, "Beasts": 2, "Dwarves": 2, "Giants": 2, "Ghosts": 1, "Insects": 1, "Demons": 0},
+    "Dark":     {"Demons": 7, "Ghosts": 4, "Insects": 3, "Beasts": 2, "Dwarves": 2, "Elves": 2, "Warriors": 2, "Giants": 1, "Mages": 1, "Celestials": 0},
+    "Arcane":   {"Mages": 5, "Ghosts": 4, "Beasts": 3, "Dwarves": 2, "Elves": 2, "Giants": 2, "Insects": 2, "Demons": 2, "Warriors": 1, "Celestials": 1},
+}
+
+# Pinned Tribe overrides preserving exact visual identity of existing custom art IDs
+PINNED_TRIBES_BY_ID = {
+    1: "Demons",     # Molten Berserker with fiery axe
+    4: "Beasts",     # Armored Lava Salamander
+    15: "Beasts",    # Fire Dragon
+    21: "Beasts",    # Water Sea Serpent
+    36: "Beasts",    # Water Leviathan
+    47: "Giants",    # Ice Crystal Golem
+    61: "Beasts",    # Electric Storm Wolf
+    87: "Mages",     # Falcon Air Mage with staff & spellbook
+    123: "Warriors", # Nature Spear Ranger
+    174: "Warriors", # Dark Iron Halberd Knight
+    235: "Mages",    # Arcane Crystal-Staff Archmage
+}
 
 TIER_NAMES = {
     1: "Tier 1 - Basic",
