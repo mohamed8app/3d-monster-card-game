@@ -311,10 +311,10 @@ namespace MonsterCardGame.Audio
             if (lower.Contains("earth")) return "ambience_earth";
             if (lower.Contains("electric")) return "ambience_electric";
             if (lower.Contains("air") || lower.Contains("wind")) return "ambience_wind";
-            if (lower.Contains("forest")) return "ambience_forest";
+            if (lower.Contains("nature") || lower.Contains("forest")) return "ambience_forest";
             if (lower.Contains("light")) return "ambience_light";
             if (lower.Contains("dark")) return "ambience_dark";
-            if (lower.Contains("mecha")) return "ambience_mecha";
+            if (lower.Contains("arcane") || lower.Contains("magic")) return "ambience_arcane";
             if (lower.Contains("ghost")) return "ambience_ghost";
             if (lower.Contains("arcane")) return "ambience_arcane";
 

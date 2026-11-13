@@ -64,11 +64,10 @@ namespace MonsterCardGame.UI
                 case "Earth": elemColor = new Color(0.6f, 0.45f, 0.25f); break;
                 case "Electric": elemColor = new Color(0.95f, 0.85f, 0.15f); break;
                 case "Air": elemColor = new Color(0.4f, 0.9f, 0.7f); break;
+                case "Nature":
                 case "Forest": elemColor = new Color(0.25f, 0.75f, 0.3f); break;
                 case "Light": elemColor = new Color(1.0f, 0.95f, 0.6f); break;
                 case "Dark": elemColor = new Color(0.35f, 0.15f, 0.5f); break;
-                case "Mecha": elemColor = new Color(0.7f, 0.75f, 0.8f); break;
-                case "Ghosts": elemColor = new Color(0.65f, 0.5f, 0.85f); break;
                 case "Arcane": elemColor = new Color(0.85f, 0.35f, 0.85f); break;
             }
             cardFrame.color = elemColor;

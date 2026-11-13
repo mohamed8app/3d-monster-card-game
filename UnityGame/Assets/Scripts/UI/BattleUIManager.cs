@@ -53,7 +53,7 @@ namespace MonsterCardGame.UI
 
         private static readonly string[] AllTestElements = {
             "Fire", "Water", "Ice", "Earth", "Electric", "Air",
-            "Forest", "Light", "Dark", "Mecha", "Ghosts", "Arcane"
+            "Nature", "Light", "Dark", "Arcane"
         };
         private int currentTestEnvIndex = -1;
 
@@ -623,7 +623,8 @@ namespace MonsterCardGame.UI
                     idCenterTxt.raycastTarget = false;
 
                     string elemEmoji = MonsterArtLoader.GetElementEmoji(card.element);
-                    var tierBadgeTxt = GameBootstrapper.CreateText(cardObj.transform, "TierBadge", $"{elemEmoji} T{Mathf.Max(1, card.tier_num)}", 13,
+                    string tribeEmoji = MonsterArtLoader.GetTribeEmoji(card.tribe);
+                    var tierBadgeTxt = GameBootstrapper.CreateText(cardObj.transform, "TierBadge", $"{elemEmoji}{tribeEmoji} T{Mathf.Max(1, card.tier_num)}", 13,
                         new Color(0.9f, 0.92f, 0.96f), TextAnchor.MiddleCenter, new Vector2(0, -24), new Vector2(120, 24));
                     tierBadgeTxt.fontStyle = FontStyle.Bold;
                     tierBadgeTxt.raycastTarget = false;
@@ -991,8 +992,9 @@ namespace MonsterCardGame.UI
             if (detailMetaText != null)
             {
                 string elemEmoji = MonsterArtLoader.GetElementEmoji(data.element);
+                string tribePart = string.IsNullOrEmpty(data.tribe) ? "" : $" • {MonsterArtLoader.GetTribeEmoji(data.tribe)} {data.tribe}";
                 string sideStr = isPlayer ? "Allied" : "Enemy";
-                detailMetaText.text = $"{elemEmoji} {data.element} • {data.role} ({sideStr}) • Cost: {data.cost} Mana";
+                detailMetaText.text = $"{elemEmoji} {data.element}{tribePart} • {data.role} ({sideStr}) • Cost: {data.cost} Mana";
                 detailMetaText.color = MonsterArtLoader.GetElementColor(data.element);
             }
 
@@ -1123,7 +1125,8 @@ namespace MonsterCardGame.UI
             if (detailMetaText != null)
             {
                 string elemEmoji = MonsterArtLoader.GetElementEmoji(data.element);
-                detailMetaText.text = $"{elemEmoji} {data.element} • {typeName} • Cost: {data.cost} Mana";
+                string tribePart = string.IsNullOrEmpty(data.tribe) ? "" : $" • {MonsterArtLoader.GetTribeEmoji(data.tribe)} {data.tribe}";
+                detailMetaText.text = $"{elemEmoji} {data.element}{tribePart} • {typeName} • Cost: {data.cost} Mana";
                 detailMetaText.color = MonsterArtLoader.GetElementColor(data.element);
             }
 

@@ -66,6 +66,7 @@ namespace MonsterCardGame.Data
         public CardType cardType = CardType.Monster;
         public string card_type = "monster";
         public string element = "Fire";
+        public string tribe = "";
         public string group = "🔥 Fire";
         public string group_en = "Fire";
         public int cost = 1;
@@ -110,14 +111,31 @@ namespace MonsterCardGame.Data
                 case "Earth": return ElementType.Earth;
                 case "Electric": return ElementType.Electric;
                 case "Air": return ElementType.Air;
-                case "Forest": return ElementType.Forest;
+                case "Nature":
+                case "Forest": return ElementType.Nature;
                 case "Light": return ElementType.Light;
                 case "Dark": return ElementType.Dark;
-                case "Mecha": return ElementType.Mecha;
-                case "Ghosts": return ElementType.Ghosts;
                 case "Arcane":
                 case "Arcane Monsters": return ElementType.Arcane;
                 default: return ElementType.Fire;
+            }
+        }
+
+        public MonsterTribe GetTribeEnum()
+        {
+            switch (tribe)
+            {
+                case "Beasts": return MonsterTribe.Beasts;
+                case "Ghosts": return MonsterTribe.Ghosts;
+                case "Dwarves": return MonsterTribe.Dwarves;
+                case "Elves": return MonsterTribe.Elves;
+                case "Warriors": return MonsterTribe.Warriors;
+                case "Giants": return MonsterTribe.Giants;
+                case "Insects": return MonsterTribe.Insects;
+                case "Mages": return MonsterTribe.Mages;
+                case "Demons": return MonsterTribe.Demons;
+                case "Celestials": return MonsterTribe.Celestials;
+                default: return MonsterTribe.None;
             }
         }
 

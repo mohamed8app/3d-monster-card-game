@@ -13,12 +13,26 @@ namespace MonsterCardGame.Data
         Earth,
         Electric,
         Air,
-        Forest,
+        Nature,
         Light,
         Dark,
-        Mecha,
-        Ghosts,
         Arcane
+    }
+
+    [Serializable]
+    public enum MonsterTribe
+    {
+        None,
+        Beasts,
+        Ghosts,
+        Dwarves,
+        Elves,
+        Warriors,
+        Giants,
+        Insects,
+        Mages,
+        Demons,
+        Celestials
     }
 
     [Serializable]

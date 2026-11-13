@@ -112,7 +112,7 @@ namespace MonsterCardGame.Core
                     int mechas = 0;
                     for (int i = 0; i < 6; i++)
                     {
-                        if (player.slots[i].IsOccupied && player.slots[i].currentMonster.data.element == "Mecha")
+                        if (player.slots[i].IsOccupied && (player.slots[i].currentMonster.data.tribe == "Dwarves" || player.slots[i].currentMonster.data.element == "Mecha"))
                             mechas++;
                     }
                     m.AddBonusDef(Mathf.Max(1, mechas) * 8);
@@ -1145,12 +1145,12 @@ namespace MonsterCardGame.Core
                 int aSlot = target.currentSlot != null ? target.currentSlot.slotIndex : slot;
                 if (showVfx) SpawnSlotStatusVfx(playerIsHuman, aSlot, $"🪨 +{15 + bonusEff} DEF ANCHORED", new Color(0.85f, 0.65f, 0.38f));
             }
-            // --- FOREST ---
+            // --- NATURE ---
             else if (act.Contains("Wrath of Nature"))
             {
                 var treant = new MonsterData
                 {
-                    id = 9998, name = "9998", element = "Forest", role = "Defender",
+                    id = 9998, name = "9998", element = "Nature", tribe = "Giants", role = "Defender",
                     tier_num = 2, cost = 2, atk = 6, def = 30,
                     passives = new List<string> { "Poison Thorns: Deal 3 damage to attacking monster" },
                     description = "Summoned Treant Guardian (30 DEF, Poison Thorns)."
@@ -1313,12 +1313,12 @@ namespace MonsterCardGame.Core
                 m.HealDefense(20 + bonusEff);
                 if (showVfx) SpawnSlotStatusVfx(playerIsHuman, slot, $"⚙️ REBOOT +{20 + bonusEff} DEF", new Color(0.75f, 0.85f, 0.95f));
             }
-            // --- GHOSTS ---
+            // --- GHOSTS / DARK ---
             else if (act.Contains("Graveyard Summoning"))
             {
                 var ghost = new MonsterData
                 {
-                    id = 9999, name = "9999", element = "Ghosts", role = "Attacker",
+                    id = 9999, name = "9999", element = "Dark", tribe = "Ghosts", role = "Attacker",
                     tier_num = 2, cost = 2, atk = 12, def = 14,
                     passives = new List<string> { "Ethereal Body: 35% immune to normal monster strikes" },
                     description = "Summoned Spectral Ghost (12 ATK, 14 DEF, Ethereal Body)."
@@ -1503,7 +1503,7 @@ namespace MonsterCardGame.Core
                 // Ethereal Body for Ghosts: reduces normal monster attacks by 35%
                 if (enemyMonster.HasPassiveSubstr("Ethereal Body") != null)
                 {
-                    if (attackerMonster.data.element != "Light" && attackerMonster.data.element != "Arcane" && attackerMonster.data.element != "Ghosts" && attackerMonster.HasPassiveSubstr("Phase Shift") == null)
+                    if (attackerMonster.data.element != "Light" && attackerMonster.data.element != "Arcane" && attackerMonster.data.tribe != "Ghosts" && attackerMonster.data.element != "Ghosts" && attackerMonster.HasPassiveSubstr("Phase Shift") == null)
                     {
                         atkPower = Mathf.Max(1, Mathf.RoundToInt(atkPower * 0.65f));
                     }

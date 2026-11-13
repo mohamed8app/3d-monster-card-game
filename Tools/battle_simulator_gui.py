@@ -39,7 +39,7 @@ DEFAULT_EXPORT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..
 
 ELEMENTS = [
     "Fire", "Water", "Ice", "Earth", "Electric", "Air",
-    "Forest", "Light", "Dark", "Mecha", "Ghosts", "Arcane",
+    "Nature", "Light", "Dark", "Arcane",
 ]
 
 TYPE_AR: Dict[str, str] = {
@@ -56,14 +56,30 @@ ELEM_AR: Dict[str, str] = {
     "Earth": "أرض",
     "Electric": "كهرباء",
     "Air": "هواء",
-    "Forest": "غابة",
+    "Nature": "طبيعة",
     "Light": "نور",
     "Dark": "ظلام",
-    "Mecha": "ميكا",
-    "Ghosts": "أشباح",
     "Arcane": "غامض",
 }
 ELEM_FROM_AR: Dict[str, str] = {v: k for k, v in ELEM_AR.items()}
+
+TRIBES: Tuple[str, ...] = (
+    "Beasts", "Ghosts", "Dwarves", "Elves", "Warriors",
+    "Giants", "Insects", "Mages", "Demons", "Celestials",
+)
+TRIBE_AR: Dict[str, str] = {
+    "Beasts": "وحوش برية",
+    "Ghosts": "أشباح",
+    "Dwarves": "أقزام",
+    "Elves": "إلف",
+    "Warriors": "محاربون",
+    "Giants": "عمالقة",
+    "Insects": "حشرات",
+    "Mages": "سحرة",
+    "Demons": "شياطين",
+    "Celestials": "سماويون",
+}
+TRIBE_FROM_AR: Dict[str, str] = {v: k for k, v in TRIBE_AR.items()}
 
 ROLE_AR: Dict[str, str] = {
     "Attacker": "مهاجم",
@@ -72,18 +88,16 @@ ROLE_AR: Dict[str, str] = {
 }
 
 ENV_MATRIX: Dict[str, Tuple[str, set]] = {
-    "Fire": ("Fire", {"Forest", "Ice", "Mecha"}),
-    "Water": ("Water", {"Fire", "Earth", "Mecha"}),
-    "Ice": ("Ice", {"Water", "Forest", "Air"}),
-    "Earth": ("Earth", {"Electric", "Fire", "Ice"}),
-    "Electric": ("Electric", {"Mecha", "Water", "Air"}),
-    "Air": ("Air", {"Ghosts", "Earth", "Dark"}),
-    "Forest": ("Forest", {"Earth", "Water", "Air"}),
-    "Light": ("Light", {"Dark", "Ghosts", "Arcane"}),
-    "Dark": ("Dark", {"Light", "Arcane", "Electric"}),
-    "Mecha": ("Mecha", {"Forest", "Ghosts", "Light"}),
-    "Ghosts": ("Ghosts", {"Fire", "Electric", "Arcane"}),
-    "Arcane": ("Arcane", {"Ice", "Light", "Dark"}),
+    "Fire": ("Fire", {"Nature", "Ice", "Dark"}),
+    "Water": ("Water", {"Fire", "Earth", "Light"}),
+    "Ice": ("Ice", {"Water", "Nature", "Air"}),
+    "Earth": ("Earth", {"Fire", "Electric", "Ice"}),
+    "Electric": ("Electric", {"Water", "Air", "Arcane"}),
+    "Air": ("Air", {"Earth", "Fire", "Dark"}),
+    "Nature": ("Nature", {"Earth", "Water", "Electric"}),
+    "Light": ("Light", {"Dark", "Ice", "Arcane"}),
+    "Dark": ("Dark", {"Light", "Nature", "Arcane"}),
+    "Arcane": ("Arcane", {"Light", "Electric", "Air"}),
 }
 
 # Slot ordering matching AIOpponent.cs
@@ -201,6 +215,7 @@ class CardProto:
     cid: int
     card_type: str  # "monster", "spell", "env"
     element: str
+    tribe: str
     role: str
     tier_num: int
     cost: int
@@ -242,6 +257,9 @@ def load_database(json_path: str) -> Tuple[Dict[int, CardProto], List[CardProto]
         cid = int(c["id"])
         ctype = c.get("card_type", "monster")
         elem = c.get("element", "Fire")
+        if elem == "Forest":
+            elem = "Nature"
+        tribe = c.get("tribe", "") or ""
         role = c.get("role", "")
         tier_num = int(c.get("tier_num", 1))
         cost = int(c.get("cost", 1))
@@ -259,7 +277,7 @@ def load_database(json_path: str) -> Tuple[Dict[int, CardProto], List[CardProto]
             a_short = act0.split(":")[0].strip() if act0 else "-"
             summary = f"{p_short} | {a_short}"
             proto = CardProto(
-                cid, "monster", elem, role, tier_num, cost, atk, def_stat,
+                cid, "monster", elem, tribe, role, tier_num, cost, atk, def_stat,
                 plist, ptags, alist, act_cost, req_enemy, 0, 0, summary
             )
             by_id[cid] = proto
@@ -269,7 +287,7 @@ def load_database(json_path: str) -> Tuple[Dict[int, CardProto], List[CardProto]
             sp = max(10, int(c.get("spellPower", 12)))
             summary = (c.get("active_skill") or c.get("description") or "")[:68]
             proto = CardProto(
-                cid, "spell", elem, role, tier_num, cost, 0, 0,
+                cid, "spell", elem, "", role, tier_num, cost, 0, 0,
                 (), frozenset(), (), 0, False, st, sp, summary
             )
             by_id[cid] = proto
@@ -286,19 +304,19 @@ def load_database(json_path: str) -> Tuple[Dict[int, CardProto], List[CardProto]
                     env_elem = ELEMENTS[(cid - 441) % len(ELEMENTS)]
             env_cost = int(c.get("cost", 1))
             proto = CardProto(
-                cid, "env", env_elem, "Environment", 3, env_cost, 0, 0,
+                cid, "env", env_elem, "", "Environment", 3, env_cost, 0, 0,
                 (), frozenset(), (), 0, False, 0, 0, f"{env_elem} (+30% Ally / -20% Counter | Draw +1)"
             )
             by_id[cid] = proto
             envs.append(proto)
 
-    # Ensure all 12 environments exist even if JSON trimmed
-    if len(envs) < 12:
+    # Ensure all element environments exist even if JSON trimmed
+    if len(envs) < len(ELEMENTS):
         existing_elems = {e.element for e in envs}
         for idx, el in enumerate(ELEMENTS, start=1):
             if el not in existing_elems:
                 cid = 440 + idx
-                proto = CardProto(cid, "env", el, "Environment", 3, 1, 0, 0, (), frozenset(), (), 0, False, 0, 0, f"{el} Environment")
+                proto = CardProto(cid, "env", el, "", "Environment", 3, 1, 0, 0, (), frozenset(), (), 0, False, 0, 0, f"{el} Environment")
                 by_id[cid] = proto
                 envs.append(proto)
 
@@ -307,12 +325,12 @@ def load_database(json_path: str) -> Tuple[Dict[int, CardProto], List[CardProto]
 
 # Synthetic token prototypes for Wrath of Nature / Graveyard Summoning
 TOKEN_TREANT = CardProto(
-    9998, "monster", "Forest", "Defender", 2, 2, 6, 30,
+    9998, "monster", "Nature", "Giants", "Defender", 2, 2, 6, 30,
     ("Poison Thorns: Deal 3 damage to attacking monster",),
     frozenset({"Poison Thorns"}), (), 0, False, 0, 0, "Token Treant"
 )
 TOKEN_GHOST = CardProto(
-    9999, "monster", "Ghosts", "Attacker", 2, 2, 12, 14,
+    9999, "monster", "Dark", "Ghosts", "Attacker", 2, 2, 12, 14,
     ("Ethereal Body: 35% immune to normal monster strikes",),
     frozenset({"Ethereal Body"}), (), 0, False, 0, 0, "Token Ghost"
 )
@@ -904,8 +922,8 @@ class BattleEngine:
             else:
                 m.add_bonus_def(10)
         if "War Fusion" in pt:
-            mechas = sum(1 for s in player.slots if s is not None and s.proto.element == "Mecha")
-            m.add_bonus_def(max(1, mechas) * 8)
+            dwarves = sum(1 for s in player.slots if s is not None and (s.proto.tribe == "Dwarves" or s.proto.element == "Mecha"))
+            m.add_bonus_def(max(1, dwarves) * 8)
         if "Nourishing Roots" in pt:
             player.mana_cap += 1
             player.power += 1
@@ -1716,7 +1734,7 @@ class BattleEngine:
                         opp_m.bubble_shield = False
                         continue
                     if opp_m.has_p("Ethereal Body"):
-                        if att.proto.element not in ("Light", "Arcane", "Ghosts") and not att.has_p("Phase Shift"):
+                        if att.proto.element not in ("Light", "Arcane") and att.proto.tribe != "Ghosts" and att.proto.element != "Ghosts" and not att.has_p("Phase Shift"):
                             atk_power = max(1, int(round(atk_power * 0.65)))
                     if not att.has_p("Targeting System"):
                         if opp_m.has_p("Light Evasion") and rng.random() < 0.20:
@@ -1932,9 +1950,10 @@ class BattleEngine:
                         actions_taken += 1
                         acted_cids.append(mcard.cid)
                         if log is not None:
+                            t_lbl = f"/{TRIBE_AR.get(mcard.tribe, mcard.tribe)}" if mcard.tribe else ""
                             log.append(
                                 f"  [دور {turn_num}] {active.name} استدعى #{mcard.cid} "
-                                f"({ELEM_AR.get(mcard.element, mcard.element)}، تكلفة {mcard.cost}، {mcard.atk}/{mcard.def_stat}) @خانة {slot}"
+                                f"({ELEM_AR.get(mcard.element, mcard.element)}{t_lbl}، تكلفة {mcard.cost}، {mcard.atk}/{mcard.def_stat}) @خانة {slot}"
                             )
 
             # 4B. Post-Summon Ally-Buff Spells (now all summoned allies get buffed!)
@@ -2342,6 +2361,12 @@ class SimulatorApp(tk.Tk):
         self.elem_filter.pack(side="left", padx=(4, 12))
         self.elem_filter.bind("<<ComboboxSelected>>", lambda _e: self.refresh_table())
 
+        tk.Label(flt, text="الفئة:", bg="#0F172A", fg="#CBD5E1").pack(side="left")
+        self.tribe_filter = ttk.Combobox(flt, values=["الكل"] + [TRIBE_AR[t] for t in TRIBES], width=12, state="readonly")
+        self.tribe_filter.set("الكل")
+        self.tribe_filter.pack(side="left", padx=(4, 12))
+        self.tribe_filter.bind("<<ComboboxSelected>>", lambda _e: self.refresh_table())
+
         tk.Label(flt, text="التوازن:", bg="#0F172A", fg="#CBD5E1").pack(side="left")
         self.status_filter = ttk.Combobox(flt, values=["الكل", "قوي جداً (>55%)", "متوازن (45-55%)", "ضعيف (<45%)"], width=18, state="readonly")
         self.status_filter.set("الكل")
@@ -2361,14 +2386,14 @@ class SimulatorApp(tk.Tk):
         tbl_wrap.pack(fill="both", expand=True)
 
         cols = (
-            "id", "type", "element", "role", "tier", "cost", "stats", "skills",
+            "id", "type", "element", "tribe", "role", "tier", "cost", "stats", "skills",
             "plays", "drawn", "winrate", "all_wr", "avg_dmg", "kills", "excite", "boredom", "status"
         )
         self.tree = ttk.Treeview(tbl_wrap, columns=cols, show="headings")
 
         headers = {
             "id": ("المعرّف", 54), "type": ("النوع", 64), "element": ("العنصر", 74),
-            "role": ("الدور", 120), "tier": ("الفئة", 44), "cost": ("التكلفة", 50),
+            "tribe": ("الفئة", 82), "role": ("الدور", 120), "tier": ("المستوى", 52), "cost": ("التكلفة", 50),
             "stats": ("هجوم/دفاع", 74), "skills": ("الكامنة + النشطة / التأثير", 280),
             "plays": ("المشاركات", 74), "drawn": ("السحب", 68),
             "winrate": ("نسبة الفوز %", 86), "all_wr": ("الكل %", 74),
@@ -2418,8 +2443,10 @@ class SimulatorApp(tk.Tk):
     def refresh_table(self) -> None:
         tf_raw = self.type_filter.get()
         ef_raw = self.elem_filter.get()
+        trf_raw = self.tribe_filter.get()
         tf = TYPE_FROM_AR.get(tf_raw, tf_raw)
         ef = ELEM_FROM_AR.get(ef_raw, ef_raw)
+        trf = TRIBE_FROM_AR.get(trf_raw, trf_raw)
         sf = self.status_filter.get()
         q = self.search_var.get().strip().lower()
 
@@ -2452,6 +2479,8 @@ class SimulatorApp(tk.Tk):
                 continue
             if ef not in ("الكل", "All") and proto.element != ef:
                 continue
+            if trf not in ("الكل", "All") and proto.tribe != trf:
+                continue
             if sf in ("قوي جداً (>55%)", "OP (>55%)") and not (plays >= 10 and wr > 55.0):
                 continue
             if sf in ("متوازن (45-55%)", "Balanced (45-55%)") and not (plays >= 10 and 45.0 <= wr <= 55.0):
@@ -2461,12 +2490,13 @@ class SimulatorApp(tk.Tk):
 
             type_disp = TYPE_AR.get(proto.card_type, proto.card_type)
             elem_disp = ELEM_AR.get(proto.element, proto.element)
+            tribe_disp = TRIBE_AR.get(proto.tribe, proto.tribe) if proto.tribe else "—"
             role_disp = ROLE_AR.get(proto.role, proto.role)
 
             if q:
                 haystack = " ".join((
                     str(cid), proto.card_type, type_disp, proto.element, elem_disp,
-                    proto.role, role_disp, proto.summary_text
+                    proto.tribe, tribe_disp, proto.role, role_disp, proto.summary_text
                 )).lower()
                 if q not in haystack:
                     continue
@@ -2475,15 +2505,15 @@ class SimulatorApp(tk.Tk):
             ex_rate = (self.cexcite.get(cid, 0) / max(1, all_p)) * 100.0 if all_p > 0 else 0.0
             st_rate = (self.cstall.get(cid, 0) / max(1, max(all_p, dr))) * 100.0 if (all_p > 0 or dr > 0) else 0.0
             rows.append((
-                cid, type_disp, elem_disp, role_disp, proto.tier_num, proto.cost,
+                cid, type_disp, elem_disp, tribe_disp, role_disp, proto.tier_num, proto.cost,
                 stats_str, proto.summary_text, all_p, dr, wr, all_wr, avg_d, tot_k, ex_rate, st_rate, st_lbl, tag
             ))
 
         key_idx = {
-            "id": 0, "type": 1, "element": 2, "role": 3, "tier": 4, "cost": 5,
-            "plays": 8, "drawn": 9, "winrate": 10, "all_wr": 11, "avg_dmg": 12, "kills": 13,
-            "excite": 14, "boredom": 15, "status": 10,
-        }.get(self.sort_col, 10)
+            "id": 0, "type": 1, "element": 2, "tribe": 3, "role": 4, "tier": 5, "cost": 6,
+            "plays": 9, "drawn": 10, "winrate": 11, "all_wr": 12, "avg_dmg": 13, "kills": 14,
+            "excite": 15, "boredom": 16, "status": 11,
+        }.get(self.sort_col, 11)
         rows.sort(key=lambda r: r[key_idx], reverse=self.sort_desc)
 
         self.tree.delete(*self.tree.get_children())
@@ -2491,11 +2521,11 @@ class SimulatorApp(tk.Tk):
             self.tree.insert(
                 "", "end",
                 values=(
-                    r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7],
-                    f"{r[8]:,}", f"{r[9]:,}", f"{r[10]:.2f}%", f"{r[11]:.2f}%",
-                    f"{r[12]:.1f}", f"{r[13]:,}", f"{r[14]:.1f}%", f"{r[15]:.1f}%", r[16]
+                    r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8],
+                    f"{r[9]:,}", f"{r[10]:,}", f"{r[11]:.2f}%", f"{r[12]:.2f}%",
+                    f"{r[13]:.1f}", f"{r[14]:,}", f"{r[15]:.1f}%", f"{r[16]:.1f}%", r[17]
                 ),
-                tags=(r[17],)
+                tags=(r[18],)
             )
 
         if self.done_matches > 0:
@@ -2666,7 +2696,7 @@ class SimulatorApp(tk.Tk):
         txt.config(state="disabled")
 
     _EXPORT_HEADERS = [
-        "المعرّف", "النوع", "العنصر", "الدور", "الفئة", "التكلفة", "الهجوم", "الدفاع",
+        "المعرّف", "النوع", "العنصر", "الفئة", "الدور", "المستوى", "التكلفة", "الهجوم", "الدفاع",
         "المهارات الكامنة", "المهارات النشطة", "إجمالي المشاركات", "مباريات بدون مرآة", "انتصارات بدون مرآة",
         "نسبة الفوز %", "نسبة الفوز الكلية %", "مرات السحب", "نسبة الفوز عند السحب %",
         "متوسط الضرر", "إجمالي القتلى", "زخم_الحماس_%", "جمود_وتعطل_%", "حالة التوازن"
@@ -2692,6 +2722,7 @@ class SimulatorApp(tk.Tk):
             st_lbl, _ = self._classify(plays, wr)
             out.append((
                 cid, TYPE_AR.get(proto.card_type, proto.card_type), ELEM_AR.get(proto.element, proto.element),
+                TRIBE_AR.get(proto.tribe, proto.tribe) if proto.tribe else "—",
                 ROLE_AR.get(proto.role, proto.role), proto.tier_num, proto.cost,
                 proto.atk, proto.def_stat, " ; ".join(proto.passives), " ; ".join(proto.actives),
                 all_p, plays, wins, round(wr, 2), round(all_wr, 2), dr, round(dr_wr, 2),

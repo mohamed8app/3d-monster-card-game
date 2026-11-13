@@ -525,12 +525,11 @@ namespace MonsterCardGame.Utils
                 "Ice" => new Color(0.4f, 0.9f, 1f),
                 "Electric" => new Color(1f, 0.9f, 0.2f),
                 "Dark" => new Color(0.6f, 0.25f, 0.85f),
-                "Ghosts" => new Color(0.7f, 0.45f, 0.95f),
-                "Mecha" => new Color(0.75f, 0.8f, 0.9f),
                 "Arcane" or "Arcane Monsters" => new Color(0.95f, 0.45f, 0.95f),
                 "Light" => new Color(1f, 0.95f, 0.55f),
                 "Earth" => new Color(0.75f, 0.55f, 0.35f),
                 "Air" => new Color(0.4f, 0.95f, 0.75f),
+                "Nature" => new Color(0.3f, 0.85f, 0.35f),
                 "Forest" => new Color(0.3f, 0.85f, 0.35f),
                 _ => new Color(0.85f, 0.85f, 0.9f)
             };
@@ -546,11 +545,10 @@ namespace MonsterCardGame.Utils
                 "Earth" => new Color(0.15f, 0.11f, 0.07f, 0.95f),
                 "Electric" => new Color(0.14f, 0.13f, 0.06f, 0.95f),
                 "Air" => new Color(0.07f, 0.15f, 0.14f, 0.95f),
+                "Nature" => new Color(0.06f, 0.15f, 0.08f, 0.95f),
                 "Forest" => new Color(0.06f, 0.15f, 0.08f, 0.95f),
                 "Light" => new Color(0.17f, 0.16f, 0.09f, 0.95f),
                 "Dark" => new Color(0.09f, 0.05f, 0.15f, 0.95f),
-                "Mecha" => new Color(0.11f, 0.13f, 0.16f, 0.95f),
-                "Ghosts" => new Color(0.12f, 0.08f, 0.18f, 0.95f),
                 "Arcane" or "Arcane Monsters" => new Color(0.16f, 0.06f, 0.18f, 0.95f),
                 _ => new Color(0.08f, 0.09f, 0.13f, 1f)
             };
@@ -566,11 +564,10 @@ namespace MonsterCardGame.Utils
                 "Earth" => "🪨",
                 "Electric" => "⚡",
                 "Air" => "🌪️",
+                "Nature" => "🌿",
                 "Forest" => "🌿",
                 "Light" => "✨",
                 "Dark" => "🌑",
-                "Mecha" => "⚙️",
-                "Ghosts" => "👻",
                 "Arcane" or "Arcane Monsters" => "🔮",
                 _ => "⭐"
             };
@@ -614,6 +611,24 @@ namespace MonsterCardGame.Utils
             };
         }
 
+        public static string GetTribeEmoji(string tribe)
+        {
+            return tribe switch
+            {
+                "Beasts" => "🐺",
+                "Ghosts" => "👻",
+                "Dwarves" => "⛏️",
+                "Elves" => "🏹",
+                "Warriors" => "⚔️",
+                "Giants" => "🗿",
+                "Insects" => "🕷️",
+                "Mages" => "🧙",
+                "Demons" => "👹",
+                "Celestials" => "👼",
+                _ => ""
+            };
+        }
+
         public static string GetEnvironmentEmoji(string element)
         {
             return element switch
@@ -624,11 +639,10 @@ namespace MonsterCardGame.Utils
                 "Earth" => "🪨",
                 "Electric" => "⚡",
                 "Air" => "🌪️",
+                "Nature" => "🌿",
                 "Forest" => "🌿",
                 "Light" => "✨",
                 "Dark" => "🌑",
-                "Mecha" => "⚙️",
-                "Ghosts" => "👻",
                 "Arcane" or "Arcane Monsters" => "🔮",
                 _ => "☀️"
             };

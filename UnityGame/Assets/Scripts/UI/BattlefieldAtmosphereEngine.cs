@@ -372,11 +372,10 @@ namespace MonsterCardGame.UI
                 "Earth" => new[] { "env_earth", "earth", "9992" },
                 "Electric" => new[] { "env_electric", "electric", "9993" },
                 "Air" => new[] { "env_wind", "env_air", "air", "wind", "9994" },
+                "Nature" => new[] { "env_forest", "forest", "nature", "9995" },
                 "Forest" => new[] { "env_forest", "forest", "9995" },
                 "Light" => new[] { "env_light", "light", "9996" },
                 "Dark" => new[] { "env_dark", "dark", "9997" },
-                "Mecha" => new[] { "env_mecha", "mecha", "9998" },
-                "Ghosts" => new[] { "env_ghost", "env_ghosts", "ghosts", "ghost", "9999" },
                 "Arcane" => new[] { "env_magic", "env_arcane", "arcane", "magic", "10000" },
                 _ => new[] { "00", "battlefield", "arena_ground", "ground", "default", "0" }
             };
@@ -487,6 +486,7 @@ namespace MonsterCardGame.UI
                 "Earth" => "earth",
                 "Electric" => "electric",
                 "Air" => "wind",
+                "Nature" => "forest",
                 "Forest" => "forest",
                 "Light" => "light",
                 "Dark" => "dark",

@@ -221,7 +221,7 @@ ABILITIES_POOL = {
             ("Immortal Mountain Shield: Prevent all Commander damage for 1 turn (Cost 2 Power)", "درع الجبال الخالد: منع وصول أي ضرر للقائد لدور كامل (تكلفة 2 باور)", 30.0),
         ]
     },
-    "Forest": {
+    "Nature": {
         "passives": [
             ("Vital Regeneration: Restores 4 DEF at the start of each turn", "تجدد حيوي: استعادة 4 دفاع في بداية كل دور", 10.0),
             ("Poison Thorns: Deals 3 damage to attacking monsters", "أشواك سامة: إلحاق 3 ضرر بالوحش المهاجم", 11.0),
@@ -325,20 +325,18 @@ ABILITIES_POOL = {
     }
 }
 
-# 12 Global Environment Weather Cards (100% English)
+# 10 Symmetric Global Environment Weather Cards (Exact 3-in / 3-out balance across 10 Elements)
 ENVIRONMENT_CARDS = [
-    (1, "Fire Environment", "Fire", "Forest, Ice, Mecha", "Molten lava empowers Fire monsters (+30%/+40%/+70%), while melting Ice, burning Forest, and overheating Mecha (-20%/-30%/-50%)."),
-    (2, "Water Environment", "Water", "Fire, Earth, Mecha", "Raging waves empower Water monsters (+30%/+40%/+70%), while extinguishing Fire, eroding Earth, and rusting Mecha (-20%/-30%/-50%)."),
-    (3, "Ice Environment", "Ice", "Water, Forest, Air", "Bitter frost empowers Ice monsters (+30%/+40%/+70%), while freezing Water, withering Forest, and weighing down Air (-20%/-30%/-50%)."),
-    (4, "Earth Environment", "Earth", "Electric, Fire, Ice", "Seismic tremors empower Earth monsters (+30%/+40%/+70%), while grounding Electric, smothering Fire, and crushing Ice (-20%/-30%/-50%)."),
-    (5, "Electric Environment", "Electric", "Mecha, Water, Air", "Thunderstorms empower Electric monsters (+30%/+40%/+70%), while short-circuiting Mecha, electrifying Water, and striking Air (-20%/-30%/-50%)."),
-    (6, "Air Environment", "Air", "Ghosts, Earth, Dark", "Cyclonic winds empower Air monsters (+30%/+40%/+70%), while scattering Ghosts, eroding Earth, and dispersing Dark (-20%/-30%/-50%)."),
-    (7, "Forest Environment", "Forest", "Earth, Water, Air", "Lush nature empowers Forest monsters (+30%/+40%/+70%), while roots split Earth and drain Water and Air (-20%/-30%/-50%)."),
-    (8, "Light Environment", "Light", "Dark, Ghosts, Arcane", "Radiant light blesses Light monsters (+30%/+40%/+70%), while banishing Dark, purifying Ghosts, and dispelling Arcane (-20%/-30%/-50%)."),
-    (9, "Dark Environment", "Dark", "Light, Arcane, Electric", "Total eclipse empowers Dark monsters (+30%/+40%/+70%), while eclipsing Light, corrupting Arcane, and dampening Electric (-20%/-30%/-50%)."),
-    (10, "Mecha Environment", "Mecha", "Forest, Ghosts, Light", "Industrial gears empower Mecha monsters (+30%/+40%/+70%), while clearing Forest, trapping Ghosts, and reflecting Light (-20%/-30%/-50%)."),
-    (11, "Ghosts Environment", "Ghosts", "Fire, Electric, Arcane", "Ethereal mist empowers Ghosts monsters (+30%/+40%/+70%), while chilling Fire, draining Electric, and haunting Arcane (-20%/-30%/-50%)."),
-    (12, "Arcane Environment", "Arcane", "Ice, Light, Dark", "Arcane surges empower Arcane monsters (+30%/+40%/+70%), while shattering Ice and bending Light and Dark (-20%/-30%/-50%)."),
+    (1,  "Fire Environment",     "Fire",     "Nature, Ice, Dark",      "Molten lava empowers Fire monsters (+30%/+40%/+70%), while burning Nature, melting Ice, and dispersing Dark (-20%/-30%/-50%)."),
+    (2,  "Water Environment",    "Water",    "Fire, Earth, Light",     "Raging waves empower Water monsters (+30%/+40%/+70%), while extinguishing Fire, eroding Earth, and refracting Light (-20%/-30%/-50%)."),
+    (3,  "Ice Environment",      "Ice",      "Water, Nature, Air",     "Bitter frost empowers Ice monsters (+30%/+40%/+70%), while freezing Water, withering Nature, and weighing down Air (-20%/-30%/-50%)."),
+    (4,  "Earth Environment",    "Earth",    "Fire, Electric, Ice",    "Seismic tremors empower Earth monsters (+30%/+40%/+70%), while smothering Fire, grounding Electric, and crushing Ice (-20%/-30%/-50%)."),
+    (5,  "Electric Environment", "Electric", "Water, Air, Arcane",     "Thunderstorms empower Electric monsters (+30%/+40%/+70%), while electrifying Water, striking Air, and disrupting Arcane (-20%/-30%/-50%)."),
+    (6,  "Air Environment",      "Air",      "Earth, Fire, Dark",      "Cyclonic winds empower Air monsters (+30%/+40%/+70%), while eroding Earth, extinguishing Fire, and scattering Dark (-20%/-30%/-50%)."),
+    (7,  "Nature Environment",   "Nature",   "Earth, Water, Electric", "Lush nature empowers Nature monsters (+30%/+40%/+70%), while roots split Earth, absorb Water, and disperse Electric (-20%/-30%/-50%)."),
+    (8,  "Light Environment",    "Light",    "Dark, Ice, Arcane",      "Radiant light blesses Light monsters (+30%/+40%/+70%), while banishing Dark, melting Ice, and dispelling Arcane (-20%/-30%/-50%)."),
+    (9,  "Dark Environment",     "Dark",     "Light, Nature, Arcane",  "Total eclipse empowers Dark monsters (+30%/+40%/+70%), while eclipsing Light, withering Nature, and corrupting Arcane (-20%/-30%/-50%)."),
+    (10, "Arcane Environment",   "Arcane",   "Light, Electric, Air",   "Arcane surges empower Arcane monsters (+30%/+40%/+70%), while bending Light, draining Electric, and warping Air (-20%/-30%/-50%)."),
 ]
 
 
@@ -365,11 +363,9 @@ ELEMENT_ADJECTIVE_AR = {
     "Electric": "كهربائي",
     "Air": "هوائي",
     "Earth": "صخري",
-    "Forest": "غابي",
+    "Nature": "طبيعي",
     "Light": "نوراني",
     "Dark": "ظلامي",
-    "Mecha": "آلي",
-    "Ghosts": "شبحي",
     "Arcane": "سحري",
 }
 
@@ -383,66 +379,56 @@ TIER_ADJECTIVE_AR = {
     7: "أسطوري",
 }
 
-ELEMENT_CREATURES_BY_BAND_AR = {
-    "Fire": {
-        "low": ["وحش", "سلمندر", "عفريت", "ذئب", "ثعلب", "مقاتل"],
-        "mid": ["فارس", "غالم", "أسد", "صقر", "حارس", "عملاق"],
-        "high": ["تنين", "فينيق", "عملاق", "تنين", "لورد", "تنين"],
-    },
-    "Water": {
-        "low": ["وحش", "قرش", "تمساح", "ثعبان", "سلطعون", "مقاتل"],
-        "mid": ["فارس", "قرش", "حارس", "عملاق", "تنين", "حوت"],
-        "high": ["تنين", "كراكن", "لفيثان", "عملاق", "تنين", "سيد"],
-    },
-    "Ice": {
-        "low": ["وحش", "ذئب", "دب", "نمر", "صقر", "مقاتل"],
-        "mid": ["فارس", "غالم", "عملاق", "ماموث", "حارس", "ذئب"],
-        "high": ["تنين", "عملاق", "فينيق", "تنين", "لورد", "طاغية"],
-    },
-    "Electric": {
-        "low": ["وحش", "فهد", "صقر", "ذئب", "ثعبان", "مقاتل"],
-        "mid": ["فارس", "غريفين", "أسد", "عملاق", "حارس", "نسر"],
-        "high": ["تنين", "فينيق", "عملاق", "تنين", "عقاب", "لورد"],
-    },
-    "Air": {
-        "low": ["وحش", "صقر", "نسر", "ذئب", "طائر", "مقاتل"],
-        "mid": ["غريفين", "فارس", "عقاب", "جني", "حارس", "عملاق"],
-        "high": ["تنين", "فينيق", "عملاق", "عقاب", "تنين", "لورد"],
-    },
-    "Earth": {
-        "low": ["وحش", "غالم", "ثور", "دب", "كركدن", "مقاتل"],
-        "mid": ["عملاق", "غالم", "فارس", "حارس", "تيتان", "مدرع"],
-        "high": ["تيتان", "تنين", "عملاق", "بهيموث", "تنين", "لورد"],
-    },
-    "Forest": {
-        "low": ["وحش", "ذئب", "نمر", "أيل", "دب", "مقاتل"],
-        "mid": ["حارس", "عملاق", "قنطور", "أسد", "كاهن", "غالم"],
-        "high": ["تنين", "عملاق", "حارس", "تيتان", "تنين", "سيد"],
-    },
-    "Light": {
-        "low": ["وحش", "حارس", "فارس", "صقر", "أسد", "مقاتل"],
-        "mid": ["ملاك", "بلادين", "فارس", "كاهن", "غريفين", "حارس"],
-        "high": ["ملاك", "تنين", "سيرافيم", "بطل", "تنين", "لورد"],
-    },
-    "Dark": {
-        "low": ["وحش", "ذئب", "غراب", "عفريت", "ثعبان", "مقاتل"],
-        "mid": ["فارس", "شيطان", "حاصد", "ساحر", "حارس", "عملاق"],
-        "high": ["تنين", "شيطان", "لورد", "عملاق", "تنين", "ملك"],
-    },
-    "Mecha": {
-        "low": ["روبوت", "مقاتل", "درون", "حارس", "جندي", "آلي"],
-        "mid": ["مدرع", "فارس", "غالم", "عملاق", "صقر", "روبوت"],
-        "high": ["تنين", "تيتان", "عملاق", "مدمر", "تنين", "ميكا"],
+TRIBE_CREATURES_BY_BAND_AR = {
+    "Beasts": {
+        "low": ["ذئب", "ثعلب", "قرش", "ثعبان", "سلمندر", "صقر"],
+        "mid": ["أسد", "نمر", "نسر", "تمساح", "غريفين", "عقاب"],
+        "high": ["تنين", "فينيق", "كراكن", "لفيثان", "تنين مجنح", "ملك الوحوش"],
     },
     "Ghosts": {
-        "low": ["طيف", "شبح", "وحش", "جندي", "ظل", "مقاتل"],
-        "mid": ["فارس", "حاصد", "ساحر", "حارس", "طيف", "محارب"],
-        "high": ["تنين", "حاصد", "ملك", "لورد", "تنين", "عملاق"],
+        "low": ["طيف", "شبح", "ظل", "هيكل", "روح", "غراب ميت"],
+        "mid": ["حاصد", "فارس ميت", "مصاص دماء", "شبح محارب", "روح هائمة", "شبح"],
+        "high": ["لورد الأشباح", "ملك الموتى", "تنين شبحي", "حاصد عظيم", "سيد البرزخ", "طيف أسطوري"],
     },
-    "Arcane": {
-        "low": ["وحش", "ساحر", "غالم", "طائر", "ثعلب", "مقاتل"],
-        "mid": ["ساحر", "فارس", "حارس", "حكيم", "غالم", "مشعوذ"],
-        "high": ["تنين", "أرشيمج", "عملاق", "سيد", "تنين", "لورد"],
+    "Dwarves": {
+        "low": ["قزم محارب", "قزم حارس", "قزم منقّب", "قزم حداد", "قزم روني", "مقاتل قزم"],
+        "mid": ["قزم مدرع", "حداد روني", "قزم مدفعي", "حارس حصن قزم", "فارس قزم", "مهندس قزم"],
+        "high": ["ملك الأقزام", "مهندس الحصار الأعظم", "لورد الحدادين", "قزم أسطوري", "بطل الحصون", "حارس الملوك"],
+    },
+    "Elves": {
+        "low": ["إلفي كشاف", "إلفي رامي", "حارس إلفي", "ساحر إلفي", "مقاتل إلفي", "طيف إلفي"],
+        "mid": ["قناص إلفي", "كاهن إلفي", "فارس إلفي", "حكيم إلفي", "أمير إلفي", "راصد إلفي"],
+        "high": ["سيد الإلف", "أرشيدرويد إلفي", "ملك الإلف", "حارس الغابة الأعلى", "بطل الإلف", "حكيم أبدي"],
+    },
+    "Warriors": {
+        "low": ["جندي", "مبارز", "مقاتل", "كشاف", "رامي رمح", "حارس"],
+        "mid": ["فارس", "قاتل ظل", "بلادين", "مرتزق مدرع", "قائد سرية", "بطل"],
+        "high": ["قائد فرسان", "سيد القتلة", "بطل الحرب", "مارشال", "سيف الأسطورة", "لورد الفرسان"],
+    },
+    "Giants": {
+        "low": ["غالم صغير", "غول", "قائد حجري", "ترول", "وحش صخري", "حارس ضخم"],
+        "mid": ["عملاق", "غالم روني", "مدرع ضخم", "تيتان", "جبار", "حارس قديم"],
+        "high": ["تيتان عظيم", "عملاق بدائي", "بهيموث", "ملك العمالقة", "تيتان أبدي", "غالم أسطوري"],
+    },
+    "Insects": {
+        "low": ["عنكبوت", "عقرب", "خنفساء", "دبور", "جندب عملاق", "نملة محاربة"],
+        "mid": ["عنكبوت ضخم", "عقرب مدرع", "خنفساء رونية", "سرب قاتل", "دبور ملكي", "فرس النبي"],
+        "high": ["ملكة الحشرات", "إمبراطور العقارب", "عنكبوت قديم", "وحش السرب", "سيد السموم", "خنفساء عملاقة"],
+    },
+    "Mages": {
+        "low": ["تلميذ سحر", "عراف", "كاهن مبتدئ", "مشعوذ", "قارئ روني", "ناسك"],
+        "mid": ["ساحر", "حكيم", "كاهن روني", "سيد تعاويذ", "متنور", "مشعوذ متمرس"],
+        "high": ["أرشيمج", "عراف أعظم", "سيد الأركين", "كاهن أكبر", "حكيم الزمان", "ساحر أسطوري"],
+    },
+    "Demons": {
+        "low": ["عفريت", "شيطان صغير", "متوحش هاوية", "جلاد", "خادم ظلام", "شرير"],
+        "mid": ["شيطان مقاتل", "فارس هاوية", "ساحر شياطين", "وحش جحيم", "ملعون", "مفترس هاوية"],
+        "high": ["سيد الشياطين", "ملك الهاوية", "شيطان أعظم", "لورد الجحيم", "شيطان أزلي", "طاغية الهاوية"],
+    },
+    "Celestials": {
+        "low": ["حارس سماوي", "رسول نور", "كشاف مجنح", "حامي طاهر", "روح سماوية", "فارس نور"],
+        "mid": ["ملاك", "فالكيري", "حارس فجر", "كاهن سماوي", "بلادين سماوي", "ملاك حارس"],
+        "high": ["سيرافيم", "رئيس ملائكة", "سيد النور", "حارس أبدي", "بطل سماوي", "ملاك أسطوري"],
     },
 }
 
@@ -482,9 +468,9 @@ ROLE_VISUAL_TRAITS_AR = {
 }
 
 
-def generate_visual_brief_ar(card_id: int, elem_en: str, role: str, tier_num: int, idx_in_elem: int) -> str:
-    """Returns a concise 4-5 word Arabic visual design brief for drawing/generating the monster."""
-    if card_id == 599:
+def generate_visual_brief_ar(card_id: int, elem_en: str, tribe_en: str, role: str, tier_num: int, idx_in_elem: int) -> str:
+    """Returns a concise 4-5 word Arabic visual design brief combining Tribe + Element + Tier + Role."""
+    if card_id == 15:
         return "تنين ناري أسطوري مدرع بالذهب"
 
     elem_adj = ELEMENT_ADJECTIVE_AR.get(elem_en, "سحري")
@@ -497,7 +483,7 @@ def generate_visual_brief_ar(card_id: int, elem_en: str, role: str, tier_num: in
     else:
         band = "high"
 
-    creatures = ELEMENT_CREATURES_BY_BAND_AR.get(elem_en, ELEMENT_CREATURES_BY_BAND_AR["Fire"])[band]
+    creatures = TRIBE_CREATURES_BY_BAND_AR.get(tribe_en, TRIBE_CREATURES_BY_BAND_AR["Beasts"])[band]
     creature = creatures[(card_id + idx_in_elem) % len(creatures)]
 
     traits = ROLE_VISUAL_TRAITS_AR.get(role, ROLE_VISUAL_TRAITS_AR["Attacker"])
@@ -506,11 +492,10 @@ def generate_visual_brief_ar(card_id: int, elem_en: str, role: str, tier_num: in
     return f"{creature} {elem_adj} {tier_adj} {trait}"
 
 
-
-# 20-Card Progressive Power & Role Ladder per Element (Strictly ascending Cost 1..8 & Tier 1..7)
+# 24-Card Progressive Power & Role Ladder per Element (Strictly ascending Cost 1..8 & Tier 1..7)
 MONSTER_PROGRESSION_LADDER = [
     # (tier_num, cost, role, passive_share, active_share)
-    (1, 1, "Attacker",    0.00, 0.00),  # Slot 1
+    (1, 1, "Attacker",    0.00, 0.00),  # Slot 1  (#1, #21, #41...)
     (1, 1, "Defender",    0.00, 0.00),  # Slot 2
     (1, 1, "Support",     0.00, 0.00),  # Slot 3
     (2, 1, "Pure Shield", 0.22, 0.00),  # Slot 4
@@ -519,17 +504,22 @@ MONSTER_PROGRESSION_LADDER = [
     (2, 2, "Support",     0.22, 0.00),  # Slot 7
     (3, 3, "Attacker",    0.26, 0.00),  # Slot 8
     (3, 3, "Defender",    0.27, 0.00),  # Slot 9
-    (3, 3, "Support",     0.27, 0.00),  # Slot 10 (Rebalanced from 0/56 Pure Shield to interactive 7/37 Support)
+    (3, 3, "Support",     0.27, 0.00),  # Slot 10
     (4, 4, "Support",     0.00, 0.20),  # Slot 11
     (4, 4, "Attacker",    0.00, 0.20),  # Slot 12
     (4, 4, "Defender",    0.00, 0.21),  # Slot 13
-    (5, 4, "Support",     0.20, 0.25),  # Slot 14 (Dark #174 -> old #5224 custom 2.5D art)
-    (5, 5, "Attacker",    0.20, 0.24),  # Slot 15 (Fire #15 -> old #599, Arcane #235 -> old #7024 custom 2.5D art)
-    (5, 5, "Support",     0.22, 0.24),  # Slot 16 (Water #36 -> old #1194 custom art)
+    (5, 4, "Support",     0.20, 0.25),  # Slot 14 (Dark #174 custom 2.5D art)
+    (5, 5, "Attacker",    0.20, 0.24),  # Slot 15 (Fire #15 Dragon, Arcane #235 Archmage)
+    (5, 5, "Support",     0.22, 0.24),  # Slot 16 (Water #36 custom art)
     (6, 6, "Attacker",    0.21, 0.25),  # Slot 17
     (6, 6, "Defender",    0.22, 0.25),  # Slot 18
     (7, 7, "Defender",    0.23, 0.27),  # Slot 19
     (7, 8, "Attacker",    0.23, 0.28),  # Slot 20
+    # +4 Expansion Slots per Element (IDs 181..220 -> 24 Monsters/Element)
+    (2, 2, "Attacker",    0.21, 0.00),  # Slot 21
+    (3, 3, "Defender",    0.27, 0.00),  # Slot 22
+    (5, 5, "Attacker",    0.20, 0.24),  # Slot 23
+    (6, 6, "Support",     0.22, 0.25),  # Slot 24
 ]
 
 
@@ -553,19 +543,47 @@ def _pick_by_tier_rank(pool_sorted, slot_idx, tier_num, shift=0):
     return pool_sorted[idx]
 
 
-def create_all_cards():
-    """Generates the balanced 452-card database: 240 Monsters (20/element) + 200 Spells + 12 Environments."""
-    all_cards = []
-    current_id = 1
+def _build_element_tribe_sequence(elem_en: str, elem_slots: list) -> list:
+    """Assigns the 24 exact Tribes for an Element while pinning custom-artwork IDs."""
+    counts = dict(TRIBE_COUNTS_BY_ELEMENT[elem_en])
+    assigned = [None] * len(elem_slots)
+    for idx, cid in enumerate(elem_slots):
+        if cid in PINNED_TRIBES_BY_ID:
+            tr = PINNED_TRIBES_BY_ID[cid]
+            assigned[idx] = tr
+            counts[tr] -= 1
+            assert counts[tr] >= 0, f"Over-pinned tribe {tr} on {elem_en}"
+    pool = []
+    for tr, cnt in sorted(counts.items()):
+        pool.extend([tr] * cnt)
+    rng = random.Random(f"tribe_spread_{elem_en}")
+    rng.shuffle(pool)
+    p_idx = 0
+    for idx in range(len(assigned)):
+        if assigned[idx] is None:
+            assigned[idx] = pool[p_idx]
+            p_idx += 1
+    return assigned
 
-    # 1. Generate 240 Monster Cards (20 progressive balanced monsters per Element across 12 Elements)
+
+def create_all_cards():
+    """Generates the balanced 450-card database: 240 Monsters (10 Elements x 10 Tribes) + 200 Spells + 10 Environments."""
+    all_cards = []
+    tribe_meta = {t[0]: t for t in TRIBES_CONFIG}
+
+    # 1. Generate 240 Monster Cards (24 per Element x 10 Elements; 24 per Tribe x 10 Tribes)
     for elem_name, elem_en, elem_icon, tab_col, count in ELEMENTS_CONFIG:
         group_name = f"{elem_icon} {elem_en}"
         elem_abilities = ABILITIES_POOL[elem_en]
         pass_pool = sorted(elem_abilities["passives"], key=lambda x: x[2])
         act_pool = sorted(elem_abilities["actives"], key=lambda x: x[2])
+        elem_slots = ELEMENT_ID_SLOTS[elem_en]
+        tribe_seq = _build_element_tribe_sequence(elem_en, elem_slots)
 
         for i in range(count):
+            cid = elem_slots[i]
+            tribe_en = tribe_seq[i]
+            tribe_label = tribe_meta[tribe_en][1]
             tier_num, cost, role, p_share, a_share = MONSTER_PROGRESSION_LADDER[i]
             tier_title = TIER_NAMES[tier_num]
             raw_budget = 16.0 + (cost * 14.0)
@@ -684,17 +702,17 @@ def create_all_cards():
             arabic_abilities_str = "  —  ".join(ar_parts)
 
             win_rate = round(50.0 + random.uniform(-1.5, 1.5), 2)
-            # Keep legendary custom Fire Dragon label when current_id == 15
-            brief_id = 599 if (elem_en == "Fire" and i == 14) else current_id
-            visual_brief_ar = generate_visual_brief_ar(brief_id, elem_en, role, tier_num, i)
+            visual_brief_ar = generate_visual_brief_ar(cid, elem_en, tribe_en, role, tier_num, i)
 
             all_cards.append({
-                "id": current_id,
-                "name": str(current_id),
+                "id": cid,
+                "name": str(cid),
                 "visual_brief_ar": visual_brief_ar,
                 "cardType": 0,
                 "card_type": "monster",
                 "element": elem_en,
+                "tribe": tribe_en,
+                "tribe_label": tribe_label,
                 "group": group_name,
                 "group_en": elem_en,
                 "role": role,
@@ -717,7 +735,12 @@ def create_all_cards():
                 "a_score": a_score,
                 "win_rate": win_rate,
             })
-            current_id += 1
+
+    # Verify exact 10x10 balance (24 per Element, 24 per Tribe, IDs 1..240)
+    assert sorted(c["id"] for c in all_cards) == list(range(1, 241))
+    assert all(cnt == 24 for cnt in Counter(c["element"] for c in all_cards).values())
+    assert all(cnt == 24 for cnt in Counter(c["tribe"] for c in all_cards).values())
+    current_id = 241
 
     # 2. Generate 200 Diverse Balanced Spell Cards (40 per Category x 5 Categories; 10 progressive variants per template)
     intermediary_spell_categories = [
@@ -800,6 +823,8 @@ def create_all_cards():
                     "cardType": 1,
                     "card_type": "spell",
                     "element": "Spell Cards",
+                    "tribe": "",
+                    "tribe_label": "—",
                     "group": "📜 Spell Cards",
                     "group_en": "Spell Cards",
                     "role": sp_role,
@@ -824,20 +849,18 @@ def create_all_cards():
                 })
                 current_id += 1
 
-    # 3. Add the 12 Global Environment Cards (100% English)
+    # 3. Add the 10 Symmetric Global Environment Cards (100% English)
     env_briefs_ar = {
-        "Fire": "بيئة بركان ناري وحمم ملتهبة",
-        "Water": "بيئة محيط مائي وأمواج عاتية",
-        "Ice": "بيئة عاصفة جليدية وصقيع قارس",
-        "Earth": "بيئة زلزال صخري وجبال متصدعة",
+        "Fire":     "بيئة بركان ناري وحمم ملتهبة",
+        "Water":    "بيئة محيط مائي وأمواج عاتية",
+        "Ice":      "بيئة عاصفة جليدية وصقيع قارس",
+        "Earth":    "بيئة زلزال صخري وجبال متصدعة",
         "Electric": "بيئة عاصفة رعدية وبرق متفجر",
-        "Air": "بيئة إعصار هوائي ورياح عاتية",
-        "Forest": "بيئة غابة سحرية وأشجار عملاقة",
-        "Light": "بيئة معبد نوراني وأشعة ذهبية",
-        "Dark": "بيئة كسوف ظلامي وضباب أسود",
-        "Mecha": "بيئة مصنع آلي وتروس عملاقة",
-        "Ghosts": "بيئة مقبرة شبحية وأرواح هائمة",
-        "Arcane": "بيئة دوامة سحرية وأحجار رونية",
+        "Air":      "بيئة إعصار هوائي ورياح عاتية",
+        "Nature":   "بيئة غابة طبيعية وأشجار عملاقة",
+        "Light":    "بيئة معبد نوراني وأشعة ذهبية",
+        "Dark":     "بيئة كسوف ظلامي وضباب أسود",
+        "Arcane":   "بيئة دوامة سحرية وأحجار رونية",
     }
 
     for env_idx, env_name, buff_el, debuff_els, env_desc in ENVIRONMENT_CARDS:
@@ -855,6 +878,8 @@ def create_all_cards():
             "cardType": 2,
             "card_type": "env",
             "element": buff_el,
+            "tribe": "",
+            "tribe_label": "—",
             "group": "🌍 Environment Cards",
             "group_en": "Environment Cards",
             "role": "Global Battlefield Weather",
@@ -879,6 +904,7 @@ def create_all_cards():
         })
         current_id += 1
 
+    all_cards.sort(key=lambda c: c["id"])
     return all_cards
 
 
@@ -892,6 +918,7 @@ def export_unity_json_files(cards):
         uc.pop("arabic_abilities", None)
         uc.pop("visual_brief_ar", None)
         uc.pop("desc", None)
+        uc.pop("tribe_label", None)
         unity_cards.append(uc)
 
     with open(CARDS_10K_JSON_PATH, "w", encoding="utf-8") as f:
@@ -905,8 +932,8 @@ def export_unity_json_files(cards):
 
 
 def write_excel_database(cards):
-    """Writes the 10,000-card Excel database in English + 4-5 Word Arabic Visual Brief + Arabic Monster Abilities."""
-    print("⏳ Generating Excel workbook (Master Sheet + 14 Category Sheets)...")
+    """Writes the 450-card Excel database (10 Elements x 10 Tribes) + Tribe breakdown sheets."""
+    print("⏳ Generating Excel workbook (Master Sheet + 10 Element Sheets + 10 Tribe Sheets + Spells + Env)...")
     wb = openpyxl.Workbook()
 
     ws_main = wb.active
@@ -917,6 +944,7 @@ def write_excel_database(cards):
 
     header_fill = PatternFill(start_color="1B263B", end_color="1B263B", fill_type="solid")
     brief_header_fill = PatternFill(start_color="9A3412", end_color="9A3412", fill_type="solid")
+    tribe_header_fill = PatternFill(start_color="065F46", end_color="065F46", fill_type="solid")
     ar_header_fill = PatternFill(start_color="5A189A", end_color="5A189A", fill_type="solid")
     sim_header_fill = PatternFill(start_color="3C096C", end_color="3C096C", fill_type="solid")
     formula_header_fill = PatternFill(start_color="0F4C5C", end_color="0F4C5C", fill_type="solid")
@@ -925,6 +953,7 @@ def write_excel_database(cards):
     data_font = Font(name="Calibri", size=11, bold=False)
     bold_font = Font(name="Calibri", size=11, bold=True)
     brief_fill = PatternFill(start_color="FFF7ED", end_color="FFF7ED", fill_type="solid")
+    tribe_fill = PatternFill(start_color="ECFDF5", end_color="ECFDF5", fill_type="solid")
     ar_fill = PatternFill(start_color="F8F0FC", end_color="F8F0FC", fill_type="solid")
     sim_fill = PatternFill(start_color="F3E8FF", end_color="F3E8FF", fill_type="solid")
     budget_fill = PatternFill(start_color="E0FBFC", end_color="E0FBFC", fill_type="solid")
@@ -945,8 +974,9 @@ def write_excel_database(cards):
         ("Card ID", header_fill),
         ("Card / Monster Name", header_fill),
         ("Visual Design Brief (نبذة تصميم صورة الوحش - 4-5 كلمات)", brief_header_fill),
-        ("Category (14 Groups)", header_fill),
-        ("Element / Group", header_fill),
+        ("Element Group (10 Elements)", header_fill),
+        ("Element", header_fill),
+        ("Monster Tribe (فئة الوحش)", tribe_header_fill),
         ("Tactical Role / Type", header_fill),
         ("Rank / Tier", header_fill),
         ("Tier Number", header_fill),
@@ -967,9 +997,9 @@ def write_excel_database(cards):
     ]
 
     col_widths = {
-        1: 11.0, 2: 20.0, 3: 38.0, 4: 22.0, 5: 18.0, 6: 22.0, 7: 20.0, 8: 12.0,
-        9: 14.0, 10: 14.0, 11: 14.0, 12: 42.0, 13: 44.0, 14: 65.0,
-        15: 65.0, 16: 24.0, 17: 26.0, 18: 24.0, 19: 26.0, 20: 24.0, 21: 24.0, 22: 24.0
+        1: 11.0, 2: 20.0, 3: 38.0, 4: 20.0, 5: 16.0, 6: 22.0, 7: 22.0, 8: 20.0,
+        9: 12.0, 10: 14.0, 11: 14.0, 12: 14.0, 13: 42.0, 14: 44.0, 15: 65.0,
+        16: 65.0, 17: 24.0, 18: 26.0, 19: 24.0, 20: 26.0, 21: 24.0, 22: 24.0, 23: 24.0
     }
 
     def populate_worksheet(ws, card_list, add_summary=False):
@@ -986,7 +1016,7 @@ def write_excel_database(cards):
             ws.cell(r, 1, c["id"]).alignment = center_align
             ws.cell(r, 2, c["name"]).alignment = center_align
 
-            # Col 3 (C): 4-5 Word Arabic Visual Design Brief right next to Monster ID/Name
+            # Col 3 (C): Arabic Visual Design Brief
             c_br = ws.cell(r, 3, c.get("visual_brief_ar", "—"))
             c_br.fill = brief_fill
             c_br.font = bold_font
@@ -994,75 +1024,82 @@ def write_excel_database(cards):
 
             ws.cell(r, 4, c["group"]).alignment = center_align
             ws.cell(r, 5, c["group_en"]).alignment = center_align
-            ws.cell(r, 6, c["role"]).alignment = center_align
-            ws.cell(r, 7, c["tier_title"]).alignment = center_align
-            ws.cell(r, 8, c["tier_num"]).alignment = center_align
-            ws.cell(r, 9, c["cost"]).alignment = center_align
-            ws.cell(r, 10, c["atk"]).alignment = center_align
-            ws.cell(r, 11, c["def"]).alignment = center_align
-            ws.cell(r, 12, c["passives_text"]).alignment = left_align
-            ws.cell(r, 13, c["active_skill"]).alignment = left_align
-            ws.cell(r, 14, c["description"]).alignment = left_align
 
-            # Col 15 (O): Arabic Translation ONLY for Monster Abilities
-            c_ar = ws.cell(r, 15, c["arabic_abilities"])
+            # Col 6 (F): Monster Tribe (فئة الوحش)
+            c_tr = ws.cell(r, 6, c.get("tribe_label", "—"))
+            c_tr.fill = tribe_fill
+            c_tr.font = bold_font
+            c_tr.alignment = center_align
+
+            ws.cell(r, 7, c["role"]).alignment = center_align
+            ws.cell(r, 8, c["tier_title"]).alignment = center_align
+            ws.cell(r, 9, c["tier_num"]).alignment = center_align
+            ws.cell(r, 10, c["cost"]).alignment = center_align
+            ws.cell(r, 11, c["atk"]).alignment = center_align
+            ws.cell(r, 12, c["def"]).alignment = center_align
+            ws.cell(r, 13, c["passives_text"]).alignment = left_align
+            ws.cell(r, 14, c["active_skill"]).alignment = left_align
+            ws.cell(r, 15, c["description"]).alignment = left_align
+
+            # Col 16 (P): Arabic Translation ONLY for Monster Abilities
+            c_ar = ws.cell(r, 16, c["arabic_abilities"])
             c_ar.fill = ar_fill
             c_ar.font = data_font
             c_ar.alignment = right_align
 
-            # Col 16 (P): Passive Score
-            c_p = ws.cell(r, 16, c["p_score"])
+            # Col 17 (Q): Passive Score
+            c_p = ws.cell(r, 17, c["p_score"])
             c_p.fill = sim_fill
             c_p.font = bold_font
             c_p.alignment = center_align
 
-            # Col 17 (Q): Active Score
-            c_q = ws.cell(r, 17, c["a_score"])
+            # Col 18 (R): Active Score
+            c_q = ws.cell(r, 18, c["a_score"])
             c_q.fill = sim_fill
             c_q.font = bold_font
             c_q.alignment = center_align
 
-            # Col 18 (R): Actual Power Formula
-            c_r = ws.cell(r, 18, f'=ROUND((J{r}*1.18) + (K{r}*IF(F{r}="Pure Shield", 0.74, 0.90)) + P{r} + Q{r}, 1)')
+            # Col 19 (S): Actual Power Formula
+            c_r = ws.cell(r, 19, f'=ROUND((K{r}*1.18) + (L{r}*IF(G{r}="Pure Shield", 0.74, 0.90)) + Q{r} + R{r}, 1)')
             c_r.fill = budget_fill
             c_r.font = bold_font
             c_r.alignment = center_align
 
-            # Col 19 (S): Budget Formula
-            c_s = ws.cell(r, 19, f"=16 + (I{r}*14)")
+            # Col 20 (T): Budget Formula
+            c_s = ws.cell(r, 20, f"=16 + (J{r}*14)")
             c_s.fill = budget_fill
             c_s.font = bold_font
             c_s.alignment = center_align
 
-            # Col 20 (T): Balance Index Formula
-            c_t = ws.cell(r, 20, f"=ROUND((R{r}/S{r})*50, 1)")
+            # Col 21 (U): Balance Index Formula
+            c_t = ws.cell(r, 21, f"=ROUND((S{r}/T{r})*50, 1)")
             c_t.fill = balance_ok_fill
             c_t.font = bold_font
             c_t.alignment = center_align
 
-            # Col 21 (U): Win Rate
-            c_u = ws.cell(r, 21, c["win_rate"])
+            # Col 22 (V): Win Rate
+            c_u = ws.cell(r, 22, c["win_rate"])
             c_u.fill = sim_fill
             c_u.font = bold_font
             c_u.alignment = center_align
 
-            # Col 22 (V): Final Balance Verdict
-            c_v = ws.cell(r, 22, f'=IF(OR(T{r}>=56, U{r}>=54.5), "🔴 Overpowered (Needs Nerf)", IF(OR(T{r}<=44, U{r}<=45.5), "🔵 Underpowered (Needs Buff)", "✅ Balanced"))')
+            # Col 23 (W): Final Balance Verdict
+            c_v = ws.cell(r, 23, f'=IF(OR(U{r}>=56, V{r}>=54.5), "🔴 Overpowered (Needs Nerf)", IF(OR(U{r}<=44, V{r}<=45.5), "🔵 Underpowered (Needs Buff)", "✅ Balanced"))')
             c_v.fill = balance_ok_fill
             c_v.font = bold_font
             c_v.alignment = center_align
 
-            for c_idx in range(1, 23):
+            for c_idx in range(1, 24):
                 ws.cell(r, c_idx).border = thin_border
-                if c_idx not in (3, 15, 16, 17, 18, 19, 20, 21, 22):
-                    ws.cell(r, c_idx).font = bold_font if c_idx in (1, 2, 9, 10, 11) else data_font
+                if c_idx not in (3, 6, 16, 17, 18, 19, 20, 21, 22, 23):
+                    ws.cell(r, c_idx).font = bold_font if c_idx in (1, 2, 10, 11, 12) else data_font
 
         last_r = len(card_list) + 1
-        ws.auto_filter.ref = f"A1:V{last_r}"
+        ws.auto_filter.ref = f"A1:W{last_r}"
 
         if add_summary and card_list:
             avg_r = last_r + 1
-            for col_idx in range(1, 23):
+            for col_idx in range(1, 24):
                 c_cell = ws.cell(avg_r, col_idx)
                 c_cell.font = bold_font
                 c_cell.alignment = center_align
@@ -1070,26 +1107,18 @@ def write_excel_database(cards):
                 c_cell.fill = summary_fill
 
             ws.cell(avg_r, 2, "Category Average")
-            for col_idx in (9, 10, 11, 16, 17, 18, 19, 20, 21):
+            for col_idx in (10, 11, 12, 17, 18, 19, 20, 21, 22):
                 col_let = get_column_letter(col_idx)
                 ws.cell(avg_r, col_idx, f"=ROUND(AVERAGE({col_let}2:{col_let}{last_r}), 1)")
-            ws.cell(avg_r, 22, f"Average ({len(card_list)} Cards)")
+            ws.cell(avg_r, 23, f"Average ({len(card_list)} Cards)")
 
     populate_worksheet(ws_main, cards, add_summary=True)
 
+    # 10 Element Sheets + Spells + Environment
     group_order = [
-        ("🔥 Fire", "E63946"),
-        ("💧 Water", "0077B6"),
-        ("❄️ Ice", "48CAE4"),
-        ("⚡ Electric", "FFB703"),
-        ("🌪️ Air", "8ECAE6"),
-        ("🪨 Earth", "8D6E63"),
-        ("🌿 Forest", "2D6A4F"),
-        ("✨ Light", "FFD166"),
-        ("🌑 Dark", "4A4E69"),
-        ("⚙️ Mecha", "6C757D"),
-        ("👻 Ghosts", "7209B7"),
-        ("🔮 Arcane", "560BAD"),
+        (f"{el_icon} {el_en}", tab_col)
+        for _, el_en, el_icon, tab_col, _ in ELEMENTS_CONFIG
+    ] + [
         ("📜 Spell Cards", "3A0CA3"),
         ("🌍 Environment Cards", "2A9D8F"),
     ]
@@ -1103,6 +1132,16 @@ def write_excel_database(cards):
         populate_worksheet(ws_cat, cat_cards, add_summary=True)
         print(f"  ✓ Created sheet: {g_title} ({len(cat_cards)} cards).")
 
+    # 10 Tribe Sheets (24 monsters per Tribe)
+    for tribe_en, tribe_label, _, tribe_col in TRIBES_CONFIG:
+        t_cards = [c for c in cards if c.get("tribe") == tribe_en]
+        ws_tr = wb.create_sheet(title=tribe_label)
+        ws_tr.sheet_properties.tabColor = tribe_col
+        ws_tr.views.sheetView[0].rightToLeft = False
+        ws_tr.freeze_panes = "D2"
+        populate_worksheet(ws_tr, t_cards, add_summary=True)
+        print(f"  ✓ Created tribe sheet: {tribe_label} ({len(t_cards)} cards).")
+
     print("💾 Saving Excel database...")
     wb.save(EXCEL_PATH)
     print(f"✅ Saved Excel database to {EXCEL_PATH}!")
@@ -1110,7 +1149,7 @@ def write_excel_database(cards):
 
 def main():
     print("============================================================================")
-    print("⚡ Generating 452-Card Balanced Database (240 Monsters + 200 Spells + 12 Environments)")
+    print("⚡ Generating 450-Card Balanced Database (10 Elements × 10 Tribes + 200 Spells + 10 Env)")
     print("============================================================================")
     cards = create_all_cards()
     print(f"✓ Prepared {len(cards)} cards.")

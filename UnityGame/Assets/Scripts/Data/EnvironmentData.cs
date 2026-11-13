@@ -72,18 +72,18 @@ namespace MonsterCardGame.Data
             {
                 case "Fire":
                     name = "Fire Environment";
-                    debuffedElements = new List<string> { "Forest", "Ice", "Mecha" };
-                    description = "Molten lava empowers Fire monsters (+30%), while melting Ice, burning Forest, and overheating Mecha (-20%).";
+                    debuffedElements = new List<string> { "Nature", "Ice", "Dark" };
+                    description = "Molten lava empowers Fire monsters (+30%), while scorching Nature, melting Ice, and burning Dark (-20%).";
                     break;
                 case "Water":
                     name = "Water Environment";
-                    debuffedElements = new List<string> { "Fire", "Earth", "Mecha" };
-                    description = "Raging waves empower Water monsters (+30%), while extinguishing Fire, eroding Earth, and rusting Mecha (-20%).";
+                    debuffedElements = new List<string> { "Fire", "Earth", "Light" };
+                    description = "Raging waves empower Water monsters (+30%), while extinguishing Fire, eroding Earth, and dimming Light (-20%).";
                     break;
                 case "Ice":
                     name = "Ice Environment";
-                    debuffedElements = new List<string> { "Water", "Forest", "Air" };
-                    description = "Bitter frost empowers Ice monsters (+30%), while freezing Water, withering Forest, and weighing down Air (-20%).";
+                    debuffedElements = new List<string> { "Water", "Nature", "Air" };
+                    description = "Bitter frost empowers Ice monsters (+30%), while freezing Water, withering Nature, and weighing down Air (-20%).";
                     break;
                 case "Earth":
                     name = "Earth Environment";
@@ -92,43 +92,34 @@ namespace MonsterCardGame.Data
                     break;
                 case "Electric":
                     name = "Electric Environment";
-                    debuffedElements = new List<string> { "Mecha", "Water", "Air" };
-                    description = "Thunderstorms empower Electric monsters (+30%), while short-circuiting Mecha, electrifying Water, and striking Air (-20%).";
+                    debuffedElements = new List<string> { "Water", "Air", "Arcane" };
+                    description = "Thunderstorms empower Electric monsters (+30%), while electrifying Water, striking Air, and disrupting Arcane (-20%).";
                     break;
                 case "Air":
                     name = "Air Environment";
-                    debuffedElements = new List<string> { "Ghosts", "Earth", "Dark" };
-                    description = "Cyclonic winds empower Air monsters (+30%), while scattering Ghosts, eroding Earth, and dispersing Dark (-20%).";
+                    debuffedElements = new List<string> { "Earth", "Fire", "Dark" };
+                    description = "Cyclonic winds empower Air monsters (+30%), while eroding Earth, scattering Fire, and dispersing Dark (-20%).";
                     break;
+                case "Nature":
                 case "Forest":
-                    name = "Forest Environment";
-                    debuffedElements = new List<string> { "Earth", "Water", "Air" };
-                    description = "Lush nature empowers Forest monsters (+30%), while roots split Earth and drain Water and Air (-20%).";
+                    name = "Nature Environment";
+                    debuffedElements = new List<string> { "Earth", "Water", "Electric" };
+                    description = "Lush wilderness empowers Nature monsters (+30%), while roots split Earth, drain Water, and ground Electric (-20%).";
                     break;
                 case "Light":
                     name = "Light Environment";
-                    debuffedElements = new List<string> { "Dark", "Ghosts", "Arcane" };
-                    description = "Radiant light blesses Light monsters (+30%), while banishing Dark, purifying Ghosts, and dispelling Arcane (-20%).";
+                    debuffedElements = new List<string> { "Dark", "Ice", "Arcane" };
+                    description = "Radiant light blesses Light monsters (+30%), while banishing Dark, shattering Ice, and dispelling Arcane (-20%).";
                     break;
                 case "Dark":
                     name = "Dark Environment";
-                    debuffedElements = new List<string> { "Light", "Arcane", "Electric" };
-                    description = "Total eclipse empowers Dark monsters (+30%), while eclipsing Light, corrupting Arcane, and dampening Electric (-20%).";
-                    break;
-                case "Mecha":
-                    name = "Mecha Environment";
-                    debuffedElements = new List<string> { "Forest", "Ghosts", "Light" };
-                    description = "Industrial gears empower Mecha monsters (+30%), while clearing Forest, trapping Ghosts, and reflecting Light (-20%).";
-                    break;
-                case "Ghosts":
-                    name = "Ghosts Environment";
-                    debuffedElements = new List<string> { "Fire", "Electric", "Arcane" };
-                    description = "Ethereal mist empowers Ghosts monsters (+30%), while chilling Fire, draining Electric, and haunting Arcane (-20%).";
+                    debuffedElements = new List<string> { "Light", "Nature", "Arcane" };
+                    description = "Total eclipse empowers Dark monsters (+30%), while eclipsing Light, withering Nature, and corrupting Arcane (-20%).";
                     break;
                 case "Arcane":
                     name = "Arcane Environment";
-                    debuffedElements = new List<string> { "Ice", "Light", "Dark" };
-                    description = "Arcane surges empower Arcane monsters (+30%), while shattering Ice and bending Light and Dark (-20%).";
+                    debuffedElements = new List<string> { "Light", "Electric", "Air" };
+                    description = "Arcane surges empower Arcane monsters (+30%), while bending Light, draining Electric, and warping Air (-20%).";
                     break;
                 default:
                     name = "Stable Weather";
@@ -152,15 +143,15 @@ namespace MonsterCardGame.Data
             return elem switch
             {
                 "Fire" => 1, "Water" => 2, "Ice" => 3, "Earth" => 4,
-                "Electric" => 5, "Air" => 6, "Forest" => 7, "Light" => 8,
-                "Dark" => 9, "Mecha" => 10, "Ghosts" => 11, "Arcane" => 12,
+                "Electric" => 5, "Air" => 6, "Nature" => 7, "Forest" => 7, "Light" => 8,
+                "Dark" => 9, "Arcane" => 10,
                 _ => 1
             };
         }
 
         public static List<EnvironmentCardData> GetAllEnvironments()
         {
-            string[] elems = { "Fire", "Water", "Ice", "Earth", "Electric", "Air", "Forest", "Light", "Dark", "Mecha", "Ghosts", "Arcane" };
+            string[] elems = { "Fire", "Water", "Ice", "Earth", "Electric", "Air", "Nature", "Light", "Dark", "Arcane" };
             var list = new List<EnvironmentCardData>();
             foreach (var elem in elems)
             {
@@ -171,7 +162,7 @@ namespace MonsterCardGame.Data
 
         public static EnvironmentCardData GetRandomEnvironment()
         {
-            string[] elems = { "Fire", "Water", "Ice", "Earth", "Electric", "Air", "Forest", "Light", "Dark", "Mecha", "Ghosts", "Arcane" };
+            string[] elems = { "Fire", "Water", "Ice", "Earth", "Electric", "Air", "Nature", "Light", "Dark", "Arcane" };
             string randomElem = elems[UnityEngine.Random.Range(0, elems.Length)];
             return new EnvironmentCardData(randomElem, 1);
         }

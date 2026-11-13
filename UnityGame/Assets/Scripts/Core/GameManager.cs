@@ -98,6 +98,7 @@ namespace MonsterCardGame.Core
                                 cardType = CardType.Monster,
                                 card_type = "monster",
                                 element = c.element,
+                        tribe = c.tribe,
                                 group = c.group,
                                 group_en = c.group_en,
                                 role = c.role,
@@ -128,7 +129,7 @@ namespace MonsterCardGame.Core
                     }
 
                     SpellDatabase.SetSpellsFromDatabase(allSpells);
-                    Debug.Log($"✅ Loaded 452-Card Balanced Database: {allMonsters.Count} Monsters + {allSpells.Count} Tactical Spells!");
+                    Debug.Log($"✅ Loaded 450-Card Balanced Database: {allMonsters.Count} Monsters + {allSpells.Count} Tactical Spells!");
                     return;
                 }
             }
@@ -422,6 +423,7 @@ namespace MonsterCardGame.Core
                 cardType = CardType.Monster,
                 card_type = "monster",
                 element = src.element,
+                tribe = src.tribe,
                 group = src.group,
                 group_en = src.group_en,
                 role = src.role,
