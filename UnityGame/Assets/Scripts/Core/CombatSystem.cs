@@ -180,6 +180,8 @@ namespace MonsterCardGame.Core
                 {
                     if (!TrySalvationSave(player, slot, m))
                     {
+                        BattleUIManager.Instance?.PlayMonsterDeathEffect(player, slot, m);
+                        MonsterCardGame.Audio.SoundManager.Instance?.PlayCardDeath();
                         player.graveyard.Add(m.data);
                         pSlot.ClearSlot();
                         continue;
@@ -304,6 +306,9 @@ namespace MonsterCardGame.Core
             if (deadM == null) return false;
             if (TrySalvationSave(owner, slot, deadM)) return false;
 
+            BattleUIManager.Instance?.PlayMonsterDeathEffect(owner, slot, deadM);
+            MonsterCardGame.Audio.SoundManager.Instance?.PlayCardDeath();
+
             if (slot >= 0 && slot < 6 && owner.slots[slot] != null && owner.slots[slot].currentMonster == deadM)
             {
                 owner.slots[slot].ClearSlot();
@@ -323,6 +328,8 @@ namespace MonsterCardGame.Core
                             t.currentDef -= 10;
                             if (!t.IsAlive && !TrySalvationSave(killerOwner, slot, t))
                             {
+                                BattleUIManager.Instance?.PlayMonsterDeathEffect(killerOwner, slot, t);
+                                MonsterCardGame.Audio.SoundManager.Instance?.PlayCardDeath();
                                 killerOwner.graveyard.Add(t.data);
                                 killerOwner.slots[slot].ClearSlot();
                             }
@@ -356,6 +363,8 @@ namespace MonsterCardGame.Core
                                 {
                                     if (!TrySalvationSave(killerOwner, ks, killerM))
                                     {
+                                        BattleUIManager.Instance?.PlayMonsterDeathEffect(killerOwner, ks, killerM);
+                                        MonsterCardGame.Audio.SoundManager.Instance?.PlayCardDeath();
                                         killerOwner.graveyard.Add(killerM.data);
                                         killerOwner.slots[ks].ClearSlot();
                                     }
@@ -399,6 +408,7 @@ namespace MonsterCardGame.Core
             if (targetM.bubbleShield && !ignoreImmunity)
             {
                 targetM.bubbleShield = false;
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayCardShieldBlock();
                 if (showVfx) SpawnSlotStatusVfx(targetIsHuman, targetSlot, "🫧 BLOCKED!", new Color(0.45f, 0.90f, 1f));
                 return;
             }
@@ -407,6 +417,7 @@ namespace MonsterCardGame.Core
             {
                 if (targetM.HasPassiveSubstr("Electromagnetic Shield") != null || targetM.HasPassiveSubstr("Night Stealth") != null)
                 {
+                    MonsterCardGame.Audio.SoundManager.Instance?.PlayCardShieldBlock();
                     if (showVfx) SpawnSlotStatusVfx(targetIsHuman, targetSlot, "🛡️ IMMUNE!", new Color(0.75f, 0.85f, 1f));
                     return;
                 }
@@ -441,8 +452,6 @@ namespace MonsterCardGame.Core
 
             if (!targetM.IsAlive)
             {
-                if (showVfx && MonsterCardGame.Audio.SoundManager.Instance != null)
-                    MonsterCardGame.Audio.SoundManager.Instance.PlayCardDeath();
                 HandleMonsterDeath(opponent, player, targetSlot, targetM, sourceM);
             }
         }
@@ -689,7 +698,7 @@ namespace MonsterCardGame.Core
             {
                 if (MonsterCardGame.Audio.SoundManager.Instance != null)
                 {
-                    MonsterCardGame.Audio.SoundManager.Instance.TryPlayMonsterSignatureClip(m.data, "skill");
+                    MonsterCardGame.Audio.SoundManager.Instance.PlayMonsterSkill(m.data);
                 }
                 if (BattleUIManager.Instance != null)
                 {
@@ -1526,6 +1535,7 @@ namespace MonsterCardGame.Core
                     if (attackerSlotView != null)
                     {
                         attackerSlotView.SetStandbyPaused(true);
+                        MonsterCardGame.Audio.SoundManager.Instance?.PlayCardAttack();
                         yield return BattleAnimations.AnimateCardAttack(attackerSlotView.transform, targetPos, () =>
                         {
                             ApplyDamageImpact(attacker, attackerMonster, atkPower, slotIdx, defender, defenderSlot, defenderSlotView, defenderLeaderTransform, isDirectToLeader);
@@ -1534,6 +1544,7 @@ namespace MonsterCardGame.Core
                     }
                     else
                     {
+                        MonsterCardGame.Audio.SoundManager.Instance?.PlayCardAttack();
                         ApplyDamageImpact(attacker, attackerMonster, atkPower, slotIdx, defender, defenderSlot, defenderSlotView, defenderLeaderTransform, isDirectToLeader);
                     }
 
@@ -1556,6 +1567,7 @@ namespace MonsterCardGame.Core
                 if (enemyMonster.bubbleShield)
                 {
                     enemyMonster.bubbleShield = false;
+                    MonsterCardGame.Audio.SoundManager.Instance?.PlayCardShieldBlock();
                     return;
                 }
 
@@ -1571,9 +1583,21 @@ namespace MonsterCardGame.Core
                 // Check Evasion & Mystic Intuition
                 if (attackerMonster.HasPassiveSubstr("Targeting System") == null)
                 {
-                    if (enemyMonster.HasPassiveSubstr("Light Evasion") != null && UnityEngine.Random.value < 0.20f) return;
-                    if (enemyMonster.HasPassiveSubstr("Mystic Intuition") != null && UnityEngine.Random.value < 0.25f) return;
-                    if (enemyMonster.HasPassiveSubstr("Nimble Agility") != null && UnityEngine.Random.value < 0.15f) return;
+                    if (enemyMonster.HasPassiveSubstr("Light Evasion") != null && UnityEngine.Random.value < 0.20f)
+                    {
+                        MonsterCardGame.Audio.SoundManager.Instance?.PlayCardShieldBlock();
+                        return;
+                    }
+                    if (enemyMonster.HasPassiveSubstr("Mystic Intuition") != null && UnityEngine.Random.value < 0.25f)
+                    {
+                        MonsterCardGame.Audio.SoundManager.Instance?.PlayCardShieldBlock();
+                        return;
+                    }
+                    if (enemyMonster.HasPassiveSubstr("Nimble Agility") != null && UnityEngine.Random.value < 0.15f)
+                    {
+                        MonsterCardGame.Audio.SoundManager.Instance?.PlayCardShieldBlock();
+                        return;
+                    }
                 }
 
                 // Armor & Damage Reduction
@@ -1630,8 +1654,6 @@ namespace MonsterCardGame.Core
 
                 if (!enemyMonster.IsAlive)
                 {
-                    if (MonsterCardGame.Audio.SoundManager.Instance != null)
-                        MonsterCardGame.Audio.SoundManager.Instance.PlayCardDeath();
                     HandleMonsterDeath(defender, attacker, slotIdx, enemyMonster, attackerMonster);
                 }
 
@@ -1647,8 +1669,6 @@ namespace MonsterCardGame.Core
                 {
                     attacker.currentMana += 1;
                 }
-                if (MonsterCardGame.Audio.SoundManager.Instance != null)
-                    MonsterCardGame.Audio.SoundManager.Instance.PlayHpDamage();
 
                 if (BattleUIManager.Instance != null)
                 {

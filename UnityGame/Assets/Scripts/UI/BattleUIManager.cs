@@ -31,6 +31,7 @@ namespace MonsterCardGame.UI
         [Header("Controls")]
         public Button attackButton;
         public Button endTurnButton;
+        public AstralHourglassControl hourglassControl;
         public Button sacrificeButton;
         public Button playCardButton;
         public Button quitButton;
@@ -381,9 +382,10 @@ namespace MonsterCardGame.UI
                     : new Color(0.92f, 0.68f, 0.68f);
             }
 
-            // 4. Control Buttons
+            // 4. Control Buttons & Astral Hourglass Turn Control
             if (attackButton != null) attackButton.interactable = gm.isPlayerTurn;
             if (endTurnButton != null) endTurnButton.interactable = gm.isPlayerTurn;
+            if (hourglassControl != null) hourglassControl.SyncStateImmediate(gm.isPlayerTurn && gm.currentPhase == GamePhase.ActionPhase);
             if (sacrificeButton != null)
             {
                 sacrificeButton.interactable = gm.isPlayerTurn && !gm.humanPlayer.hasSacrificedThisTurn && selectedCardForAction != null;
@@ -1943,6 +1945,8 @@ namespace MonsterCardGame.UI
                 return;
             }
 
+            MonsterCardGame.Audio.SoundManager.Instance?.PlayCardSelect();
+
             ClearBoardSelection();
             selectedCardForAction = card;
             ShowCardDetails(card);
@@ -2140,6 +2144,7 @@ namespace MonsterCardGame.UI
             }
             else
             {
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
                 LogCombatMessage($"❌ Cannot summon monster to Slot {slotIndex} (Check Mana & slot availability).");
             }
         }
@@ -2228,6 +2233,7 @@ namespace MonsterCardGame.UI
 
             if (!CombatSystem.Instance.ActivateMonsterAbility(gm.humanPlayer, gm.aiPlayer, slotIndex, out string msg))
             {
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
                 LogCombatMessage(msg);
                 if (monster != null)
                 {
@@ -2321,12 +2327,14 @@ namespace MonsterCardGame.UI
 
             if (!gm.isPlayerTurn)
             {
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
                 LogCombatMessage("⚠️ You cannot sacrifice cards during the enemy turn!");
                 return;
             }
 
             if (gm.humanPlayer.hasSacrificedThisTurn)
             {
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
                 LogCombatMessage("⚠️ You already sacrificed a card this turn (only 1 sacrifice allowed per turn).");
                 return;
             }
@@ -2370,14 +2378,20 @@ namespace MonsterCardGame.UI
             UpdateUI();
         }
 
+        public void OnHourglassEndTurnClicked()
+        {
+            OnEndTurnClicked();
+        }
+
         private void OnEndTurnClicked()
         {
             var gm = GameManager.Instance;
             if (gm == null || !gm.isPlayerTurn || gm.currentPhase != GamePhase.ActionPhase) return;
 
-            MonsterCardGame.Audio.SoundManager.Instance.PlayTurnEnd();
+            MonsterCardGame.Audio.SoundManager.Instance?.PlayTurnEnd();
             DeselectHandCards();
             ClearBoardSelection();
+            LogCombatMessage("⏳ Astral Hourglass activated — passing turn...");
             gm.OnPlayerEndTurn();
             UpdateUI();
         }
@@ -2410,11 +2424,57 @@ namespace MonsterCardGame.UI
             {
                 StartCoroutine(BattleAnimations.AnimateSpellCast(canvas, spellCard, casterName));
             }
+            PlayBattlefieldSpellMirage(spellCard);
             if (BattlefieldAtmosphereEngine.Instance != null && spellCard != null)
             {
                 Color c = MonsterArtLoader.GetElementColor(spellCard.element);
                 BattlefieldAtmosphereEngine.Instance.TriggerActionPulse(c, 1.35f);
             }
+        }
+
+        public void PlayBattlefieldSpellMirage(CardData spellCard)
+        {
+            if (centerBoardRect == null) return;
+            Color elemColor = spellCard != null ? MonsterArtLoader.GetElementColor(spellCard.element) : new Color(0.55f, 0.78f, 1.0f);
+            StartCoroutine(BattleAnimations.AnimateBattlefieldMirage(centerBoardRect, elemColor, 1.55f));
+        }
+
+        /// <summary>
+        /// Detaches a clean visual snapshot of a dying monster at its board slot and plays the &lt;2s death dissolution VFX,
+        /// allowing the real board slot to clear cleanly right away without leaving any red or stale boxes behind.
+        /// </summary>
+        public void PlayMonsterDeathEffect(PlayerState owner, int slotIndex, MonsterInstance deadMonster)
+        {
+            if (deadMonster == null || deadMonster.data == null) return;
+
+            var gm = GameManager.Instance;
+            bool isPlayerSide = (gm != null && owner == gm.humanPlayer);
+            var sv = GetSlotView(slotIndex, isPlayerSide);
+            if (sv == null) return;
+
+            Transform layer = (cardFlightLayer != null) ? cardFlightLayer : transform;
+            var visual = CreateFlyingCardVisual(deadMonster.data, false, out _);
+            if (visual != null)
+            {
+                var rt = visual.GetComponent<RectTransform>();
+                if (rt != null)
+                {
+                    rt.sizeDelta = new Vector2(148f, 184f);
+                }
+                activeFlightVisuals.Add(visual);
+            }
+
+            Color elemColor = MonsterArtLoader.GetElementColor(deadMonster.data.element);
+            StartCoroutine(BattleAnimations.AnimateMonsterDeath(
+                visual,
+                layer,
+                sv.transform.position,
+                elemColor,
+                1.25f,
+                () =>
+                {
+                    if (visual != null) activeFlightVisuals.Remove(visual);
+                }));
         }
 
         public void ShowAbilityBanner(CardData monsterData, string abilityText)
@@ -2565,6 +2625,7 @@ namespace MonsterCardGame.UI
 
         public void OnRestartClicked()
         {
+            MonsterCardGame.Audio.SoundManager.Instance?.PlayUiClick();
             if (gameOverPanel != null) gameOverPanel.SetActive(false);
             var gm = GameManager.Instance;
             if (gm != null)

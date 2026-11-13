@@ -415,6 +415,7 @@ namespace MonsterCardGame.Core
         {
             if (damage <= 0 || teamImmuneTurns > 0) return;
 
+            bool hadShield = shield > 0;
             if (shield > 0)
             {
                 int absorbed = Mathf.Min(shield, damage);
@@ -426,6 +427,11 @@ namespace MonsterCardGame.Core
             {
                 currentHp = Mathf.Max(0, currentHp - damage);
                 Debug.Log($"🚨 [{playerName}] took {damage} direct Commander damage. Remaining HP: {currentHp}/{maxHp}");
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayHpDamage();
+            }
+            else if (hadShield)
+            {
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayCardShieldBlock();
             }
         }
 
@@ -445,8 +451,13 @@ namespace MonsterCardGame.Core
                 }
             }
 
+            int previousHp = currentHp;
             currentHp = Mathf.Min(maxHp, currentHp + healAmount);
             Debug.Log($"💚 [{playerName}] healed Commander for {healAmount} HP. Current HP: {currentHp}/{maxHp}");
+            if (currentHp > previousHp)
+            {
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayHpHeal();
+            }
         }
     }
 }

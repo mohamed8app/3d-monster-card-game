@@ -24,6 +24,9 @@ namespace MonsterCardGame.UI
         private static Sprite _summoningCircleSprite;
         private static Sprite _handTraySprite;
         private static Sprite _elementalAuraHaloSprite;
+        private static Sprite _circularBlueFlareSprite;
+        private static Sprite _mirageRippleSprite;
+        private static Sprite _mirageWaveSweepSprite;
         private static Sprite _abilityFlashCoreSprite;
         private static Sprite _abilityShockwaveRingSprite;
         private static Sprite _crossedSwordsSprite;
@@ -475,25 +478,16 @@ namespace MonsterCardGame.UI
                 new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(1, 0), new Vector2(2, 1080));
             rightEdgeDiv.GetComponent<Image>().raycastTarget = false;
 
-            // Top Utility Row (Turn Badge + Compact End Turn + Compact Exit Button at y = +506)
+            // Top Utility Row (Full-Width Centered Turn Badge at y = +506 — clean symmetrical top-right header)
             var turnBadgePanel = CreateOrnatePanel(rightWing.transform, "TopTurnBar",
                 new Color(0.07f, 0.09f, 0.14f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-82, 506), new Vector2(156, 32));
-            ui.turnInfoText = CreateText(turnBadgePanel.transform, "TurnInfoText", "TURN 1 • YOUR MOVE", 10,
-                new Color(0.84f, 0.90f, 0.98f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(146, 28));
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 506), new Vector2(320, 32));
+            ui.turnInfoText = CreateText(turnBadgePanel.transform, "TurnInfoText", "TURN 1 • YOUR MOVE", 11,
+                new Color(0.84f, 0.90f, 0.98f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(300, 28));
             AddTextShadow(ui.turnInfoText);
 
-            ui.endTurnButton = CreateBeveledButton(rightWing.transform, "EndTurnBtn", "END ⏭",
-                new Color(0.15f, 0.25f, 0.39f, 0.98f), new Color(0.92f, 0.96f, 1f),
-                new Vector2(38, 506), new Vector2(72, 32), 11,
-                () => { if (BattleUIManager.Instance != null) BattleUIManager.Instance.SendMessage("OnEndTurnClicked"); });
-
-            var quitBtn = CreateBeveledButton(rightWing.transform, "QuitGameBtn", "EXIT",
-                new Color(0.36f, 0.13f, 0.16f, 0.98f), new Color(0.95f, 0.90f, 0.90f),
-                new Vector2(119, 506), new Vector2(82, 32), 11,
-                () => { if (BattleUIManager.Instance != null) BattleUIManager.Instance.OnQuitClicked(); });
-            quitBtn.gameObject.AddComponent<QuitButtonHandler>();
-            ui.quitButton = quitBtn;
+            ui.endTurnButton = null;
+            ui.quitButton = null;
 
             // Zone A: Enemy Leader Side Slot (y = +382, 320 x 196)
             BuildSideLeaderSlot(rightWing.transform, ui, false, 382f, 196f);
@@ -521,6 +515,9 @@ namespace MonsterCardGame.UI
             // Zone D: Player Leader Side Slot (y = -384, 320 x 236)
             BuildSideLeaderSlot(rightWing.transform, ui, true, -384f, 236f);
 
+            // 10.2 Center Seam Astral Hourglass Medallion (integrated on BottomArenaSeamDivider at x = 0, y = -310)
+            BuildAstralHourglassMedallion(screenRoot.transform, ui);
+
             // 10.5 Top-Level Overlay for Card Flight Animations (Deck -> Hand, Hand -> Board/Env/Leader)
             var flightLayerObj = new GameObject("CardFlightLayer");
             flightLayerObj.transform.SetParent(screenRoot.transform, false);
@@ -533,6 +530,127 @@ namespace MonsterCardGame.UI
 
             // 11. Epic Game Over Modal
             BuildGameOverModal(canvas, ui);
+        }
+
+        private static void BuildAstralHourglassMedallion(Transform screenRoot, BattleUIManager ui)
+        {
+            var anchor = new GameObject("AstralHourglassMedallion");
+            anchor.transform.SetParent(screenRoot, false);
+            var anchorRect = anchor.AddComponent<RectTransform>();
+            anchorRect.anchorMin = new Vector2(0.5f, 0.5f);
+            anchorRect.anchorMax = new Vector2(0.5f, 0.5f);
+            anchorRect.sizeDelta = new Vector2(124f, 96f);
+            anchorRect.anchoredPosition = new Vector2(0f, -310f);
+
+            // 1. Scale pivot centered at the circular medallion (x=0, y=-310 -> base touches seam line y=-344)
+            var scalePivotObj = new GameObject("MedallionScalePivot");
+            scalePivotObj.transform.SetParent(anchor.transform, false);
+            var scaleRect = scalePivotObj.AddComponent<RectTransform>();
+            scaleRect.anchorMin = new Vector2(0.5f, 0.5f);
+            scaleRect.anchorMax = new Vector2(0.5f, 0.5f);
+            scaleRect.sizeDelta = new Vector2(86f, 86f);
+            scaleRect.anchoredPosition = Vector2.zero;
+
+            // Invisible circular hit catcher across the full medallion & ring perimeter
+            var hitCatcher = scalePivotObj.AddComponent<Image>();
+            hitCatcher.sprite = GetCircleSprite();
+            hitCatcher.color = new Color(0f, 0f, 0f, 0f);
+            hitCatcher.raycastTarget = true;
+
+            // Circular Blue Flare Halo behind medallion (pure radial glow + soft corona, zero square corners)
+            var haloObj = new GameObject("HourglassAuraHalo");
+            haloObj.transform.SetParent(scalePivotObj.transform, false);
+            var haloRect = haloObj.AddComponent<RectTransform>();
+            haloRect.anchorMin = new Vector2(0.5f, 0.5f);
+            haloRect.anchorMax = new Vector2(0.5f, 0.5f);
+            haloRect.sizeDelta = new Vector2(152f, 152f);
+            var haloImg = haloObj.AddComponent<Image>();
+            haloImg.sprite = GetCircularBlueFlareSprite();
+            haloImg.color = new Color(0.24f, 0.72f, 1.0f, 0.56f);
+            haloImg.raycastTarget = false;
+
+            // Shimmering astral cyan-blue star lens flare core
+            var flareObj = new GameObject("HourglassFlareCore");
+            flareObj.transform.SetParent(scalePivotObj.transform, false);
+            var flareRect = flareObj.AddComponent<RectTransform>();
+            flareRect.anchorMin = new Vector2(0.5f, 0.5f);
+            flareRect.anchorMax = new Vector2(0.5f, 0.5f);
+            flareRect.sizeDelta = new Vector2(118f, 118f);
+            var flareImg = flareObj.AddComponent<Image>();
+            flareImg.sprite = GetAbilityFlashCoreSprite();
+            flareImg.color = new Color(0.52f, 0.90f, 1.0f, 0.45f);
+            flareImg.raycastTarget = false;
+
+            // Spinning subtle astrolabe rune ring behind medallion
+            var ringObj = new GameObject("HourglassRuneRing");
+            ringObj.transform.SetParent(scalePivotObj.transform, false);
+            var ringRect = ringObj.AddComponent<RectTransform>();
+            ringRect.anchorMin = new Vector2(0.5f, 0.5f);
+            ringRect.anchorMax = new Vector2(0.5f, 0.5f);
+            ringRect.sizeDelta = new Vector2(88f, 88f);
+            var ringImg = ringObj.AddComponent<Image>();
+            ringImg.sprite = GetSummoningCircleSprite();
+            ringImg.color = new Color(0.32f, 0.80f, 1.0f, 0.62f);
+            ringImg.raycastTarget = false;
+
+            // Flip pivot (rotates 0 <-> 180 deg cleanly on turn transition)
+            var flipPivotObj = new GameObject("HourglassFlipPivot");
+            flipPivotObj.transform.SetParent(scalePivotObj.transform, false);
+            var flipRect = flipPivotObj.AddComponent<RectTransform>();
+            flipRect.anchorMin = new Vector2(0.5f, 0.5f);
+            flipRect.anchorMax = new Vector2(0.5f, 0.5f);
+            flipRect.sizeDelta = new Vector2(72f, 72f);
+
+            var medallionImg = flipPivotObj.AddComponent<Image>();
+            Sprite hgSprite = LoadResourceSprite("astral_hourglass");
+            if (hgSprite != null)
+            {
+                medallionImg.sprite = hgSprite;
+                medallionImg.color = Color.white;
+                medallionImg.preserveAspect = true;
+            }
+            else
+            {
+                medallionImg.sprite = GetCircleSprite();
+                medallionImg.color = new Color(0.28f, 0.42f, 0.58f, 0.96f);
+            }
+            medallionImg.raycastTarget = true;
+
+            // 2. Compact sapphire-bronze nameplate integrated cleanly on the seam divider beneath the medallion
+            var plaque = CreatePanel(anchor.transform, "HourglassNameplate",
+                new Color(0.05f, 0.08f, 0.14f, 0.95f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -38f), new Vector2(114f, 18f));
+            var plaqueImg = plaque.GetComponent<Image>();
+            plaqueImg.raycastTarget = true;
+            var plaqueOut = plaque.AddComponent<Outline>();
+            plaqueOut.effectColor = new Color(0.26f, 0.52f, 0.84f, 0.90f);
+            plaqueOut.effectDistance = new Vector2(1.0f, 1.0f);
+
+            var captionTxt = CreateText(plaque.transform, "HourglassCaption", "⏳ PASS TURN", 9,
+                new Color(0.76f, 0.90f, 1.0f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(108f, 16f));
+            captionTxt.fontStyle = FontStyle.Bold;
+            captionTxt.raycastTarget = false;
+            AddTextShadow(captionTxt);
+
+            // Bind Button to root anchor so clicking either the circular medallion OR its nameplate triggers Pass/Attack
+            var btn = anchor.AddComponent<Button>();
+            btn.transition = Selectable.Transition.None;
+            btn.navigation = new Navigation { mode = Navigation.Mode.None };
+            btn.targetGraphic = medallionImg;
+
+            var ctrl = anchor.AddComponent<AstralHourglassControl>();
+            ctrl.hourglassButton = btn;
+            ctrl.scalePivot = scaleRect;
+            ctrl.flipPivot = flipRect;
+            ctrl.medallionImage = medallionImg;
+            ctrl.outerRuneRing = ringImg;
+            ctrl.glowHalo = haloImg;
+            ctrl.flareCore = flareImg;
+            ctrl.captionText = captionTxt;
+            ctrl.captionBgImage = plaqueImg;
+            ctrl.BindButton();
+
+            ui.hourglassControl = ctrl;
         }
 
         private static void BuildSideLeaderSlot(Transform parent, BattleUIManager ui, bool isPlayerSide, float centerY, float height)
@@ -1593,6 +1711,125 @@ namespace MonsterCardGame.UI
             tex.Apply();
             _elementalAuraHaloSprite = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f));
             return _elementalAuraHaloSprite;
+        }
+
+        public static Sprite GetCircularBlueFlareSprite()
+        {
+            if (_circularBlueFlareSprite != null) return _circularBlueFlareSprite;
+
+            int size = 192;
+            Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Bilinear;
+            float c = (size - 1) * 0.5f;
+            float maxR = size * 0.49f;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float nx = (x - c) / maxR;
+                    float ny = (y - c) / maxR;
+                    float r = Mathf.Sqrt(nx * nx + ny * ny);
+                    if (r >= 0.99f)
+                    {
+                        tex.SetPixel(x, y, Color.clear);
+                        continue;
+                    }
+
+                    // Smooth radial bloom + luminous circular corona peaking right outside the 72px medallion rim
+                    float bloom = Mathf.Exp(-r * r * 4.4f) * 0.72f;
+                    float coronaRim = Mathf.Exp(-Mathf.Pow((r - 0.54f) * 7.5f, 2f)) * 0.88f;
+
+                    float angle = Mathf.Atan2(ny, nx);
+                    float rayPrimary = Mathf.Pow(Mathf.Abs(Mathf.Cos(angle * 2f)), 10f);
+                    float rayDiag = Mathf.Pow(Mathf.Abs(Mathf.Cos(angle * 2f + Mathf.PI * 0.5f)), 8f);
+                    float radialEnvelope = Mathf.Pow(Mathf.Clamp01(1f - r), 1.55f);
+                    float flareRays = (rayPrimary * 0.42f + rayDiag * 0.22f) * radialEnvelope;
+
+                    float edgeFade = Mathf.Clamp01((0.99f - r) / 0.22f);
+                    edgeFade = edgeFade * edgeFade * (3f - 2f * edgeFade);
+
+                    float alpha = Mathf.Clamp01((bloom + coronaRim + flareRays) * edgeFade);
+                    float heat = Mathf.Clamp01(coronaRim * 0.65f + bloom * 0.5f + flareRays * 0.7f);
+                    float redCh = Mathf.Lerp(0.45f, 0.92f, heat);
+                    float greenCh = Mathf.Lerp(0.80f, 0.98f, heat);
+
+                    tex.SetPixel(x, y, new Color(redCh, greenCh, 1.0f, alpha));
+                }
+            }
+
+            tex.Apply();
+            _circularBlueFlareSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+            return _circularBlueFlareSprite;
+        }
+
+        public static Sprite GetMirageRippleSprite()
+        {
+            if (_mirageRippleSprite != null) return _mirageRippleSprite;
+
+            int w = 256, h = 128;
+            Texture2D tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Bilinear;
+
+            for (int y = 0; y < h; y++)
+            {
+                float ny = (y / (float)(h - 1)) * 2f - 1f;
+                float edgeY = Mathf.Clamp01((1f - Mathf.Abs(ny)) / 0.25f);
+                edgeY = edgeY * edgeY * (3f - 2f * edgeY);
+
+                for (int x = 0; x < w; x++)
+                {
+                    float nx = (x / (float)(w - 1)) * 2f - 1f;
+                    float edgeX = Mathf.Clamp01((1f - Mathf.Abs(nx)) / 0.18f);
+                    edgeX = edgeX * edgeX * (3f - 2f * edgeX);
+
+                    // Overlapping liquid heat/arcane mirage caustic bands
+                    float w1 = 0.5f + 0.5f * Mathf.Sin(y * 0.34f + Mathf.Sin(x * 0.055f) * 2.4f);
+                    float w2 = 0.5f + 0.5f * Mathf.Sin(y * 0.22f - Mathf.Cos(x * 0.042f) * 2.1f);
+                    float caustic = Mathf.Pow(w1 * 0.58f + w2 * 0.42f, 2.2f);
+                    float shimmer = Mathf.Pow(w1 * w2, 1.8f);
+
+                    float alpha = Mathf.Clamp01((caustic * 0.72f + shimmer * 0.48f) * edgeX * edgeY);
+                    float lum = Mathf.Lerp(0.76f, 1.0f, shimmer);
+                    tex.SetPixel(x, y, new Color(lum, lum * 0.98f, 1f, alpha));
+                }
+            }
+
+            tex.Apply();
+            _mirageRippleSprite = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f));
+            return _mirageRippleSprite;
+        }
+
+        public static Sprite GetMirageWaveSweepSprite()
+        {
+            if (_mirageWaveSweepSprite != null) return _mirageWaveSweepSprite;
+
+            int w = 160, h = 160;
+            Texture2D tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Bilinear;
+
+            for (int y = 0; y < h; y++)
+            {
+                float ny = (y / (float)(h - 1)) * 2f - 1f;
+                float envY = Mathf.Clamp01(1f - ny * ny);
+                float curveOffset = Mathf.Sin(ny * 2.6f) * 0.14f;
+
+                for (int x = 0; x < w; x++)
+                {
+                    float nx = (x / (float)(w - 1)) * 2f - 1f - curveOffset;
+                    float core = Mathf.Exp(-nx * nx * 16f);
+                    float trailingHaze = Mathf.Exp(-(nx + 0.28f) * (nx + 0.28f) * 5.2f) * 0.58f;
+                    float ripple = 0.78f + 0.22f * Mathf.Sin(y * 0.40f + nx * 10f);
+
+                    float alpha = Mathf.Clamp01((core + trailingHaze) * envY * ripple);
+                    float peak = Mathf.Clamp01(core * 0.85f);
+                    tex.SetPixel(x, y, new Color(Mathf.Lerp(0.75f, 1f, peak), Mathf.Lerp(0.92f, 1f, peak), 1f, alpha));
+                }
+            }
+
+            tex.Apply();
+            _mirageWaveSweepSprite = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f));
+            return _mirageWaveSweepSprite;
         }
 
         public static Sprite GetAbilityFlashCoreSprite()

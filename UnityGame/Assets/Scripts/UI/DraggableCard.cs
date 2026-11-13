@@ -123,6 +123,7 @@ namespace MonsterCardGame.UI
             if (isDragging || isHovered) return;
             isHovered = true;
             UpdateVisualState();
+            MonsterCardGame.Audio.SoundManager.Instance?.PlayCardHover();
             if (BattleUIManager.Instance != null && cardData != null)
             {
                 BattleUIManager.Instance.ShowCardDetails(cardData);
@@ -411,6 +412,7 @@ namespace MonsterCardGame.UI
             }
             else
             {
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
                 if (BattleUIManager.Instance != null)
                 {
                     BattleUIManager.Instance.LogCombatMessage($"❌ Cannot summon monster to Slot {slotIndex} (Check Mana & slot availability).");

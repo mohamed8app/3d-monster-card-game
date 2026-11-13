@@ -785,6 +785,423 @@ namespace MonsterCardGame.UI
         }
 
         /// <summary>
+        /// Monster Death Effect (strictly <= 2s, default 1.25s):
+        /// Brief fracture shake & spectral soul shockwave followed by ember-ash dissolution and rising soul sparks.
+        /// Uses a detached card ghost so the underlying board slot clears immediately without stuck highlights.
+        /// </summary>
+        public static IEnumerator AnimateMonsterDeath(
+            GameObject deathCardVisual,
+            Transform vfxParent,
+            Vector3 worldPos,
+            Color elemColor,
+            float duration = 1.25f,
+            Action onCleanup = null)
+        {
+            duration = Mathf.Clamp(duration, 0.55f, 1.85f);
+            Transform layer = (deathCardVisual != null && deathCardVisual.transform.parent != null)
+                ? deathCardVisual.transform.parent
+                : vfxParent;
+            if (layer == null)
+            {
+                if (deathCardVisual != null) GameObject.Destroy(deathCardVisual);
+                onCleanup?.Invoke();
+                yield break;
+            }
+
+            // Force zero raycasts on detached ghost
+            if (deathCardVisual != null)
+            {
+                deathCardVisual.transform.position = worldPos;
+                var cgGhost = deathCardVisual.GetComponent<CanvasGroup>() ?? deathCardVisual.AddComponent<CanvasGroup>();
+                cgGhost.blocksRaycasts = false;
+                cgGhost.interactable = false;
+                cgGhost.alpha = 1f;
+                foreach (var g in deathCardVisual.GetComponentsInChildren<Graphic>(true))
+                {
+                    if (g != null) g.raycastTarget = false;
+                }
+            }
+
+            // 1. Expanding Spectral Soul Shockwave Ring & Core Flare
+            var ringObj = new GameObject("DeathShockwaveRing");
+            ringObj.transform.SetParent(layer, false);
+            ringObj.transform.position = worldPos;
+            var ringRect = ringObj.AddComponent<RectTransform>();
+            ringRect.sizeDelta = new Vector2(180f, 180f);
+            var ringImg = ringObj.AddComponent<Image>();
+            ringImg.sprite = GameBootstrapper.GetAbilityShockwaveRingSprite();
+            Color crimsonSoul = Color.Lerp(elemColor, new Color(0.95f, 0.24f, 0.30f), 0.58f);
+            ringImg.color = crimsonSoul;
+            ringImg.raycastTarget = false;
+
+            var coreObj = new GameObject("DeathCoreFlare");
+            coreObj.transform.SetParent(layer, false);
+            coreObj.transform.position = worldPos;
+            var coreRect = coreObj.AddComponent<RectTransform>();
+            coreRect.sizeDelta = new Vector2(165f, 165f);
+            var coreImg = coreObj.AddComponent<Image>();
+            coreImg.sprite = GameBootstrapper.GetCircularBlueFlareSprite();
+            coreImg.color = Color.Lerp(crimsonSoul, Color.white, 0.35f);
+            coreImg.raycastTarget = false;
+
+            // 2. Rising Ember & Soul Dust Motes (10 particles)
+            const int moteCount = 10;
+            var motes = new GameObject[moteCount];
+            var moteImgs = new Image[moteCount];
+            var moteStart = new Vector3[moteCount];
+            var moteVel = new Vector3[moteCount];
+            var moteSizes = new float[moteCount];
+            Sprite circleSp = GameBootstrapper.GetCircleSprite();
+            Sprite flareSp = GameBootstrapper.GetAbilityFlashCoreSprite();
+
+            for (int i = 0; i < moteCount; i++)
+            {
+                var mObj = new GameObject($"DeathSoulMote_{i}");
+                mObj.transform.SetParent(layer, false);
+                var mRect = mObj.AddComponent<RectTransform>();
+                float sz = UnityEngine.Random.Range(10f, 22f);
+                mRect.sizeDelta = new Vector2(sz, sz);
+                var mImg = mObj.AddComponent<Image>();
+                mImg.sprite = (i % 3 == 0) ? flareSp : circleSp;
+                mImg.color = (i % 2 == 0)
+                    ? Color.Lerp(crimsonSoul, new Color(1f, 0.65f, 0.25f), 0.45f)
+                    : Color.Lerp(elemColor, Color.white, 0.35f);
+                mImg.raycastTarget = false;
+
+                Vector3 offset = new Vector3(
+                    UnityEngine.Random.Range(-56f, 56f),
+                    UnityEngine.Random.Range(-70f, 55f),
+                    0f);
+                mObj.transform.position = worldPos + offset;
+
+                motes[i] = mObj;
+                moteImgs[i] = mImg;
+                moteStart[i] = worldPos + offset;
+                moteVel[i] = new Vector3(
+                    offset.x * UnityEngine.Random.Range(0.75f, 1.45f) + UnityEngine.Random.Range(-22f, 22f),
+                    UnityEngine.Random.Range(55f, 125f),
+                    0f);
+                moteSizes[i] = sz;
+            }
+
+            // Collect all child images of the dying card so they smoothly char & dissolve
+            Graphic[] ghostGraphics = deathCardVisual != null
+                ? deathCardVisual.GetComponentsInChildren<Graphic>(true)
+                : new Graphic[0];
+            Color[] baseColors = new Color[ghostGraphics.Length];
+            for (int i = 0; i < ghostGraphics.Length; i++)
+            {
+                baseColors[i] = ghostGraphics[i] != null ? ghostGraphics[i].color : Color.white;
+            }
+            CanvasGroup cardCg = deathCardVisual != null ? deathCardVisual.GetComponent<CanvasGroup>() : null;
+            float tiltTarget = (UnityEngine.Random.value < 0.5f ? -1f : 1f) * UnityEngine.Random.Range(5f, 9f);
+
+            float t = 0f;
+            float shatterCut = 0.16f;
+            while (t < duration)
+            {
+                t += Mathf.Min(Time.deltaTime, 0.05f);
+                float p = Mathf.Clamp01(t / duration);
+
+                // Shockwave ring rapid expansion (0 -> 0.50s)
+                if (ringObj != null)
+                {
+                    float rp = Mathf.Clamp01(t / 0.50f);
+                    float rEase = EaseOutCubic(rp);
+                    float rScale = Mathf.Lerp(0.45f, 2.05f, rEase);
+                    ringRect.localScale = new Vector3(rScale, rScale, 1f);
+                    Color rc = crimsonSoul;
+                    rc.a = (1f - rp) * 0.90f;
+                    ringImg.color = rc;
+                }
+
+                // Core flare peak then dissolve (0 -> 0.65s)
+                if (coreObj != null)
+                {
+                    float cp = Mathf.Clamp01(t / 0.65f);
+                    float cScale = Mathf.Lerp(0.55f, 1.55f, EaseOutQuad(cp));
+                    coreRect.localScale = new Vector3(cScale, cScale, 1f);
+                    Color cc = Color.Lerp(Color.white, crimsonSoul, Mathf.Clamp01(cp * 1.3f));
+                    cc.a = (1f - cp * cp) * 0.85f;
+                    coreImg.color = cc;
+                }
+
+                // Dying Card Ghost: Brief violent tremor -> scorch & shrink & float dissolve
+                if (deathCardVisual != null)
+                {
+                    if (t < shatterCut)
+                    {
+                        float sp = t / shatterCut;
+                        float shakeX = Mathf.Sin(t * 78f) * 7.5f * (1f - sp * 0.4f);
+                        deathCardVisual.transform.position = worldPos + new Vector3(shakeX, 0f, 0f);
+                        deathCardVisual.transform.localScale = Vector3.one * Mathf.Lerp(1.06f, 0.98f, sp);
+                    }
+                    else
+                    {
+                        float dp = Mathf.Clamp01((t - shatterCut) / (duration - shatterCut));
+                        float dEase = EaseOutQuad(dp);
+                        deathCardVisual.transform.position = worldPos + new Vector3(0f, dEase * 36f, 0f);
+                        float sc = Mathf.Lerp(0.98f, 0.68f, dEase);
+                        deathCardVisual.transform.localScale = new Vector3(sc, sc, 1f);
+                        deathCardVisual.transform.localRotation = Quaternion.Euler(0f, 0f, tiltTarget * dEase);
+                        if (cardCg != null)
+                        {
+                            cardCg.alpha = Mathf.Pow(1f - dp, 1.35f);
+                        }
+                    }
+
+                    // Scorch tint transition (flash bright -> ember crimson/ash)
+                    Color ashTint = new Color(0.28f, 0.16f, 0.22f, 1f);
+                    float tintP = Mathf.Clamp01(t / 0.35f);
+                    Color flashMix = (t < 0.11f)
+                        ? Color.Lerp(Color.white, crimsonSoul, t / 0.11f)
+                        : Color.Lerp(crimsonSoul, ashTint, tintP);
+                    for (int i = 0; i < ghostGraphics.Length; i++)
+                    {
+                        if (ghostGraphics[i] != null)
+                        {
+                            Color bc = baseColors[i];
+                            Color tinted = Color.Lerp(bc, flashMix * bc, 0.72f);
+                            tinted.a = bc.a;
+                            ghostGraphics[i].color = tinted;
+                        }
+                    }
+                }
+
+                // Rising drifting ember & soul dust motes
+                for (int i = 0; i < moteCount; i++)
+                {
+                    if (motes[i] == null) continue;
+                    float mp = Mathf.Clamp01((p - i * 0.025f) / 0.85f);
+                    float mEase = EaseOutQuad(mp);
+                    float sway = Mathf.Sin(t * 7f + i * 1.4f) * 10f * mp;
+                    motes[i].transform.position = moteStart[i] + moteVel[i] * mEase + new Vector3(sway, 0f, 0f);
+                    float sc = Mathf.Lerp(1.15f, 0.15f, mp);
+                    motes[i].transform.localScale = new Vector3(sc, sc, 1f);
+                    if (moteImgs[i] != null)
+                    {
+                        Color mc = moteImgs[i].color;
+                        mc.a = Mathf.Clamp01(mp * 5f) * Mathf.Pow(1f - mp, 1.25f) * 0.92f;
+                        moteImgs[i].color = mc;
+                    }
+                }
+
+                yield return null;
+            }
+
+            if (deathCardVisual != null) GameObject.Destroy(deathCardVisual);
+            if (ringObj != null) GameObject.Destroy(ringObj);
+            if (coreObj != null) GameObject.Destroy(coreObj);
+            for (int i = 0; i < moteCount; i++)
+            {
+                if (motes[i] != null) GameObject.Destroy(motes[i]);
+            }
+
+            onCleanup?.Invoke();
+        }
+
+        /// <summary>
+        /// Magical Battlefield Mirage Effect ("سراب سحري") clipped cleanly inside CenterBattleBoard (1200x688)
+        /// when activating a Spell card. Transforms the arena with flowing iridescent caustic ripples,
+        /// refractive prism sweep waves, and rising shimmering haze wisps without resizing arena_ground.
+        /// </summary>
+        public static IEnumerator AnimateBattlefieldMirage(RectTransform battleBoardRect, Color elemColor, float duration = 1.55f)
+        {
+            if (battleBoardRect == null) yield break;
+
+            // Lower Floor Mirage Layer (sits right above ArenaBackground / Video and beneath battle slots)
+            var floorOverlay = new GameObject("SpellMirageFloorOverlay");
+            floorOverlay.transform.SetParent(battleBoardRect, false);
+            int targetIdx = Mathf.Min(2, battleBoardRect.childCount - 1);
+            floorOverlay.transform.SetSiblingIndex(targetIdx);
+            var fRect = floorOverlay.AddComponent<RectTransform>();
+            fRect.anchorMin = Vector2.zero;
+            fRect.anchorMax = Vector2.one;
+            fRect.offsetMin = Vector2.zero;
+            fRect.offsetMax = Vector2.zero;
+            var fMask = floorOverlay.AddComponent<RectMask2D>();
+            var fCg = floorOverlay.AddComponent<CanvasGroup>();
+            fCg.blocksRaycasts = false;
+            fCg.interactable = false;
+
+            // Upper Air Refraction Mirage Glint (subtle translucent shimmer over arena air)
+            var airOverlay = new GameObject("SpellMirageAirOverlay");
+            airOverlay.transform.SetParent(battleBoardRect, false);
+            airOverlay.transform.SetAsLastSibling();
+            var aRect = airOverlay.AddComponent<RectTransform>();
+            aRect.anchorMin = Vector2.zero;
+            aRect.anchorMax = Vector2.one;
+            aRect.offsetMin = Vector2.zero;
+            aRect.offsetMax = Vector2.zero;
+            airOverlay.AddComponent<RectMask2D>();
+            var aCg = airOverlay.AddComponent<CanvasGroup>();
+            aCg.blocksRaycasts = false;
+            aCg.interactable = false;
+
+            Color mirageCyan = new Color(0.42f, 0.88f, 1.0f);
+            Color mirageViolet = new Color(0.72f, 0.50f, 1.0f);
+            Color primaryMirage = Color.Lerp(mirageCyan, elemColor, 0.44f);
+            Color secondaryMirage = Color.Lerp(mirageViolet, elemColor, 0.36f);
+
+            // 1. Ethereal base atmosphere haze tint on floor
+            var washObj = new GameObject("MirageBaseWash");
+            washObj.transform.SetParent(floorOverlay.transform, false);
+            var washRect = washObj.AddComponent<RectTransform>();
+            washRect.anchorMin = Vector2.zero;
+            washRect.anchorMax = Vector2.one;
+            washRect.offsetMin = Vector2.zero;
+            washRect.offsetMax = Vector2.zero;
+            var washImg = washObj.AddComponent<Image>();
+            washImg.color = new Color(primaryMirage.r, primaryMirage.g, primaryMirage.b, 0f);
+            washImg.raycastTarget = false;
+
+            Sprite rippleSprite = GameBootstrapper.GetMirageRippleSprite();
+            Sprite sweepSprite = GameBootstrapper.GetMirageWaveSweepSprite();
+            Sprite flareSprite = GameBootstrapper.GetAbilityFlashCoreSprite();
+            Sprite glowSprite = GameBootstrapper.GetCircularBlueFlareSprite();
+
+            // 2. Twin undulating caustic mirage layers gliding in opposing directions
+            var veilAObj = new GameObject("MirageRippleVeilA");
+            veilAObj.transform.SetParent(floorOverlay.transform, false);
+            var veilARect = veilAObj.AddComponent<RectTransform>();
+            veilARect.anchorMin = new Vector2(0.5f, 0.5f);
+            veilARect.anchorMax = new Vector2(0.5f, 0.5f);
+            veilARect.sizeDelta = new Vector2(1680f, 820f);
+            var veilAImg = veilAObj.AddComponent<Image>();
+            veilAImg.sprite = rippleSprite;
+            veilAImg.color = primaryMirage;
+            veilAImg.raycastTarget = false;
+
+            var veilBObj = new GameObject("MirageRippleVeilB");
+            veilBObj.transform.SetParent(floorOverlay.transform, false);
+            var veilBRect = veilBObj.AddComponent<RectTransform>();
+            veilBRect.anchorMin = new Vector2(0.5f, 0.5f);
+            veilBRect.anchorMax = new Vector2(0.5f, 0.5f);
+            veilBRect.sizeDelta = new Vector2(1680f, 820f);
+            var veilBImg = veilBObj.AddComponent<Image>();
+            veilBImg.sprite = rippleSprite;
+            veilBImg.color = secondaryMirage;
+            veilBImg.raycastTarget = false;
+
+            // 3. Diagonal Luminous Refractive Mirage Wave sweeping smoothly across air
+            var sweepObj = new GameObject("MirageRefractionSweep");
+            sweepObj.transform.SetParent(airOverlay.transform, false);
+            var sweepRect = sweepObj.AddComponent<RectTransform>();
+            sweepRect.anchorMin = new Vector2(0.5f, 0.5f);
+            sweepRect.anchorMax = new Vector2(0.5f, 0.5f);
+            sweepRect.sizeDelta = new Vector2(460f, 920f);
+            sweepRect.localRotation = Quaternion.Euler(0f, 0f, -12f);
+            var sweepImg = sweepObj.AddComponent<Image>();
+            sweepImg.sprite = sweepSprite;
+            sweepImg.color = Color.Lerp(primaryMirage, Color.white, 0.45f);
+            sweepImg.raycastTarget = false;
+
+            // 4. 14 Floating Mirage Heat/Mana Wisps ascending over the battlefield
+            const int wispCount = 14;
+            var wisps = new RectTransform[wispCount];
+            var wispImgs = new Image[wispCount];
+            var wispBase = new Vector2[wispCount];
+            var wispPhase = new float[wispCount];
+            for (int i = 0; i < wispCount; i++)
+            {
+                var wObj = new GameObject($"MirageWisp_{i}");
+                wObj.transform.SetParent((i % 2 == 0) ? floorOverlay.transform : airOverlay.transform, false);
+                var wRect = wObj.AddComponent<RectTransform>();
+                wRect.anchorMin = new Vector2(0.5f, 0.5f);
+                wRect.anchorMax = new Vector2(0.5f, 0.5f);
+                float size = UnityEngine.Random.Range(32f, 82f);
+                wRect.sizeDelta = new Vector2(size, size);
+                var wImg = wObj.AddComponent<Image>();
+                wImg.sprite = (i % 3 == 0) ? flareSprite : glowSprite;
+                wImg.color = (i % 2 == 0) ? primaryMirage : secondaryMirage;
+                wImg.raycastTarget = false;
+
+                wispBase[i] = new Vector2(
+                    UnityEngine.Random.Range(-540f, 540f),
+                    UnityEngine.Random.Range(-290f, 220f));
+                wispPhase[i] = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
+                wisps[i] = wRect;
+                wispImgs[i] = wImg;
+            }
+
+            float t = 0f;
+            while (t < duration && battleBoardRect != null)
+            {
+                t += Mathf.Min(Time.deltaTime, 0.05f);
+                float p = Mathf.Clamp01(t / duration);
+
+                // Smooth envelope: quick shimmering entrance -> dreamy wave sustain -> soft fade out
+                float envelope = Mathf.Sin(p * Mathf.PI);
+                float sustainEnv = Mathf.Clamp01(p / 0.18f) * Mathf.Clamp01((1f - p) / 0.34f);
+
+                if (washImg != null)
+                {
+                    Color wc = Color.Lerp(primaryMirage, secondaryMirage, 0.5f + 0.5f * Mathf.Sin(t * 5f));
+                    wc.a = sustainEnv * 0.22f;
+                    washImg.color = wc;
+                }
+
+                // Counter-flowing liquid caustic mirage sheets (vertical shimmer + horizontal drift)
+                if (veilARect != null)
+                {
+                    float driftX = Mathf.Lerp(-165f, 165f, p);
+                    float undulateY = Mathf.Sin(t * 7.2f) * 18f;
+                    veilARect.anchoredPosition = new Vector2(driftX, undulateY);
+                    float sy = 1.0f + Mathf.Sin(t * 9.0f) * 0.045f;
+                    veilARect.localScale = new Vector3(1.04f, sy, 1f);
+                    Color vcA = primaryMirage;
+                    vcA.a = sustainEnv * (0.48f + 0.14f * Mathf.Sin(t * 11f));
+                    veilAImg.color = vcA;
+                }
+
+                if (veilBRect != null)
+                {
+                    float driftX = Mathf.Lerp(175f, -175f, p);
+                    float undulateY = Mathf.Cos(t * 5.8f) * 16f;
+                    veilBRect.anchoredPosition = new Vector2(driftX, undulateY);
+                    float sy = 1.0f + Mathf.Cos(t * 8.2f) * 0.05f;
+                    veilBRect.localScale = new Vector3(1.06f, sy, 1f);
+                    Color vcB = secondaryMirage;
+                    vcB.a = sustainEnv * (0.42f + 0.12f * Mathf.Cos(t * 9.5f));
+                    veilBImg.color = vcB;
+                }
+
+                // Luminous refraction beam sweeping softly across the battlefield air
+                if (sweepRect != null)
+                {
+                    float sweepP = Mathf.Clamp01(p / 0.85f);
+                    float sweepX = Mathf.Lerp(-820f, 820f, EaseInOutCubic(sweepP));
+                    sweepRect.anchoredPosition = new Vector2(sweepX, Mathf.Sin(p * Mathf.PI * 2f) * 20f);
+                    Color sc = Color.Lerp(primaryMirage, Color.white, 0.42f);
+                    sc.a = Mathf.Sin(sweepP * Mathf.PI) * 0.34f;
+                    sweepImg.color = sc;
+                }
+
+                // Undulating Mirage Wisps floating upward across the field
+                for (int i = 0; i < wispCount; i++)
+                {
+                    if (wisps[i] == null) continue;
+                    float phase = wispPhase[i];
+                    float wx = wispBase[i].x + Mathf.Sin(t * 4.5f + phase) * 24f;
+                    float wy = wispBase[i].y + p * 115f + Mathf.Cos(t * 3.8f + phase) * 10f;
+                    wisps[i].anchoredPosition = new Vector2(wx, wy);
+
+                    float pulse = 0.82f + 0.26f * Mathf.Sin(t * 6.5f + phase);
+                    wisps[i].localScale = new Vector3(pulse, pulse, 1f);
+
+                    Color wc = (i % 2 == 0) ? primaryMirage : secondaryMirage;
+                    wc.a = envelope * ((i % 2 == 0) ? 0.38f : 0.24f) * (0.7f + 0.3f * Mathf.Sin(t * 8f + phase));
+                    wispImgs[i].color = wc;
+                }
+
+                yield return null;
+            }
+
+            if (floorOverlay != null) GameObject.Destroy(floorOverlay);
+            if (airOverlay != null) GameObject.Destroy(airOverlay);
+        }
+
+        /// <summary>
         /// Screen Shake on Direct Leader Hit
         /// </summary>
         public static IEnumerator AnimateScreenShake(Transform target, float intensity = 8f, float duration = 0.22f)

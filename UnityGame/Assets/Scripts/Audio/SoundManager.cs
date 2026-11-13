@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using MonsterCardGame.Data;
@@ -6,8 +5,8 @@ using MonsterCardGame.Data;
 namespace MonsterCardGame.Audio
 {
     /// <summary>
-    /// Comprehensive Sound & Ambience Manager for the Monster Card Game.
-    /// Controls SFX and cross-fading between the 12 elemental environment ambiences.
+    /// Pure Asset Sound Effects Manager.
+    /// Plays only authentic audio assets loaded from Resources/Audio/SFX (zero synthetic/procedural tones).
     /// </summary>
     public class SoundManager : MonoBehaviour
     {
@@ -28,23 +27,18 @@ namespace MonsterCardGame.Audio
 
         [Header("Audio Channels")]
         private AudioSource sfxSource;
-        private AudioSource spellSfxSource;
-        private AudioSource ambienceSourceA;
-        private AudioSource ambienceSourceB;
-        private bool isUsingSourceA = true;
+        private AudioSource signatureSfxSource;
 
         [Header("Audio Settings")]
-        [Range(0f, 1f)] public float sfxVolume = 0.85f;
-        [Range(0f, 1f)] public float spellSfxVolume = 0.95f;
-        [Range(0f, 1f)] public float ambienceVolume = 0f; // Disabled per user request: only video audio and card SFX play!
+        [Range(0f, 1f)] public float sfxVolume = 0.88f;
+        [Range(0f, 1f)] public float signatureSfxVolume = 0.95f;
 
-        private Dictionary<string, AudioClip> sfxClips = new Dictionary<string, AudioClip>();
-        private Dictionary<string, AudioClip> spellClips = new Dictionary<string, AudioClip>();
-        private Dictionary<string, AudioClip> monsterClips = new Dictionary<string, AudioClip>();
-        private Dictionary<string, AudioClip> ambienceClips = new Dictionary<string, AudioClip>();
-
-        private Coroutine crossFadeCoroutine;
-        private string currentAmbienceKey = "";
+        private readonly Dictionary<string, AudioClip> sfxClips = new Dictionary<string, AudioClip>();
+        private readonly Dictionary<string, AudioClip> spellClips = new Dictionary<string, AudioClip>();
+        private readonly Dictionary<string, AudioClip> monsterClips = new Dictionary<string, AudioClip>();
+        private readonly Dictionary<string, AudioClip> envClips = new Dictionary<string, AudioClip>();
+        private readonly Dictionary<string, AudioClip> leaderClips = new Dictionary<string, AudioClip>();
+        private readonly Dictionary<string, float> lastPlayTimes = new Dictionary<string, float>();
 
         private void Awake()
         {
@@ -65,122 +59,138 @@ namespace MonsterCardGame.Audio
             sfxSource = gameObject.AddComponent<AudioSource>();
             sfxSource.playOnAwake = false;
             sfxSource.spatialBlend = 0f;
+            sfxSource.pitch = 1f;
 
-            // Dedicated unpitched source so Spell audio retains crisp natural fidelity even alongside hit/attack SFX
-            spellSfxSource = gameObject.AddComponent<AudioSource>();
-            spellSfxSource.playOnAwake = false;
-            spellSfxSource.spatialBlend = 0f;
-            spellSfxSource.pitch = 1f;
-
-            ambienceSourceA = gameObject.AddComponent<AudioSource>();
-            ambienceSourceA.loop = true;
-            ambienceSourceA.playOnAwake = false;
-            ambienceSourceA.spatialBlend = 0f;
-            ambienceSourceA.volume = 0f;
-
-            ambienceSourceB = gameObject.AddComponent<AudioSource>();
-            ambienceSourceB.loop = true;
-            ambienceSourceB.playOnAwake = false;
-            ambienceSourceB.spatialBlend = 0f;
-            ambienceSourceB.volume = 0f;
+            // Dedicated pure unpitched source for Spells, Signature Monsters, Environments, and Leaders
+            signatureSfxSource = gameObject.AddComponent<AudioSource>();
+            signatureSfxSource.playOnAwake = false;
+            signatureSfxSource.spatialBlend = 0f;
+            signatureSfxSource.pitch = 1f;
         }
 
-        private void Start()
+        public void ReloadAudioClips()
         {
-            // Background synthetic ambience/music completely disabled per user request
-            StopAllAmbience();
-        }
-
-        public void StopAllAmbience()
-        {
-            if (ambienceSourceA != null) { ambienceSourceA.volume = 0f; ambienceSourceA.Stop(); }
-            if (ambienceSourceB != null) { ambienceSourceB.volume = 0f; ambienceSourceB.Stop(); }
+            LoadAllAudioClips();
         }
 
         private void LoadAllAudioClips()
         {
-            string[] sfxNames = {
-                "card_draw", "card_play", "card_sacrifice",
-                "card_attack", "card_hit", "card_death",
-                "hp_damage", "turn_end"
-            };
+            sfxClips.Clear();
+            spellClips.Clear();
+            monsterClips.Clear();
+            envClips.Clear();
+            leaderClips.Clear();
 
-            foreach (var name in sfxNames)
-            {
-                var clip = Resources.Load<AudioClip>("Audio/SFX/" + name);
-                if (clip != null) sfxClips[name] = clip;
-            }
+            // Load every pure audio asset anywhere under Resources/Audio/SFX
+            LoadClipsInto("Audio/SFX", sfxClips);
+            LoadClipsInto("Audio/SFX/Spells", spellClips);
+            LoadClipsInto("Audio/SFX/Monsters", monsterClips);
+            LoadClipsInto("Audio/SFX/Environments", envClips);
+            LoadClipsInto("Audio/SFX/Leaders", leaderClips);
 
-            string[] ambNames = {
-                "ambience_fire", "ambience_water", "ambience_ice",
-                "ambience_earth", "ambience_electric", "ambience_wind",
-                "ambience_forest", "ambience_light", "ambience_dark",
-                "ambience_mecha", "ambience_ghost", "ambience_arcane"
-            };
-
-            foreach (var name in ambNames)
-            {
-                var clip = Resources.Load<AudioClip>("Audio/Ambience/" + name);
-                if (clip != null) ambienceClips[name] = clip;
-            }
-
-            AudioClip[] loadedSpellClips = Resources.LoadAll<AudioClip>("Audio/SFX/Spells");
-            if (loadedSpellClips != null)
-            {
-                foreach (var sc in loadedSpellClips)
-                {
-                    if (sc != null)
-                    {
-                        spellClips[sc.name.Trim().ToLowerInvariant()] = sc;
-                    }
-                }
-            }
-
-            AudioClip[] loadedMonsterClips = Resources.LoadAll<AudioClip>("Audio/SFX/Monsters");
-            if (loadedMonsterClips != null)
-            {
-                foreach (var mc in loadedMonsterClips)
-                {
-                    if (mc != null)
-                    {
-                        monsterClips[mc.name.Trim().ToLowerInvariant()] = mc;
-                    }
-                }
-            }
-
-            Debug.Log($"🔊 [SoundManager] Loaded {sfxClips.Count} SFX, {spellClips.Count} Spell SFX, {monsterClips.Count} Monster SFX, and {ambienceClips.Count} Ambience clips.");
+            Debug.Log($"🔊 [SoundManager] Pure Audio Loaded: {sfxClips.Count} Total SFX | {spellClips.Count} Spells | {monsterClips.Count} Monsters | {envClips.Count} Environments | {leaderClips.Count} Leaders");
         }
 
-        #region Card SFX Playback with Natural Pitch Shifting
-
-        public void PlaySFX(string clipName, float pitchVariance = 0.05f)
+        private static void LoadClipsInto(string resourceFolder, Dictionary<string, AudioClip> target)
         {
-            if (sfxClips.TryGetValue(clipName, out AudioClip clip))
+            AudioClip[] clips = Resources.LoadAll<AudioClip>(resourceFolder);
+            if (clips == null) return;
+
+            foreach (var clip in clips)
             {
-                float randomPitch = 1.0f + Random.Range(-pitchVariance, pitchVariance);
-                sfxSource.pitch = randomPitch;
-                sfxSource.PlayOneShot(clip, sfxVolume);
+                if (clip == null || string.IsNullOrEmpty(clip.name)) continue;
+                string key = clip.name.Trim().ToLowerInvariant();
+                target[key] = clip;
             }
         }
 
-        public void PlayCardDraw() => PlaySFX("card_draw", 0.04f);
-        public void PlayCardPlay() => PlaySFX("card_play", 0.05f);
-        public void PlayCardSacrifice() => PlaySFX("card_sacrifice", 0.03f);
-        public void PlayCardAttack() => PlaySFX("card_attack", 0.06f);
-        public void PlayCardHit() => PlaySFX("card_hit", 0.08f);
-        public void PlayCardDeath() => PlaySFX("card_death", 0.05f);
-        public void PlayHpDamage() => PlaySFX("hp_damage", 0.04f);
-        public void PlayTurnEnd() => PlaySFX("turn_end", 0.02f);
+        private bool CheckCooldown(string key, float minInterval)
+        {
+            if (minInterval <= 0f) return true;
+            float now = Time.unscaledTime;
+            if (lastPlayTimes.TryGetValue(key, out float prev) && (now - prev) < minInterval)
+            {
+                return false;
+            }
+            lastPlayTimes[key] = now;
+            return true;
+        }
 
-        /// <summary>
-        /// Plays the signature Spell cast sound matching the exact card ID (e.g. spell_241..spell_401)
-        /// or falls back to its tactical spell category sound.
-        /// </summary>
+        private bool PlayClip(AudioClip clip, AudioSource channel, float volume, float pitchVariance = 0f, float minInterval = 0f, string cooldownKey = null)
+        {
+            if (clip == null || channel == null) return false;
+
+            string key = cooldownKey ?? clip.name;
+            if (!CheckCooldown(key, minInterval)) return false;
+
+            channel.pitch = (pitchVariance > 0.001f) ? (1.0f + Random.Range(-pitchVariance, pitchVariance)) : 1.0f;
+            channel.PlayOneShot(clip, volume);
+            return true;
+        }
+
+        public bool PlaySFX(string clipName, float pitchVariance = 0.02f, float volumeScale = 1.0f, float minInterval = 0f)
+        {
+            if (string.IsNullOrEmpty(clipName) || sfxSource == null) return false;
+            string key = clipName.Trim().ToLowerInvariant();
+            if (!sfxClips.TryGetValue(key, out AudioClip clip) || clip == null) return false;
+
+            return PlayClip(clip, sfxSource, sfxVolume * Mathf.Clamp01(volumeScale), pitchVariance, minInterval, key);
+        }
+
+        public bool PlayFirstAvailable(float pitchVariance, float volumeScale, float minInterval, params string[] keys)
+        {
+            if (keys == null) return false;
+            foreach (var k in keys)
+            {
+                if (string.IsNullOrEmpty(k)) continue;
+                string normalized = k.Trim().ToLowerInvariant();
+                if (sfxClips.TryGetValue(normalized, out AudioClip clip) && clip != null)
+                {
+                    return PlayClip(clip, sfxSource, sfxVolume * Mathf.Clamp01(volumeScale), pitchVariance, minInterval, normalized);
+                }
+            }
+            return false;
+        }
+
+        #region Core Gameplay & UI SFX
+
+        public void PlayMatchStart() => PlaySFX("match_start", 0f, 1f, 0.25f);
+        public void PlayTurnStart(bool isPlayerTurn)
+        {
+            if (isPlayerTurn) PlayFirstAvailable(0f, 0.95f, 0.15f, "turn_start_player", "turn_start");
+            else PlayFirstAvailable(0f, 0.90f, 0.15f, "turn_start_enemy", "turn_start");
+        }
+        public void PlayTurnEnd() => PlaySFX("turn_end", 0f, 1f, 0.12f);
+        public void PlayCombatStart() => PlaySFX("combat_start", 0f, 1f, 0.15f);
+
+        public void PlayCardDraw() => PlaySFX("card_draw", 0.03f, 0.9f, 0.06f);
+        public void PlayCardHover() => PlaySFX("card_hover", 0.02f, 0.45f, 0.09f);
+        public void PlayCardSelect() => PlaySFX("card_select", 0.02f, 0.75f, 0.05f);
+        public void PlayCardSacrifice() => PlaySFX("card_sacrifice", 0.02f, 1f, 0.08f);
+        public void PlayCardPlay() => PlayFirstAvailable(0.02f, 1f, 0.05f, "card_summon", "card_play");
+
+        public void PlayCardAttack() => PlaySFX("card_attack", 0.03f, 1f, 0.05f);
+        public void PlayCardHit() => PlaySFX("card_hit", 0.03f, 0.95f, 0.05f);
+        public void PlayCardShieldBlock() => PlaySFX("card_shield_block", 0.02f, 0.95f, 0.08f);
+        public void PlayCardDeath() => PlaySFX("card_death", 0.02f, 1f, 0.07f);
+
+        public void PlayHpDamage() => PlaySFX("hp_damage", 0.02f, 1f, 0.08f);
+        public void PlayHpHeal() => PlaySFX("hp_heal", 0.02f, 0.95f, 0.08f);
+
+        public void PlayUiClick() => PlaySFX("ui_click", 0.02f, 0.75f, 0.04f);
+        public void PlayInvalidAction() => PlaySFX("error_invalid", 0.01f, 0.85f, 0.12f);
+        public void PlayVictory() => PlaySFX("victory", 0f, 1f, 0.5f);
+        public void PlayDefeat() => PlaySFX("defeat", 0f, 1f, 0.5f);
+
+        #endregion
+
+        #region Signature Spells, Monsters, Environments & Leaders
+
         public void PlaySpellCast(CardData spellCard)
         {
             if (spellCard == null)
             {
-                PlayCardPlay();
+                PlaySFX("spell_cast", 0f, 1f, 0.08f);
                 return;
             }
 
@@ -201,14 +211,14 @@ namespace MonsterCardGame.Audio
                 else if (role.Contains("pierce") || role.Contains("destroy")) spellClips.TryGetValue("spell_401", out clip);
             }
 
-            if (clip != null && spellSfxSource != null)
+            if (clip == null)
             {
-                spellSfxSource.pitch = 1f;
-                spellSfxSource.PlayOneShot(clip, spellSfxVolume);
+                sfxClips.TryGetValue("spell_cast", out clip);
             }
-            else
+
+            if (clip != null)
             {
-                PlayCardPlay();
+                PlayClip(clip, signatureSfxSource, signatureSfxVolume, 0f, 0.05f, idKey);
             }
         }
 
@@ -217,108 +227,93 @@ namespace MonsterCardGame.Audio
             if (monsterCard == null || string.IsNullOrEmpty(suffix)) return false;
 
             AudioClip clip = null;
-            string idKey = $"monster_{monsterCard.id}_{suffix}";
+            string cleanSuffix = suffix.Trim().ToLowerInvariant();
+            string idKey = $"monster_{monsterCard.id}_{cleanSuffix}";
+
             if (!monsterClips.TryGetValue(idKey, out clip) && !string.IsNullOrEmpty(monsterCard.name))
             {
-                monsterClips.TryGetValue($"monster_{monsterCard.name.Trim().ToLowerInvariant()}_{suffix}", out clip);
+                monsterClips.TryGetValue($"monster_{monsterCard.name.Trim().ToLowerInvariant()}_{cleanSuffix}", out clip);
             }
 
-            if (clip != null && spellSfxSource != null)
+            if (clip != null)
             {
-                spellSfxSource.pitch = 1f;
-                spellSfxSource.PlayOneShot(clip, spellSfxVolume);
-                return true;
+                return PlayClip(clip, signatureSfxSource, signatureSfxVolume, 0f, 0.05f, idKey);
             }
             return false;
         }
 
-        /// <summary>
-        /// Plays the signature battlefield entrance sound for a summoned monster (e.g. monster_15_summon)
-        /// or falls back to the generic card summon SFX.
-        /// </summary>
         public void PlayMonsterSummon(CardData monsterCard)
         {
             if (!TryPlayMonsterSignatureClip(monsterCard, "summon"))
             {
-                PlayCardPlay();
+                PlayFirstAvailable(0.02f, 1f, 0.05f, "card_summon", "card_play");
             }
         }
 
-        /// <summary>
-        /// Plays the signature active skill sound for a monster (e.g. monster_15_skill)
-        /// or falls back to the generic attack/ability SFX.
-        /// </summary>
         public void PlayMonsterSkill(CardData monsterCard)
         {
             if (!TryPlayMonsterSignatureClip(monsterCard, "skill"))
             {
-                PlayCardAttack();
+                PlayFirstAvailable(0.02f, 1f, 0.05f, "monster_skill", "card_attack");
             }
         }
 
-        #endregion
+        public void PlayEnvironmentActivate(EnvironmentCardData env)
+        {
+            AudioClip clip = null;
+            string key = "env_activate";
+            if (env != null && !string.IsNullOrEmpty(env.element))
+            {
+                string elemKey = $"env_{env.element.Trim().ToLowerInvariant()}";
+                if (envClips.TryGetValue(elemKey, out clip) || sfxClips.TryGetValue(elemKey, out clip))
+                {
+                    key = elemKey;
+                }
+            }
 
-        #region 12 Environment Ambiences with Smooth Cross-Fade
+            if (clip == null && !envClips.TryGetValue("env_activate", out clip))
+            {
+                sfxClips.TryGetValue("env_activate", out clip);
+            }
+
+            if (clip != null)
+            {
+                PlayClip(clip, signatureSfxSource, signatureSfxVolume, 0f, 0.12f, key);
+            }
+        }
+
+        public void PlayLeaderDeploy(CardData leaderCard)
+        {
+            AudioClip clip = null;
+            string key = "leader_deploy";
+            if (leaderCard != null)
+            {
+                string idKey = $"leader_{leaderCard.id}";
+                if (leaderClips.TryGetValue(idKey, out clip) || sfxClips.TryGetValue(idKey, out clip))
+                {
+                    key = idKey;
+                }
+            }
+
+            if (clip == null && !leaderClips.TryGetValue("leader_deploy", out clip))
+            {
+                sfxClips.TryGetValue("leader_deploy", out clip);
+            }
+
+            if (clip != null)
+            {
+                PlayClip(clip, signatureSfxSource, signatureSfxVolume, 0f, 0.12f, key);
+            }
+        }
 
         public void SetEnvironmentAmbience(string elementOrKey, float fadeDuration = 1.5f)
         {
-            // All synthetic background ambience/music disabled per user request: "الغى الموسيقى اللى انت عاملها"
-            StopAllAmbience();
+            // Legacy procedural ambience removed completely — pure video audio + ElevenLabs SFX only.
         }
 
-        private IEnumerator CrossFadeAmbience(AudioClip newClip, float duration)
+        public void StopAllAmbience()
         {
-            AudioSource currentSource = isUsingSourceA ? ambienceSourceA : ambienceSourceB;
-            AudioSource newSource = isUsingSourceA ? ambienceSourceB : ambienceSourceA;
-
-            newSource.clip = newClip;
-            newSource.volume = 0f;
-            newSource.Play();
-
-            float timer = 0f;
-            float startVol = currentSource.volume;
-
-            while (timer < duration)
-            {
-                timer += Time.deltaTime;
-                float progress = timer / duration;
-
-                if (currentSource.isPlaying)
-                    currentSource.volume = Mathf.Lerp(startVol, 0f, progress);
-
-                newSource.volume = Mathf.Lerp(0f, ambienceVolume, progress);
-                yield return null;
-            }
-
-            if (currentSource.isPlaying)
-            {
-                currentSource.Stop();
-                currentSource.volume = 0f;
-            }
-            newSource.volume = ambienceVolume;
-
-            isUsingSourceA = !isUsingSourceA;
-        }
-
-        private string MapToAmbienceKey(string input)
-        {
-            if (string.IsNullOrEmpty(input)) return "ambience_fire";
-            string lower = input.Trim().ToLower();
-
-            if (lower.Contains("fire")) return "ambience_fire";
-            if (lower.Contains("water")) return "ambience_water";
-            if (lower.Contains("ice")) return "ambience_ice";
-            if (lower.Contains("earth")) return "ambience_earth";
-            if (lower.Contains("electric")) return "ambience_electric";
-            if (lower.Contains("air") || lower.Contains("wind")) return "ambience_wind";
-            if (lower.Contains("nature") || lower.Contains("forest")) return "ambience_forest";
-            if (lower.Contains("light")) return "ambience_light";
-            if (lower.Contains("dark")) return "ambience_dark";
-            if (lower.Contains("arcane") || lower.Contains("magic")) return "ambience_arcane";
-            if (lower.Contains("ghost")) return "ambience_ghost";
-            if (lower.Contains("arcane")) return "ambience_arcane";
-
-            return "ambience_fire";
+            // No procedural ambience sources exist.
         }
 
         #endregion

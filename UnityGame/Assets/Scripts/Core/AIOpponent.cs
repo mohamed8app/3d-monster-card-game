@@ -102,11 +102,15 @@ namespace MonsterCardGame.Core
                     yield return ui.AnimateEnemyCardSacrificeRoutine();
                 }
 
-                if (aiPlayer.SacrificeCard(bestSacrifice) && ui != null)
+                if (aiPlayer.SacrificeCard(bestSacrifice))
                 {
-                    ui.LogCombatMessage(
-                        $"🔥 Enemy sacrificed a card (+1 Power / +1 Mana -> Mana: {aiPlayer.currentMana}, Power: {aiPlayer.power}).");
-                    ui.UpdateUI();
+                    MonsterCardGame.Audio.SoundManager.Instance?.PlayCardSacrifice();
+                    if (ui != null)
+                    {
+                        ui.LogCombatMessage(
+                            $"🔥 Enemy sacrificed a card (+1 Power / +1 Mana -> Mana: {aiPlayer.currentMana}, Power: {aiPlayer.power}).");
+                        ui.UpdateUI();
+                    }
                 }
                 yield return new WaitForSeconds(0.35f);
             }
@@ -206,7 +210,7 @@ namespace MonsterCardGame.Core
                     {
                         if (MonsterCardGame.Audio.SoundManager.Instance != null)
                         {
-                            MonsterCardGame.Audio.SoundManager.Instance.TryPlayMonsterSignatureClip(card, "summon");
+                            MonsterCardGame.Audio.SoundManager.Instance.PlayMonsterSummon(card);
                         }
 
                         if (ui != null)

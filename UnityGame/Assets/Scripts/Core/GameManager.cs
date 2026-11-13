@@ -213,6 +213,7 @@ namespace MonsterCardGame.Core
             aiPlayer.currentMana = 0;
 
             Debug.Log($"🎲 Epic Battle Started! Decks: {defaultDeckSize} unique cards each | Opening Hands: P1={p1Draws}, P2={p2Draws} | Start Resources: 0 Power / 0 Mana (P2 +1 Mana on Turn 2).");
+            MonsterCardGame.Audio.SoundManager.Instance?.PlayMatchStart();
 
             StartTurn();
 
@@ -627,6 +628,10 @@ namespace MonsterCardGame.Core
 
             if (isPlayerTurn)
             {
+                if (currentTurn > 1)
+                {
+                    MonsterCardGame.Audio.SoundManager.Instance?.PlayTurnStart(true);
+                }
                 if (BattleUIManager.Instance != null)
                 {
                     BattleUIManager.Instance.ShowBanner($"🟢 YOUR TURN (Round {currentTurn} • Mana: {activePlayer.currentMana} | Power: {activePlayer.power} ∞)", new Color(0.2f, 0.95f, 0.5f));
@@ -635,6 +640,7 @@ namespace MonsterCardGame.Core
             }
             else
             {
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayTurnStart(false);
                 if (BattleUIManager.Instance != null)
                 {
                     BattleUIManager.Instance.ShowBanner("🔴 ENEMY TURN (Thinking...)", new Color(1f, 0.35f, 0.35f));
@@ -650,6 +656,7 @@ namespace MonsterCardGame.Core
             if (spellCard == null || spellCard.cardType != CardType.Spell) return false;
             if (spellCard.cost > caster.currentMana)
             {
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
                 if (BattleUIManager.Instance != null)
                 {
                     BattleUIManager.Instance.LogCombatMessage($"❌ Not enough Mana to cast Spell [{spellCard.name}]! (Req: {spellCard.cost}💧, Avail: {caster.currentMana}💧)");
@@ -1113,6 +1120,7 @@ namespace MonsterCardGame.Core
 
             if (envCard.cost > player.currentMana)
             {
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
                 if (BattleUIManager.Instance != null)
                 {
                     BattleUIManager.Instance.LogCombatMessage($"❌ Not enough Mana to activate [{envCard.name}]! (Req: {envCard.cost}💧, Avail: {player.currentMana}💧)");
@@ -1149,6 +1157,7 @@ namespace MonsterCardGame.Core
 
             // Cantrip: Environment cards grant +1 card draw so shifting weather never costs card advantage
             player.DrawCard();
+            MonsterCardGame.Audio.SoundManager.Instance?.PlayEnvironmentActivate(activeEnvironment);
 
             if (BattleUIManager.Instance != null)
             {
@@ -1169,6 +1178,7 @@ namespace MonsterCardGame.Core
 
             if (leaderCard.cost > player.currentMana)
             {
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
                 if (BattleUIManager.Instance != null)
                 {
                     BattleUIManager.Instance.LogCombatMessage($"❌ Not enough Mana to deploy Leader [{leaderCard.name}]! (Req: {leaderCard.cost}💧, Avail: {player.currentMana}💧)");
@@ -1185,6 +1195,7 @@ namespace MonsterCardGame.Core
             }
 
             player.activeLeader = leaderCard;
+            MonsterCardGame.Audio.SoundManager.Instance?.PlayLeaderDeploy(leaderCard);
 
             if (BattleUIManager.Instance != null)
             {
@@ -1229,6 +1240,7 @@ namespace MonsterCardGame.Core
             }
 
             currentPhase = GamePhase.CombatPhase;
+            MonsterCardGame.Audio.SoundManager.Instance?.PlayCombatStart();
 
             if (BattleUIManager.Instance != null)
             {
@@ -1367,6 +1379,7 @@ namespace MonsterCardGame.Core
                 }
 
                 currentPhase = GamePhase.CombatPhase;
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayCombatStart();
 
                 StartCoroutine(CombatSystem.Instance.ExecuteCombatPhaseAnimated(humanPlayer, aiPlayer, activeEnvironment, () =>
                 {
@@ -1385,6 +1398,10 @@ namespace MonsterCardGame.Core
 
         public void EndTurn()
         {
+            if (!isPlayerTurn)
+            {
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayTurnEnd();
+            }
             CancelAutoEndTurn();
             currentPhase = GamePhase.TurnEnd;
 
@@ -1428,6 +1445,7 @@ namespace MonsterCardGame.Core
             if (!aiPlayer.IsAlive)
             {
                 currentPhase = GamePhase.GameOver;
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayVictory();
                 string envName = activeEnvironment != null ? activeEnvironment.name : "Stable Weather ☀️";
                 if (BattleUIManager.Instance != null)
                 {
@@ -1438,6 +1456,7 @@ namespace MonsterCardGame.Core
             else if (!humanPlayer.IsAlive)
             {
                 currentPhase = GamePhase.GameOver;
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayDefeat();
                 string envName = activeEnvironment != null ? activeEnvironment.name : "Stable Weather ☀️";
                 if (BattleUIManager.Instance != null)
                 {
