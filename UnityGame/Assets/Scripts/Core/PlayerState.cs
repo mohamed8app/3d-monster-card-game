@@ -51,6 +51,7 @@ namespace MonsterCardGame.Core
         public Func<PlayerState, List<CardData>> onDeckExhaustedRefill;
         public Func<int, float> getCardDrawWeightMultiplier;
         public Action<int> onCardDrawnCallback;
+        public Action<PlayerState, CardData> onCardDrawnToHand;
 
         public bool IsAlive => currentHp > 0;
 
@@ -230,6 +231,7 @@ namespace MonsterCardGame.Core
                 if (hand.Count < maxHandSize)
                 {
                     hand.Add(card);
+                    onCardDrawnToHand?.Invoke(this, card);
                     if (MonsterCardGame.Audio.SoundManager.Instance != null)
                     {
                         MonsterCardGame.Audio.SoundManager.Instance.PlayCardDraw();

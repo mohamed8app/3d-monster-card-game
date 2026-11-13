@@ -653,26 +653,51 @@ namespace MonsterCardGame.Core
 
             for (int slot = 0; slot < 6; slot++)
             {
-                var pSlot = player.slots[slot];
-                if (pSlot == null || !pSlot.IsOccupied) continue;
-                var m = pSlot.currentMonster;
-                if (!m.IsAlive || m.silencedTurns > 0 || m.frozenTurns > 0 || m.hasUsedActiveThisTurn || !m.HasActiveSkill)
-                    continue;
+                TryExecuteSlotActiveSkill(player, opponent, slot);
+                if (player.currentMana <= 0 && player.power <= 0) break;
+            }
+        }
 
-                if (ActivateMonsterAbility(player, opponent, slot, out string msg))
+        /// <summary>
+        /// Steps through the AI/player's monster active skills one by one, refreshing UI so Mana/Power changes are visible live.
+        /// </summary>
+        public System.Collections.IEnumerator ExecuteActiveSkillsAnimated(PlayerState player, PlayerState opponent)
+        {
+            if (player == null || (player.currentMana <= 0 && player.power <= 0)) yield break;
+
+            for (int slot = 0; slot < 6; slot++)
+            {
+                if (TryExecuteSlotActiveSkill(player, opponent, slot))
                 {
-                    if (MonsterCardGame.Audio.SoundManager.Instance != null)
-                    {
-                        MonsterCardGame.Audio.SoundManager.Instance.TryPlayMonsterSignatureClip(m.data, "skill");
-                    }
-                    if (BattleUIManager.Instance != null)
-                    {
-                        BattleUIManager.Instance.LogCombatMessage(msg);
-                    }
+                    if (BattleUIManager.Instance != null) BattleUIManager.Instance.UpdateUI();
+                    yield return new WaitForSeconds(0.45f);
                 }
 
                 if (player.currentMana <= 0 && player.power <= 0) break;
             }
+        }
+
+        private bool TryExecuteSlotActiveSkill(PlayerState player, PlayerState opponent, int slot)
+        {
+            var pSlot = player.slots[slot];
+            if (pSlot == null || !pSlot.IsOccupied) return false;
+            var m = pSlot.currentMonster;
+            if (!m.IsAlive || m.silencedTurns > 0 || m.frozenTurns > 0 || m.hasUsedActiveThisTurn || !m.HasActiveSkill)
+                return false;
+
+            if (ActivateMonsterAbility(player, opponent, slot, out string msg))
+            {
+                if (MonsterCardGame.Audio.SoundManager.Instance != null)
+                {
+                    MonsterCardGame.Audio.SoundManager.Instance.TryPlayMonsterSignatureClip(m.data, "skill");
+                }
+                if (BattleUIManager.Instance != null)
+                {
+                    BattleUIManager.Instance.LogCombatMessage(msg);
+                }
+                return true;
+            }
+            return false;
         }
 
         private List<BoardSlot> GetAliveSlots(PlayerState p)

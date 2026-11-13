@@ -54,6 +54,7 @@ namespace MonsterCardGame.Core
         private readonly Dictionary<int, int> cardMissedDraws = new Dictionary<int, int>();
         private readonly List<int> allCatalogIds = new List<int>();
         private int pityDirtyCounter = 0;
+        private Coroutine autoEndTurnCoroutine = null;
 
         private void Awake()
         {
@@ -180,10 +181,14 @@ namespace MonsterCardGame.Core
             humanPlayer.onDeckExhaustedRefill = RefillPlayerDeck;
             humanPlayer.getCardDrawWeightMultiplier = GetCardPityWeight;
             humanPlayer.onCardDrawnCallback = RecordCardDrawnForPity;
+            humanPlayer.onCardDrawnToHand = (p, c) => BattleUIManager.Instance?.NotifyCardDrawn(true, c);
 
             aiPlayer.onDeckExhaustedRefill = RefillPlayerDeck;
             aiPlayer.getCardDrawWeightMultiplier = GetCardPityWeight;
             aiPlayer.onCardDrawnCallback = null;
+            aiPlayer.onCardDrawnToHand = (p, c) => BattleUIManager.Instance?.NotifyCardDrawn(false, c);
+
+            BattleUIManager.Instance?.ClearFlightAnimations();
 
             // Player 1 begins with 5 cards (skips Turn 1 draw -> 5); Player 2 begins with 6 cards (skips Turn 2 draw -> 6)
             int p1Draws = Mathf.Max(0, firstPlayerOpeningHand);
@@ -213,7 +218,6 @@ namespace MonsterCardGame.Core
 
             if (BattleUIManager.Instance != null)
             {
-                BattleUIManager.Instance.UpdateUI();
                 if (humanPlayer.hand != null && humanPlayer.hand.Count > 0)
                 {
                     BattleUIManager.Instance.ShowCardDetails(humanPlayer.hand[0]);
@@ -627,6 +631,7 @@ namespace MonsterCardGame.Core
                 {
                     BattleUIManager.Instance.ShowBanner($"🟢 YOUR TURN (Round {currentTurn} • Mana: {activePlayer.currentMana} | Power: {activePlayer.power} ∞)", new Color(0.2f, 0.95f, 0.5f));
                 }
+                EvaluateAutoEndTurn();
             }
             else
             {
@@ -696,6 +701,7 @@ namespace MonsterCardGame.Core
             {
                 BattleUIManager.Instance.UpdateUI();
             }
+            EvaluateAutoEndTurn();
             return true;
         }
 
@@ -1150,6 +1156,7 @@ namespace MonsterCardGame.Core
                 BattleUIManager.Instance.UpdateUI();
             }
 
+            EvaluateAutoEndTurn();
             return true;
         }
 
@@ -1188,6 +1195,7 @@ namespace MonsterCardGame.Core
                 BattleUIManager.Instance.UpdateUI();
             }
 
+            EvaluateAutoEndTurn();
             return true;
         }
 
@@ -1237,9 +1245,105 @@ namespace MonsterCardGame.Core
             }));
         }
 
+        /// <summary>
+        /// Returns true if the human player still has at least one legal tactical action this turn:
+        /// sacrificing a card, playing an affordable card with valid placement, or triggering a Ready board ability.
+        /// </summary>
+        public bool HasAnyRemainingPlayerAction()
+        {
+            if (!isPlayerTurn || currentPhase != GamePhase.ActionPhase || humanPlayer == null)
+                return false;
+
+            // 1. Sacrifice available
+            if (!humanPlayer.hasSacrificedThisTurn && humanPlayer.hand != null && humanPlayer.hand.Count > 0)
+                return true;
+
+            // 2. Affordable playable card in hand
+            bool hasEmptySlot = false;
+            if (humanPlayer.slots != null)
+            {
+                foreach (var slot in humanPlayer.slots)
+                {
+                    if (slot != null && !slot.IsOccupied)
+                    {
+                        hasEmptySlot = true;
+                        break;
+                    }
+                }
+            }
+
+            if (humanPlayer.hand != null)
+            {
+                foreach (var c in humanPlayer.hand)
+                {
+                    if (c == null) continue;
+                    if (c.cost <= humanPlayer.currentMana)
+                    {
+                        if (c.cardType != CardType.Monster || hasEmptySlot)
+                            return true;
+                    }
+                }
+            }
+
+            // 3. Ready monster ability on board
+            if (CombatSystem.Instance != null && humanPlayer.slots != null)
+            {
+                for (int i = 0; i < humanPlayer.slots.Length; i++)
+                {
+                    if (CombatSystem.Instance.GetAbilityState(humanPlayer, aiPlayer, i, out _, out _) == CombatSystem.AbilityReadyState.Ready)
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        public void CancelAutoEndTurn()
+        {
+            if (autoEndTurnCoroutine != null)
+            {
+                StopCoroutine(autoEndTurnCoroutine);
+                autoEndTurnCoroutine = null;
+            }
+        }
+
+        public void EvaluateAutoEndTurn(float delay = 0.65f)
+        {
+            CancelAutoEndTurn();
+            if (!isPlayerTurn || currentPhase != GamePhase.ActionPhase) return;
+            if (!HasAnyRemainingPlayerAction())
+            {
+                autoEndTurnCoroutine = StartCoroutine(AutoEndTurnCoroutine(delay));
+            }
+        }
+
+        private System.Collections.IEnumerator AutoEndTurnCoroutine(float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            autoEndTurnCoroutine = null;
+
+            if (!isPlayerTurn || currentPhase != GamePhase.ActionPhase) yield break;
+            if (HasAnyRemainingPlayerAction()) yield break;
+
+            if (BattleUIManager.Instance != null)
+            {
+                BattleUIManager.Instance.LogCombatMessage("⚡ No available actions remaining — ending turn automatically...");
+                BattleUIManager.Instance.DeselectHandCards();
+                BattleUIManager.Instance.ClearBoardSelection();
+            }
+
+            if (MonsterCardGame.Audio.SoundManager.Instance != null)
+            {
+                MonsterCardGame.Audio.SoundManager.Instance.PlayTurnEnd();
+            }
+
+            OnPlayerEndTurn();
+        }
+
         public void OnPlayerEndTurn()
         {
             if (!isPlayerTurn || currentPhase != GamePhase.ActionPhase) return;
+            CancelAutoEndTurn();
 
             bool hasReadyAttackers = false;
             foreach (var slot in humanPlayer.slots)
@@ -1281,6 +1385,7 @@ namespace MonsterCardGame.Core
 
         public void EndTurn()
         {
+            CancelAutoEndTurn();
             currentPhase = GamePhase.TurnEnd;
 
             if (activeEnvironment != null)
@@ -1344,6 +1449,7 @@ namespace MonsterCardGame.Core
 
         public void RestartGame()
         {
+            CancelAutoEndTurn();
             for (int i = 0; i < humanPlayer.slots.Length; i++)
             {
                 if (humanPlayer.slots[i] != null) humanPlayer.slots[i].ClearSlot();
@@ -1359,6 +1465,7 @@ namespace MonsterCardGame.Core
 
             if (BattleUIManager.Instance != null)
             {
+                BattleUIManager.Instance.ClearFlightAnimations();
                 if (BattleUIManager.Instance.gameOverPanel != null)
                 {
                     BattleUIManager.Instance.gameOverPanel.SetActive(false);

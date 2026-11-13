@@ -70,26 +70,228 @@ namespace MonsterCardGame.UI
         }
 
         /// <summary>
-        /// Card Summon Pop-in & Bounce
+        /// Smooth post-landing settle (replaces sudden 0.3x flash pop)
         /// </summary>
         public static IEnumerator AnimateCardSummon(Transform target)
         {
+            yield return AnimateCardSettle(target, 0.16f);
+        }
+
+        public static IEnumerator AnimateCardSettle(Transform target, float duration = 0.16f)
+        {
             if (target == null) yield break;
 
-            Vector3 originalScale = target.localScale;
-            target.localScale = Vector3.one * 0.3f;
-
-            float t = 0;
-            float duration = 0.28f;
-            while (t < duration)
+            Vector3 originalScale = Vector3.one;
+            float t = 0f;
+            while (t < duration && target != null)
             {
-                t += Time.deltaTime;
-                float p = t / duration;
-                float scaleFactor = EaseOutBack(p);
-                target.localScale = Vector3.Lerp(Vector3.one * 0.3f, originalScale, scaleFactor);
+                t += Mathf.Min(Time.deltaTime, 0.05f);
+                float p = Mathf.Clamp01(t / duration);
+                // Smooth gentle 1.05 -> 1.00 cushion upon landing (no flash jump)
+                float s = Mathf.Lerp(1.05f, 1.0f, EaseOutQuad(p));
+                target.localScale = originalScale * s;
                 yield return null;
             }
-            target.localScale = originalScale;
+            if (target != null) target.localScale = originalScale;
+        }
+
+        /// <summary>
+        /// Smooth card draw slide from the Deck origin into the live seat inside Player/Enemy hand.
+        /// </summary>
+        public static IEnumerator AnimateDrawFlight(
+            GameObject flyingCardVisual,
+            Vector3 startWorldPos,
+            Transform liveTargetHandSlot,
+            Vector3 fallbackTargetPos,
+            float duration,
+            float delay,
+            float startTiltDeg,
+            Action onArrived)
+        {
+            if (flyingCardVisual == null)
+            {
+                onArrived?.Invoke();
+                yield break;
+            }
+
+            flyingCardVisual.SetActive(false);
+
+            if (delay > 0f)
+            {
+                yield return new WaitForSeconds(delay);
+            }
+
+            if (flyingCardVisual == null)
+            {
+                onArrived?.Invoke();
+                yield break;
+            }
+
+            flyingCardVisual.SetActive(true);
+            Transform tr = flyingCardVisual.transform;
+            tr.position = startWorldPos;
+            tr.localScale = Vector3.one * 0.56f;
+            tr.localRotation = Quaternion.Euler(0f, 0f, startTiltDeg);
+
+            var cg = flyingCardVisual.GetComponent<CanvasGroup>() ?? flyingCardVisual.AddComponent<CanvasGroup>();
+            cg.blocksRaycasts = false;
+            cg.interactable = false;
+            cg.alpha = 0.2f;
+
+            Vector3 lastValidTargetPos = (liveTargetHandSlot != null) ? liveTargetHandSlot.position : fallbackTargetPos;
+            float t = 0f;
+
+            while (t < duration && flyingCardVisual != null)
+            {
+                t += Mathf.Min(Time.deltaTime, 0.05f);
+                float p = Mathf.Clamp01(t / duration);
+                float ease = EaseOutCubic(p);
+
+                if (liveTargetHandSlot != null)
+                {
+                    lastValidTargetPos = liveTargetHandSlot.position;
+                }
+
+                Vector3 basePos = Vector3.Lerp(startWorldPos, lastValidTargetPos, ease);
+                float arc = Mathf.Sin(p * Mathf.PI) * 26f;
+                tr.position = basePos + new Vector3(0f, arc, 0f);
+
+                float scale = Mathf.Lerp(0.56f, 1.0f, ease);
+                tr.localScale = new Vector3(scale, scale, 1f);
+                tr.localRotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(startTiltDeg, 0f, ease));
+                cg.alpha = Mathf.Clamp01(p * 3.5f);
+
+                yield return null;
+            }
+
+            onArrived?.Invoke();
+
+            if (flyingCardVisual != null)
+            {
+                GameObject.Destroy(flyingCardVisual);
+            }
+        }
+
+        /// <summary>
+        /// Smooth card play / summon / spell / environment / sacrifice flight from hand to target on the board.
+        /// Supports an optional mid-air reveal flip for opponent cards leaving a face-down hand.
+        /// </summary>
+        public static IEnumerator AnimateBoardCardFlight(
+            GameObject flyingCardVisual,
+            Vector3 startWorldPos,
+            Vector3 targetWorldPos,
+            float duration,
+            float startScale,
+            float endScale,
+            float arcHeight,
+            GameObject revealBackVisual,
+            float endFadeOutDuration,
+            Action onArrived)
+        {
+            if (flyingCardVisual == null)
+            {
+                onArrived?.Invoke();
+                yield break;
+            }
+
+            Transform tr = flyingCardVisual.transform;
+            tr.position = startWorldPos;
+            tr.localScale = Vector3.one * startScale;
+
+            var cg = flyingCardVisual.GetComponent<CanvasGroup>() ?? flyingCardVisual.AddComponent<CanvasGroup>();
+            cg.blocksRaycasts = false;
+            cg.interactable = false;
+            cg.alpha = 1f;
+
+            bool hasRevealFlip = (revealBackVisual != null);
+            if (hasRevealFlip)
+            {
+                revealBackVisual.SetActive(true);
+            }
+
+            float t = 0f;
+            while (t < duration && flyingCardVisual != null)
+            {
+                t += Mathf.Min(Time.deltaTime, 0.05f);
+                float p = Mathf.Clamp01(t / duration);
+                float ease = EaseInOutCubic(p);
+
+                Vector3 pos = Vector3.Lerp(startWorldPos, targetWorldPos, ease);
+                float arc = Mathf.Sin(p * Mathf.PI) * arcHeight;
+                tr.position = pos + new Vector3(0f, arc, 0f);
+
+                float baseScale = Mathf.Lerp(startScale, endScale, ease);
+
+                if (hasRevealFlip)
+                {
+                    if (p < 0.22f)
+                    {
+                        float fp = p / 0.22f;
+                        float flipX = Mathf.Lerp(1f, 0.05f, fp);
+                        tr.localScale = new Vector3(baseScale * flipX, baseScale, 1f);
+                    }
+                    else if (p < 0.44f)
+                    {
+                        if (revealBackVisual != null && revealBackVisual.activeSelf)
+                        {
+                            revealBackVisual.SetActive(false);
+                        }
+                        float fp = (p - 0.22f) / 0.22f;
+                        float flipX = Mathf.Lerp(0.05f, 1f, fp);
+                        tr.localScale = new Vector3(baseScale * flipX, baseScale, 1f);
+                    }
+                    else
+                    {
+                        if (revealBackVisual != null && revealBackVisual.activeSelf)
+                        {
+                            revealBackVisual.SetActive(false);
+                        }
+                        tr.localScale = new Vector3(baseScale, baseScale, 1f);
+                    }
+                }
+                else
+                {
+                    tr.localScale = new Vector3(baseScale, baseScale, 1f);
+                }
+
+                // Subtle bank tilt while traveling laterally
+                float deltaX = targetWorldPos.x - startWorldPos.x;
+                float tilt = Mathf.Sin(p * Mathf.PI) * Mathf.Clamp(-deltaX * 0.012f, -6f, 6f);
+                tr.localRotation = Quaternion.Euler(0f, 0f, tilt);
+
+                yield return null;
+            }
+
+            if (revealBackVisual != null)
+            {
+                revealBackVisual.SetActive(false);
+            }
+            if (tr != null)
+            {
+                tr.position = targetWorldPos;
+                tr.localRotation = Quaternion.identity;
+            }
+
+            onArrived?.Invoke();
+
+            if (endFadeOutDuration > 0f && flyingCardVisual != null && cg != null)
+            {
+                float ft = 0f;
+                Vector3 holdScale = tr.localScale;
+                while (ft < endFadeOutDuration && flyingCardVisual != null)
+                {
+                    ft += Mathf.Min(Time.deltaTime, 0.05f);
+                    float fp = Mathf.Clamp01(ft / endFadeOutDuration);
+                    cg.alpha = 1f - fp;
+                    tr.localScale = holdScale * Mathf.Lerp(1f, 0.88f, fp);
+                    yield return null;
+                }
+            }
+
+            if (flyingCardVisual != null)
+            {
+                GameObject.Destroy(flyingCardVisual);
+            }
         }
 
         /// <summary>
@@ -147,26 +349,48 @@ namespace MonsterCardGame.UI
             attacker.position = startPos;
         }
 
+        private static readonly Dictionary<Transform, Color> activeShakeBaseColors = new Dictionary<Transform, Color>();
+        private static readonly Dictionary<Transform, Vector3> activeShakeBasePositions = new Dictionary<Transform, Vector3>();
+        private static readonly Dictionary<Transform, int> activeShakeTokens = new Dictionary<Transform, int>();
+
         /// <summary>
-        /// Hit Shake & Flash
+        /// Hit Shake & Flash (re-entrant safe: never locks flash tint as permanent base color on overlapping hits)
         /// </summary>
         public static IEnumerator AnimateHitShake(Transform target, Color flashColor, float intensity = 12f)
         {
             if (target == null) yield break;
 
-            Vector3 originalPos = target.position;
             var img = target.GetComponent<Image>();
-            Color originalColor = img != null ? img.color : Color.white;
+
+            if (!activeShakeBasePositions.ContainsKey(target))
+            {
+                activeShakeBasePositions[target] = target.localPosition;
+            }
+            if (img != null && !activeShakeBaseColors.ContainsKey(target))
+            {
+                activeShakeBaseColors[target] = img.color;
+            }
+
+            Vector3 originalLocalPos = activeShakeBasePositions[target];
+            Color originalColor = (img != null && activeShakeBaseColors.TryGetValue(target, out Color bc)) ? bc : Color.white;
+
+            int myToken = (activeShakeTokens.TryGetValue(target, out int prev) ? prev : 0) + 1;
+            activeShakeTokens[target] = myToken;
 
             float duration = 0.28f;
-            float t = 0;
+            float t = 0f;
 
-            while (t < duration)
+            while (t < duration && target != null)
             {
-                t += Time.deltaTime;
-                float p = 1f - (t / duration);
+                if (!activeShakeTokens.TryGetValue(target, out int cur) || cur != myToken)
+                {
+                    yield break;
+                }
+
+                t += Mathf.Min(Time.deltaTime, 0.05f);
+                float p = Mathf.Clamp01(1f - (t / duration));
                 float offsetX = Mathf.Sin(t * 50f) * intensity * p;
-                target.position = originalPos + new Vector3(offsetX, 0, 0);
+                target.localPosition = originalLocalPos + new Vector3(offsetX, 0f, 0f);
 
                 if (img != null)
                 {
@@ -175,8 +399,14 @@ namespace MonsterCardGame.UI
                 yield return null;
             }
 
-            target.position = originalPos;
-            if (img != null) img.color = originalColor;
+            if (target != null && activeShakeTokens.TryGetValue(target, out int endTok) && endTok == myToken)
+            {
+                target.localPosition = originalLocalPos;
+                if (img != null) img.color = originalColor;
+                activeShakeTokens.Remove(target);
+                activeShakeBasePositions.Remove(target);
+                activeShakeBaseColors.Remove(target);
+            }
         }
 
         /// <summary>
@@ -588,6 +818,17 @@ namespace MonsterCardGame.UI
         private static float EaseOutQuad(float x)
         {
             return 1f - (1f - x) * (1f - x);
+        }
+
+        private static float EaseOutCubic(float x)
+        {
+            float inv = 1f - x;
+            return 1f - inv * inv * inv;
+        }
+
+        private static float EaseInOutCubic(float x)
+        {
+            return x < 0.5f ? 4f * x * x * x : 1f - Mathf.Pow(-2f * x + 2f, 3f) / 2f;
         }
     }
 }

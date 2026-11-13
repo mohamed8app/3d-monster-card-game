@@ -21,6 +21,7 @@ namespace MonsterCardGame.UI
         public Image enemyAvatarImage;
 
         public Text playerPowerText;
+        public Text enemyPowerText;
         public Text turnInfoText;
 
         [Header("Opponent Hand Display (Face-Down Cards)")]
@@ -81,6 +82,27 @@ namespace MonsterCardGame.UI
         [Header("Combat Log")]
         public Text combatLogText;
         private List<string> logEntries = new List<string>();
+
+        [Header("Card Flight Motion & Anchors")]
+        public RectTransform cardFlightLayer;
+        public RectTransform centerBoardRect;
+        public RectTransform playerDeckAnchor;
+        public RectTransform enemyDeckAnchor;
+        public RectTransform playerPowerAnchor;
+        public RectTransform enemyPowerAnchor;
+
+        private readonly List<CardData> pendingPlayerDrawnCards = new List<CardData>();
+        private readonly HashSet<CardData> inFlightPlayerDrawCards = new HashSet<CardData>();
+        private int pendingEnemyDrawnCount = 0;
+        private int inFlightEnemyDrawCount = 0;
+        private readonly List<GameObject> activeFlightVisuals = new List<GameObject>();
+        public int HandRenderGeneration { get; private set; } = 0;
+        private DraggableCard activeDraggingCard = null;
+
+        public void SetDraggingCard(DraggableCard card)
+        {
+            activeDraggingCard = card;
+        }
 
         [Header("Game Over Modal")]
         public GameObject gameOverPanel;
@@ -337,21 +359,15 @@ namespace MonsterCardGame.UI
             if (enemyHpText != null) enemyHpText.text = $"❤️ {gm.aiPlayer.currentHp} / {gm.aiPlayer.maxHp} HP";
             if (enemyHpSlider != null) enemyHpSlider.value = (float)gm.aiPlayer.currentHp / gm.aiPlayer.maxHp;
 
-            // 2. Update Turn Mana & Permanent Power (Unlimited Power ∞)
+            // 2. Update Turn Mana & Permanent Power (Unlimited Power ∞) for both Player & Enemy
             if (playerPowerText != null)
             {
-                string crystals = "";
-                int mana = gm.humanPlayer.currentMana;
-                int permPower = gm.humanPlayer.power;
-                int displayIcons = Mathf.Min(Mathf.Max(permPower, mana), 8);
+                playerPowerText.text = $"{FormatManaPowerText(gm.humanPlayer.currentMana, gm.humanPlayer.power)}  |  Deck: {gm.humanPlayer.deck.Count}";
+            }
 
-                for (int i = 0; i < displayIcons; i++)
-                {
-                    crystals += (i < mana) ? "💎" : "◇";
-                }
-                if (Mathf.Max(permPower, mana) > 8) crystals += "+";
-
-                playerPowerText.text = $"[ {crystals} ]  Mana: {mana}  |  Power: {permPower} (∞)  |  Deck: {gm.humanPlayer.deck.Count}";
+            if (enemyPowerText != null && gm.aiPlayer != null)
+            {
+                enemyPowerText.text = FormatManaPowerText(gm.aiPlayer.currentMana, gm.aiPlayer.power);
             }
 
             // 3. Turn Indicator
@@ -387,6 +403,20 @@ namespace MonsterCardGame.UI
             // 8. Update Shared Environment & Side Leader Slots
             UpdateEnvironmentVisuals();
             UpdateLeaderSlotsUI();
+        }
+
+        private static string FormatManaPowerText(int mana, int permPower)
+        {
+            string crystals = "";
+            int displayIcons = Mathf.Min(Mathf.Max(permPower, mana), 8);
+            for (int i = 0; i < displayIcons; i++)
+            {
+                crystals += (i < mana) ? "💎" : "◇";
+            }
+            if (Mathf.Max(permPower, mana) > 8) crystals += "+";
+            if (string.IsNullOrEmpty(crystals)) crystals = "◇";
+
+            return $"[ {crystals} ]  Mana: {mana}  |  Power: {permPower} (∞)";
         }
 
         private void UpdateSlots()
@@ -705,13 +735,183 @@ namespace MonsterCardGame.UI
             }
         }
 
+        public void ClearFlightAnimations()
+        {
+            pendingPlayerDrawnCards.Clear();
+            inFlightPlayerDrawCards.Clear();
+            pendingEnemyDrawnCount = 0;
+            inFlightEnemyDrawCount = 0;
+
+            for (int i = 0; i < activeFlightVisuals.Count; i++)
+            {
+                if (activeFlightVisuals[i] != null) Destroy(activeFlightVisuals[i]);
+            }
+            activeFlightVisuals.Clear();
+
+            if (playerSlotViews != null)
+            {
+                for (int i = 0; i < playerSlotViews.Length; i++) playerSlotViews[i]?.SetFlightHidden(false);
+            }
+            if (enemySlotViews != null)
+            {
+                for (int i = 0; i < enemySlotViews.Length; i++) enemySlotViews[i]?.SetFlightHidden(false);
+            }
+        }
+
+        public void NotifyCardDrawn(bool isPlayerSide, CardData card)
+        {
+            if (isPlayerSide)
+            {
+                if (card != null)
+                {
+                    pendingPlayerDrawnCards.Add(card);
+                    inFlightPlayerDrawCards.Add(card);
+                }
+            }
+            else
+            {
+                pendingEnemyDrawnCount++;
+                inFlightEnemyDrawCount++;
+            }
+        }
+
+        private Vector3 GetDeckOriginWorldPos(bool isPlayerSide)
+        {
+            if (isPlayerSide)
+            {
+                if (playerDeckAnchor != null) return playerDeckAnchor.position;
+                if (playerHandContainer != null) return playerHandContainer.position + new Vector3(-560f, 0f, 0f);
+                return new Vector3(320f, 110f, 0f);
+            }
+            else
+            {
+                if (enemyDeckAnchor != null) return enemyDeckAnchor.position;
+                if (enemyHandContainer != null) return enemyHandContainer.position + new Vector3(-560f, 0f, 0f);
+                return new Vector3(320f, 970f, 0f);
+            }
+        }
+
+        public Vector3 GetCenterArenaWorldPos()
+        {
+            if (centerBoardRect != null) return centerBoardRect.position;
+            return new Vector3(Screen.width * 0.5f, Screen.height * 0.5f, 0f);
+        }
+
+        public Vector3 GetEnvironmentTargetWorldPos()
+        {
+            if (envSlotButton != null) return envSlotButton.transform.position;
+            if (envAltarPanel != null) return envAltarPanel.transform.position;
+            return GetCenterArenaWorldPos() + new Vector3(680f, 0f, 0f);
+        }
+
+        public Vector3 GetPlayerLeaderTargetWorldPos()
+        {
+            if (playerLeaderSlotButton != null) return playerLeaderSlotButton.transform.position;
+            return GetCenterArenaWorldPos() + new Vector3(680f, -340f, 0f);
+        }
+
+        public Vector3 GetPlayerHandCardWorldPos(CardData card)
+        {
+            if (playerHandContainer != null && card != null)
+            {
+                for (int i = 0; i < playerHandContainer.childCount; i++)
+                {
+                    var child = playerHandContainer.GetChild(i);
+                    var drag = child.GetComponent<DraggableCard>();
+                    if (drag != null && drag.cardData == card)
+                    {
+                        return child.position;
+                    }
+                }
+            }
+            return playerHandContainer != null ? playerHandContainer.position : GetCenterArenaWorldPos() + new Vector3(0f, -380f, 0f);
+        }
+
+        private Vector3 ConsumeTopEnemyHandCardPos()
+        {
+            if (enemyHandContainer != null)
+            {
+                for (int i = enemyHandContainer.childCount - 1; i >= 0; i--)
+                {
+                    var child = enemyHandContainer.GetChild(i);
+                    var cg = child.GetComponent<CanvasGroup>();
+                    if (cg == null || cg.alpha > 0.5f)
+                    {
+                        Vector3 pos = child.position;
+                        if (cg == null) cg = child.gameObject.AddComponent<CanvasGroup>();
+                        cg.alpha = 0f;
+                        return pos;
+                    }
+                }
+            }
+            return GetDeckOriginWorldPos(false);
+        }
+
+        private GameObject CreateFlyingCardVisual(CardData card, bool includeCardBackCover, out GameObject backCoverObj)
+        {
+            backCoverObj = null;
+            Transform layer = (cardFlightLayer != null) ? cardFlightLayer : transform;
+            var cardGo = CreateDynamicCardUI(layer, card);
+            var rect = cardGo.GetComponent<RectTransform>();
+            if (rect != null)
+            {
+                rect.anchorMin = new Vector2(0.5f, 0.5f);
+                rect.anchorMax = new Vector2(0.5f, 0.5f);
+                rect.pivot = new Vector2(0.5f, 0.5f);
+                rect.sizeDelta = new Vector2(138f, 182f);
+            }
+            var cg = cardGo.GetComponent<CanvasGroup>() ?? cardGo.AddComponent<CanvasGroup>();
+            cg.blocksRaycasts = false;
+            cg.interactable = false;
+            foreach (var g in cardGo.GetComponentsInChildren<Graphic>(true))
+            {
+                if (g != null) g.raycastTarget = false;
+            }
+
+            if (includeCardBackCover)
+            {
+                backCoverObj = CreateFaceDownCardUI(cardGo.transform, -1);
+                backCoverObj.name = "CardBackCover";
+                var bRect = backCoverObj.GetComponent<RectTransform>();
+                if (bRect != null)
+                {
+                    bRect.anchorMin = new Vector2(0.5f, 0.5f);
+                    bRect.anchorMax = new Vector2(0.5f, 0.5f);
+                    bRect.pivot = new Vector2(0.5f, 0.5f);
+                    bRect.anchoredPosition = Vector2.zero;
+                    bRect.sizeDelta = new Vector2(138f, 182f);
+                }
+                foreach (var g in backCoverObj.GetComponentsInChildren<Graphic>(true))
+                {
+                    if (g != null) g.raycastTarget = false;
+                }
+            }
+
+            activeFlightVisuals.Add(cardGo);
+            return cardGo;
+        }
+
         private void RefreshPlayerHand()
         {
             var gm = GameManager.Instance;
             if (gm == null || playerHandContainer == null) return;
 
-            foreach (Transform child in playerHandContainer)
+            HandRenderGeneration++;
+
+            if (activeDraggingCard != null)
             {
+                if (!gm.isPlayerTurn || gm.currentPhase != GamePhase.ActionPhase
+                    || gm.humanPlayer.hand == null || !gm.humanPlayer.hand.Contains(activeDraggingCard.cardData))
+                {
+                    Destroy(activeDraggingCard.gameObject);
+                    activeDraggingCard = null;
+                }
+            }
+
+            for (int c = playerHandContainer.childCount - 1; c >= 0; c--)
+            {
+                var child = playerHandContainer.GetChild(c);
+                child.SetParent(null, false);
                 Destroy(child.gameObject);
             }
 
@@ -723,16 +923,89 @@ namespace MonsterCardGame.UI
             }
 
             var mainCanvas = GetComponentInParent<Canvas>();
+            var createdItems = new List<GameObject>();
+            var createdCards = new List<CardData>();
+
             foreach (var card in gm.humanPlayer.hand)
             {
                 var cardObj = CreateDynamicCardUI(playerHandContainer, card);
+                var cg = cardObj.GetComponent<CanvasGroup>() ?? cardObj.AddComponent<CanvasGroup>();
+                if (inFlightPlayerDrawCards.Contains(card))
+                {
+                    cg.alpha = 0f;
+                }
                 var draggable = cardObj.AddComponent<DraggableCard>();
                 draggable.Setup(card, mainCanvas);
                 if (selectedCardForAction != null && selectedCardForAction == card)
                 {
                     draggable.SetSelected(true);
                 }
+                createdItems.Add(cardObj);
+                createdCards.Add(card);
             }
+
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(playerHandContainer as RectTransform);
+
+            if (pendingPlayerDrawnCards.Count > 0)
+            {
+                var claimedIndices = new HashSet<int>();
+                for (int d = 0; d < pendingPlayerDrawnCards.Count; d++)
+                {
+                    var drawnCard = pendingPlayerDrawnCards[d];
+                    GameObject targetSeat = null;
+                    for (int k = createdCards.Count - 1; k >= 0; k--)
+                    {
+                        if (!claimedIndices.Contains(k) && createdCards[k] == drawnCard)
+                        {
+                            claimedIndices.Add(k);
+                            targetSeat = createdItems[k];
+                            break;
+                        }
+                    }
+
+                    Vector3 fallbackPos = targetSeat != null ? targetSeat.transform.position : playerHandContainer.position;
+                    StartCoroutine(AnimatePlayerDrawCardRoutine(drawnCard, targetSeat, fallbackPos, d * 0.08f));
+                }
+                pendingPlayerDrawnCards.Clear();
+            }
+        }
+
+        private System.Collections.IEnumerator AnimatePlayerDrawCardRoutine(CardData card, GameObject targetSeat, Vector3 fallbackPos, float delay)
+        {
+            var flyingVisual = CreateFlyingCardVisual(card, false, out _);
+            Vector3 startPos = GetDeckOriginWorldPos(true);
+
+            yield return BattleAnimations.AnimateDrawFlight(
+                flyingVisual,
+                startPos,
+                targetSeat != null ? targetSeat.transform : null,
+                fallbackPos,
+                0.42f,
+                delay,
+                -8f,
+                () =>
+                {
+                    inFlightPlayerDrawCards.Remove(card);
+                    if (targetSeat != null)
+                    {
+                        var cg = targetSeat.GetComponent<CanvasGroup>();
+                        if (cg != null) cg.alpha = 1f;
+                    }
+                    else if (playerHandContainer != null)
+                    {
+                        for (int i = 0; i < playerHandContainer.childCount; i++)
+                        {
+                            var child = playerHandContainer.GetChild(i);
+                            var drag = child.GetComponent<DraggableCard>();
+                            if (drag != null && drag.cardData == card)
+                            {
+                                var cg = child.GetComponent<CanvasGroup>();
+                                if (cg != null) cg.alpha = 1f;
+                            }
+                        }
+                    }
+                });
         }
 
         private void RefreshEnemyHand()
@@ -740,21 +1013,209 @@ namespace MonsterCardGame.UI
             var gm = GameManager.Instance;
             if (gm == null || enemyHandContainer == null) return;
 
-            foreach (Transform child in enemyHandContainer)
+            for (int c = enemyHandContainer.childCount - 1; c >= 0; c--)
             {
+                var child = enemyHandContainer.GetChild(c);
+                child.SetParent(null, false);
                 Destroy(child.gameObject);
             }
 
             int handCount = gm.aiPlayer.hand.Count;
             if (enemyHandCountText != null)
             {
-                enemyHandCountText.text = $"🎴 Enemy Hand: {handCount}  |  Deck: {gm.aiPlayer.deck.Count}";
+                enemyHandCountText.text = $"🎴 Hand: {handCount}  |  Deck: {gm.aiPlayer.deck.Count}";
             }
 
+            var createdBacks = new List<GameObject>();
             for (int i = 0; i < handCount; i++)
             {
-                CreateFaceDownCardUI(enemyHandContainer, i);
+                var backGo = CreateFaceDownCardUI(enemyHandContainer, i);
+                backGo.GetComponent<CanvasGroup>(); // Ensure ready if added below
+                createdBacks.Add(backGo);
             }
+
+            inFlightEnemyDrawCount = Mathf.Clamp(inFlightEnemyDrawCount, 0, handCount);
+            int firstHiddenIdx = handCount - inFlightEnemyDrawCount;
+            for (int i = firstHiddenIdx; i < handCount; i++)
+            {
+                var cg = createdBacks[i].GetComponent<CanvasGroup>() ?? createdBacks[i].AddComponent<CanvasGroup>();
+                cg.alpha = 0f;
+            }
+
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(enemyHandContainer as RectTransform);
+
+            if (pendingEnemyDrawnCount > 0)
+            {
+                int toAnimate = Mathf.Min(pendingEnemyDrawnCount, handCount);
+                pendingEnemyDrawnCount = 0;
+                int startIdx = handCount - toAnimate;
+                for (int k = 0; k < toAnimate; k++)
+                {
+                    var seat = createdBacks[startIdx + k];
+                    Vector3 fallbackPos = seat.transform.position;
+                    StartCoroutine(AnimateEnemyDrawCardRoutine(seat, fallbackPos, k * 0.08f));
+                }
+            }
+        }
+
+        private System.Collections.IEnumerator AnimateEnemyDrawCardRoutine(GameObject targetSeat, Vector3 fallbackPos, float delay)
+        {
+            Transform layer = (cardFlightLayer != null) ? cardFlightLayer : transform;
+            var flyingVisual = CreateFaceDownCardUI(layer, -1);
+            var rect = flyingVisual.GetComponent<RectTransform>();
+            if (rect != null)
+            {
+                rect.anchorMin = new Vector2(0.5f, 0.5f);
+                rect.anchorMax = new Vector2(0.5f, 0.5f);
+                rect.pivot = new Vector2(0.5f, 0.5f);
+                rect.sizeDelta = new Vector2(138f, 182f);
+            }
+            foreach (var g in flyingVisual.GetComponentsInChildren<Graphic>(true))
+            {
+                if (g != null) g.raycastTarget = false;
+            }
+            activeFlightVisuals.Add(flyingVisual);
+
+            Vector3 startPos = GetDeckOriginWorldPos(false);
+
+            yield return BattleAnimations.AnimateDrawFlight(
+                flyingVisual,
+                startPos,
+                targetSeat != null ? targetSeat.transform : null,
+                fallbackPos,
+                0.42f,
+                delay,
+                8f,
+                () =>
+                {
+                    inFlightEnemyDrawCount = Mathf.Max(0, inFlightEnemyDrawCount - 1);
+                    if (targetSeat != null)
+                    {
+                        var cg = targetSeat.GetComponent<CanvasGroup>();
+                        if (cg != null) cg.alpha = 1f;
+                    }
+                    else if (enemyHandContainer != null)
+                    {
+                        int visibleTargetCount = Mathf.Max(0, enemyHandContainer.childCount - inFlightEnemyDrawCount);
+                        for (int i = 0; i < visibleTargetCount; i++)
+                        {
+                            var cg = enemyHandContainer.GetChild(i).GetComponent<CanvasGroup>();
+                            if (cg != null) cg.alpha = 1f;
+                        }
+                    }
+                });
+        }
+
+        public System.Collections.IEnumerator AnimateEnemyCardSacrificeRoutine()
+        {
+            Vector3 startPos = ConsumeTopEnemyHandCardPos();
+            Vector3 targetPos = (enemyPowerAnchor != null) ? enemyPowerAnchor.position : GetDeckOriginWorldPos(false);
+            Transform layer = (cardFlightLayer != null) ? cardFlightLayer : transform;
+
+            var visual = CreateFaceDownCardUI(layer, -1);
+            var rect = visual.GetComponent<RectTransform>();
+            if (rect != null)
+            {
+                rect.anchorMin = new Vector2(0.5f, 0.5f);
+                rect.anchorMax = new Vector2(0.5f, 0.5f);
+                rect.pivot = new Vector2(0.5f, 0.5f);
+                rect.sizeDelta = new Vector2(138f, 182f);
+            }
+            foreach (var g in visual.GetComponentsInChildren<Graphic>(true))
+            {
+                if (g != null) g.raycastTarget = false;
+            }
+            activeFlightVisuals.Add(visual);
+
+            yield return BattleAnimations.AnimateBoardCardFlight(
+                visual, startPos, targetPos, 0.38f, 0.94f, 0.45f, -20f, null, 0.12f, null);
+        }
+
+        public System.Collections.IEnumerator AnimateEnemyCardPlayRoutine(CardData card, Vector3 targetWorldPos, float duration = 0.50f, float fadeOutAfter = 0.08f, float endScale = 0.98f)
+        {
+            if (card == null) yield break;
+
+            Vector3 startPos = ConsumeTopEnemyHandCardPos();
+            var visual = CreateFlyingCardVisual(card, true, out GameObject backCover);
+            yield return BattleAnimations.AnimateBoardCardFlight(
+                visual, startPos, targetWorldPos, duration, 0.90f, endScale, -32f, backCover, fadeOutAfter, null);
+        }
+
+        public void LaunchPlayerUtilityCardFlight(CardData card, Vector3 startWorldPos)
+        {
+            if (card == null) return;
+
+            Vector3 targetPos;
+            float endScale = 1.0f;
+            float fadeAfter = 0.14f;
+            float dur = 0.40f;
+
+            if (card.cardType == CardType.Spell)
+            {
+                targetPos = GetCenterArenaWorldPos();
+                endScale = 1.10f;
+                fadeAfter = 0.20f;
+            }
+            else if (card.cardType == CardType.Environment)
+            {
+                targetPos = GetEnvironmentTargetWorldPos();
+                endScale = 0.85f;
+                fadeAfter = 0.12f;
+                dur = 0.42f;
+            }
+            else if (card.cardType == CardType.Leader)
+            {
+                targetPos = GetPlayerLeaderTargetWorldPos();
+                endScale = 0.85f;
+                fadeAfter = 0.12f;
+                dur = 0.42f;
+            }
+            else
+            {
+                return;
+            }
+
+            var visual = CreateFlyingCardVisual(card, false, out _);
+            StartCoroutine(BattleAnimations.AnimateBoardCardFlight(
+                visual, startWorldPos, targetPos, dur, 1.0f, endScale, 36f, null, fadeAfter, null));
+        }
+
+        public void LaunchSacrificeFlight(CardData card, Vector3 startWorldPos)
+        {
+            if (card == null) return;
+            Vector3 targetPos = (playerPowerAnchor != null) ? playerPowerAnchor.position : GetDeckOriginWorldPos(true);
+            var visual = CreateFlyingCardVisual(card, false, out _);
+            StartCoroutine(BattleAnimations.AnimateBoardCardFlight(
+                visual, startWorldPos, targetPos, 0.36f, 0.96f, 0.45f, 24f, null, 0.12f, null));
+        }
+
+        private System.Collections.IEnumerator LaunchMonsterLandingFlight(CardData card, int slotIndex, Vector3 startWorldPos, float duration)
+        {
+            var slotView = (playerSlotViews != null && slotIndex >= 0 && slotIndex < playerSlotViews.Length)
+                ? playerSlotViews[slotIndex]
+                : null;
+            Vector3 targetPos = (slotView != null) ? slotView.transform.position : GetCenterArenaWorldPos();
+
+            var visual = CreateFlyingCardVisual(card, false, out _);
+            yield return BattleAnimations.AnimateBoardCardFlight(
+                visual,
+                startWorldPos,
+                targetPos,
+                duration,
+                0.98f,
+                1.02f,
+                32f,
+                null,
+                0f,
+                () =>
+                {
+                    if (slotView != null)
+                    {
+                        slotView.SetFlightHidden(false);
+                        StartCoroutine(BattleAnimations.AnimateCardSettle(slotView.transform, 0.16f));
+                    }
+                });
         }
 
         private GameObject CreateFaceDownCardUI(Transform parent, int index)
@@ -1672,20 +2133,23 @@ namespace MonsterCardGame.UI
             }
 
             var chosenCard = selectedCardForAction;
+            Vector3 startHandPos = GetPlayerHandCardWorldPos(chosenCard);
             if (gm.humanPlayer.SummonMonster(chosenCard, slotIndex, gm.currentTurn))
             {
-                OnPlayerMonsterSummoned(chosenCard, slotIndex);
+                OnPlayerMonsterSummoned(chosenCard, slotIndex, startHandPos, false);
             }
             else
             {
-                LogCombatMessage($"❌ Cannot summon monster to Slot {slotIndex} (Check Power & slot availability).");
+                LogCombatMessage($"❌ Cannot summon monster to Slot {slotIndex} (Check Mana & slot availability).");
             }
         }
 
-        public void OnPlayerMonsterSummoned(CardData chosenCard, int slotIndex)
+        public void OnPlayerMonsterSummoned(CardData chosenCard, int slotIndex, Vector3? explicitStartPos = null, bool isQuickDrop = false)
         {
             var gm = GameManager.Instance;
             if (gm == null || chosenCard == null) return;
+
+            Vector3 startPos = explicitStartPos ?? GetPlayerHandCardWorldPos(chosenCard);
 
             if (MonsterCardGame.Audio.SoundManager.Instance != null)
                 MonsterCardGame.Audio.SoundManager.Instance.PlayMonsterSummon(chosenCard);
@@ -1704,11 +2168,11 @@ namespace MonsterCardGame.UI
                     var abState = CombatSystem.Instance.GetAbilityState(gm.humanPlayer, gm.aiPlayer, slotIndex, out int cost, out string reason);
                     if (abState == CombatSystem.AbilityReadyState.Ready)
                     {
-                        LogCombatMessage($"⚡ [{chosenCard.name}] Aura Awakened! Click its glowing ⚡ Flash Sigil (or Double-Click card) to unleash ({cost}⚡)!");
+                        LogCombatMessage($"⚡ [{chosenCard.name}] Aura Awakened! Click its glowing ⚡ Flash Sigil (or Double-Click card) to unleash ({cost})!");
                     }
                     else
                     {
-                        LogCombatMessage($"✨ [{chosenCard.name}] has Special Ability ({cost}⚡): {reason}");
+                        LogCombatMessage($"✨ [{chosenCard.name}] has Special Ability ({cost}): {reason}");
                     }
                 }
             }
@@ -1717,17 +2181,26 @@ namespace MonsterCardGame.UI
                 selectedBoardSlotIndex = -1;
             }
 
-            UpdateUI();
-
+            float flightDuration = 0f;
             if (slotIndex >= 0 && slotIndex < playerSlotViews.Length && playerSlotViews[slotIndex] != null)
             {
-                StartCoroutine(BattleAnimations.AnimateCardSummon(playerSlotViews[slotIndex].transform));
+                flightDuration = isQuickDrop ? 0.24f : 0.40f;
+                playerSlotViews[slotIndex].SetFlightHidden(true);
+            }
+
+            UpdateUI();
+
+            if (flightDuration > 0f)
+            {
+                StartCoroutine(LaunchMonsterLandingFlight(chosenCard, slotIndex, startPos, flightDuration));
             }
 
             if (summonedMonster != null)
             {
                 ShowMonsterDetails(summonedMonster.data, summonedMonster, true);
             }
+
+            gm.EvaluateAutoEndTurn(0.65f + flightDuration);
         }
 
         public void OnSlotAbilityButtonClicked(int slotIndex)
@@ -1792,6 +2265,7 @@ namespace MonsterCardGame.UI
                 ClearBoardSelection();
                 UpdateUI();
             }
+            gm.EvaluateAutoEndTurn();
         }
 
         private void OnPlayCardClicked()
@@ -1802,10 +2276,12 @@ namespace MonsterCardGame.UI
             if (selectedCardForAction != null)
             {
                 var chosenCard = selectedCardForAction;
+                Vector3 startPos = GetPlayerHandCardWorldPos(chosenCard);
                 if (chosenCard.cardType == CardType.Spell)
                 {
                     if (gm.CastSpell(gm.humanPlayer, gm.aiPlayer, chosenCard))
                     {
+                        LaunchPlayerUtilityCardFlight(chosenCard, startPos);
                         DeselectHandCards();
                         UpdateUI();
                     }
@@ -1814,6 +2290,7 @@ namespace MonsterCardGame.UI
                 {
                     if (gm.PlayEnvironmentCard(gm.humanPlayer, chosenCard))
                     {
+                        LaunchPlayerUtilityCardFlight(chosenCard, startPos);
                         DeselectHandCards();
                         UpdateUI();
                     }
@@ -1822,6 +2299,7 @@ namespace MonsterCardGame.UI
                 {
                     if (gm.PlayLeaderCard(gm.humanPlayer, chosenCard))
                     {
+                        LaunchPlayerUtilityCardFlight(chosenCard, startPos);
                         DeselectHandCards();
                         UpdateUI();
                     }
@@ -1836,7 +2314,7 @@ namespace MonsterCardGame.UI
         /// <summary>
         /// Direct sacrifice of any card in hand via Right-Click (+1 Power & +1 Mana).
         /// </summary>
-        public void SacrificeCardDirectly(CardData card)
+        public void SacrificeCardDirectly(CardData card, Vector3? explicitStartPos = null)
         {
             var gm = GameManager.Instance;
             if (gm == null) return;
@@ -1855,12 +2333,16 @@ namespace MonsterCardGame.UI
 
             if (card == null) return;
 
+            Vector3 startPos = explicitStartPos ?? GetPlayerHandCardWorldPos(card);
+
             if (gm.humanPlayer.SacrificeCard(card))
             {
                 MonsterCardGame.Audio.SoundManager.Instance.PlayCardSacrifice();
                 LogCombatMessage($"🔥 Sacrificed [{card.name}] via Right-Click! Gained +1 Power & +1 Mana.");
+                LaunchSacrificeFlight(card, startPos);
                 DeselectHandCards();
                 UpdateUI();
+                gm.EvaluateAutoEndTurn();
             }
         }
 
@@ -1891,7 +2373,7 @@ namespace MonsterCardGame.UI
         private void OnEndTurnClicked()
         {
             var gm = GameManager.Instance;
-            if (gm == null || !gm.isPlayerTurn) return;
+            if (gm == null || !gm.isPlayerTurn || gm.currentPhase != GamePhase.ActionPhase) return;
 
             MonsterCardGame.Audio.SoundManager.Instance.PlayTurnEnd();
             DeselectHandCards();
@@ -1988,10 +2470,16 @@ namespace MonsterCardGame.UI
 
         public void TriggerHitShake(Transform target, Color color)
         {
-            if (target != null)
+            if (target == null) return;
+
+            var sv = target.GetComponent<SlotView>();
+            if (sv != null)
             {
-                StartCoroutine(BattleAnimations.AnimateHitShake(target, color));
+                sv.PlayHitFlashAndShake(color);
+                return;
             }
+
+            StartCoroutine(BattleAnimations.AnimateHitShake(target, color));
         }
 
         public SlotView GetSlotView(int index, bool isPlayer)

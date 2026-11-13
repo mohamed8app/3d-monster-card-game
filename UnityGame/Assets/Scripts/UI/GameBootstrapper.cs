@@ -273,6 +273,7 @@ namespace MonsterCardGame.UI
             // =========================================================================
             var centerBoard = CreatePanel(screenRoot.transform, "CenterBattleBoard", new Color(0.04f, 0.05f, 0.08f, 1f),
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1200, 688));
+            ui.centerBoardRect = centerBoard.GetComponent<RectTransform>();
 
             // 1.1 Open Battle Plain Ground (arena_ground)
             var bgObj = new GameObject("ArenaBackground");
@@ -474,28 +475,33 @@ namespace MonsterCardGame.UI
                 new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(1, 0), new Vector2(2, 1080));
             rightEdgeDiv.GetComponent<Image>().raycastTarget = false;
 
-            // Top Utility Row (Turn Badge + Compact Exit Button at y = +506)
+            // Top Utility Row (Turn Badge + Compact End Turn + Compact Exit Button at y = +506)
             var turnBadgePanel = CreateOrnatePanel(rightWing.transform, "TopTurnBar",
                 new Color(0.07f, 0.09f, 0.14f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-52, 506), new Vector2(216, 32));
-            ui.turnInfoText = CreateText(turnBadgePanel.transform, "TurnInfoText", "TURN 1 • YOUR MOVE", 11,
-                new Color(0.84f, 0.90f, 0.98f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(204, 28));
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-82, 506), new Vector2(156, 32));
+            ui.turnInfoText = CreateText(turnBadgePanel.transform, "TurnInfoText", "TURN 1 • YOUR MOVE", 10,
+                new Color(0.84f, 0.90f, 0.98f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(146, 28));
             AddTextShadow(ui.turnInfoText);
+
+            ui.endTurnButton = CreateBeveledButton(rightWing.transform, "EndTurnBtn", "END ⏭",
+                new Color(0.15f, 0.25f, 0.39f, 0.98f), new Color(0.92f, 0.96f, 1f),
+                new Vector2(38, 506), new Vector2(72, 32), 11,
+                () => { if (BattleUIManager.Instance != null) BattleUIManager.Instance.SendMessage("OnEndTurnClicked"); });
 
             var quitBtn = CreateBeveledButton(rightWing.transform, "QuitGameBtn", "EXIT",
                 new Color(0.36f, 0.13f, 0.16f, 0.98f), new Color(0.95f, 0.90f, 0.90f),
-                new Vector2(114, 506), new Vector2(92, 32), 12,
+                new Vector2(119, 506), new Vector2(82, 32), 11,
                 () => { if (BattleUIManager.Instance != null) BattleUIManager.Instance.OnQuitClicked(); });
             quitBtn.gameObject.AddComponent<QuitButtonHandler>();
             ui.quitButton = quitBtn;
 
-            // Zone A: Enemy Leader Side Slot (y = +388, 320 x 188)
-            BuildSideLeaderSlot(rightWing.transform, ui, false, 388f, 188f);
+            // Zone A: Enemy Leader Side Slot (y = +382, 320 x 196)
+            BuildSideLeaderSlot(rightWing.transform, ui, false, 382f, 196f);
 
-            // Zone B: Compact Battle Chronicle Log (y = +224, 320 x 124)
+            // Zone B: Expanded Battle Chronicle Log (y = +148, 320 x 228)
             var logPanel = CreateOrnatePanel(rightWing.transform, "CombatLogPanel",
                 new Color(0.05f, 0.06f, 0.09f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 224), new Vector2(320, 124));
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 148), new Vector2(320, 228));
 
             var logHeaderBar = CreatePanel(logPanel.transform, "LogHeaderBar",
                 new Color(0.08f, 0.10f, 0.15f, 0.96f),
@@ -504,40 +510,26 @@ namespace MonsterCardGame.UI
                 new Color(0.72f, 0.78f, 0.86f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(290, 20));
             AddTextShadow(lhTxt);
 
-            ui.combatLogText = CreateText(logPanel.transform, "CombatLogText", "Match started cleanly — ready for tactical orders...", 10,
-                new Color(0.86f, 0.90f, 0.95f), TextAnchor.UpperLeft, new Vector2(0, -12), new Vector2(296, 86));
+            ui.combatLogText = CreateText(logPanel.transform, "CombatLogText", "Match started — drag cards or right-click to sacrifice. Turns auto-complete when no actions remain.", 10,
+                new Color(0.86f, 0.90f, 0.95f), TextAnchor.UpperLeft, new Vector2(0, -12), new Vector2(296, 188));
             ui.combatLogText.horizontalOverflow = HorizontalWrapMode.Wrap;
             ui.combatLogText.verticalOverflow = VerticalWrapMode.Truncate;
 
-            // Zone C: Shared Environment Card Slot centered on Right Wing (y = +32, 320 x 242)
-            BuildSharedEnvironmentSlot(rightWing.transform, ui, 32f, 242f);
+            // Zone C: Shared Environment Card Slot centered cleanly on Right Wing (y = -114, 320 x 256)
+            BuildSharedEnvironmentSlot(rightWing.transform, ui, -114f, 256f);
 
-            // Zone D: Command Orders (y = -196, 320 x 188)
-            var arsenalPanel = CreateOrnatePanel(rightWing.transform, "CommandArsenalPanel",
-                new Color(0.06f, 0.07f, 0.10f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -196), new Vector2(320, 188));
+            // Zone D: Player Leader Side Slot (y = -384, 320 x 236)
+            BuildSideLeaderSlot(rightWing.transform, ui, true, -384f, 236f);
 
-            var arsTitle = CreateText(arsenalPanel.transform, "ArsenalHeader", "COMMAND ORDERS", 11,
-                new Color(0.72f, 0.78f, 0.86f), TextAnchor.UpperCenter, new Vector2(0, 74), new Vector2(290, 20));
-            AddTextShadow(arsTitle);
-
-            ui.attackButton = CreateBeveledButton(arsenalPanel.transform, "AttackBtn", "All-Out Monster Assault",
-                new Color(0.46f, 0.15f, 0.18f, 0.98f), Color.white,
-                new Vector2(0, 34), new Vector2(296, 40), 13,
-                () => ui.SendMessage("OnAttackClicked"));
-
-            ui.playCardButton = CreateBeveledButton(arsenalPanel.transform, "PlayCardBtn", "Activate Card / Spell",
-                new Color(0.28f, 0.18f, 0.42f, 0.98f), Color.white,
-                new Vector2(0, -14), new Vector2(296, 40), 13,
-                () => ui.SendMessage("OnPlayCardClicked"));
-
-            ui.endTurnButton = CreateBeveledButton(arsenalPanel.transform, "EndTurnBtn", "End Tactical Turn",
-                new Color(0.16f, 0.28f, 0.44f, 0.98f), new Color(0.92f, 0.96f, 1f),
-                new Vector2(0, -64), new Vector2(296, 42), 14,
-                () => ui.SendMessage("OnEndTurnClicked"));
-
-            // Zone E: Player Leader Side Slot (y = -410, 320 x 214)
-            BuildSideLeaderSlot(rightWing.transform, ui, true, -410f, 214f);
+            // 10.5 Top-Level Overlay for Card Flight Animations (Deck -> Hand, Hand -> Board/Env/Leader)
+            var flightLayerObj = new GameObject("CardFlightLayer");
+            flightLayerObj.transform.SetParent(screenRoot.transform, false);
+            var flightLayerRect = flightLayerObj.AddComponent<RectTransform>();
+            flightLayerRect.anchorMin = Vector2.zero;
+            flightLayerRect.anchorMax = Vector2.one;
+            flightLayerRect.sizeDelta = Vector2.zero;
+            flightLayerRect.anchoredPosition = Vector2.zero;
+            ui.cardFlightLayer = flightLayerRect;
 
             // 11. Epic Game Over Modal
             BuildGameOverModal(canvas, ui);
@@ -897,7 +889,29 @@ namespace MonsterCardGame.UI
 
             var statusBox = CreateOrnatePanel(citadel.transform, $"{prefix}StatusChamber",
                 isPlayerSide ? new Color(0.05f, 0.09f, 0.16f, 0.95f) : new Color(0.14f, 0.07f, 0.10f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(44, -30), new Vector2(202, 34));
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                isPlayerSide ? new Vector2(44, -30) : new Vector2(44, -32),
+                isPlayerSide ? new Vector2(202, 34) : new Vector2(202, 44));
+
+            var statusRect = statusBox.GetComponent<RectTransform>();
+            var deckOriginObj = new GameObject($"{prefix}DeckOrigin");
+            deckOriginObj.transform.SetParent(citadel.transform, false);
+            var deckOriginRect = deckOriginObj.AddComponent<RectTransform>();
+            deckOriginRect.anchorMin = new Vector2(0.5f, 0.5f);
+            deckOriginRect.anchorMax = new Vector2(0.5f, 0.5f);
+            deckOriginRect.sizeDelta = new Vector2(16, 16);
+            deckOriginRect.anchoredPosition = isPlayerSide ? new Vector2(158f, -10f) : new Vector2(158f, 10f);
+
+            if (isPlayerSide)
+            {
+                ui.playerPowerAnchor = statusRect;
+                ui.playerDeckAnchor = deckOriginRect;
+            }
+            else
+            {
+                ui.enemyPowerAnchor = statusRect;
+                ui.enemyDeckAnchor = deckOriginRect;
+            }
 
             if (isPlayerSide)
             {
@@ -911,12 +925,20 @@ namespace MonsterCardGame.UI
             }
             else
             {
-                ui.enemyHandCountText = CreateText(statusBox.transform, "EnemyHandLabel", "Hand: 6  |  Deck: 44", 11,
-                    new Color(0.84f, 0.84f, 0.90f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(194, 30));
+                ui.enemyPowerText = CreateText(statusBox.transform, "EnemyPowerText", "[ ◇ ]  Mana: 0  |  Power: 0 (∞)", 10,
+                    new Color(0.98f, 0.78f, 0.82f), TextAnchor.MiddleCenter, new Vector2(0, 9), new Vector2(196, 22));
+                ui.enemyPowerText.horizontalOverflow = HorizontalWrapMode.Wrap;
+                ui.enemyPowerText.resizeTextForBestFit = true;
+                ui.enemyPowerText.resizeTextMinSize = 7;
+                ui.enemyPowerText.resizeTextMaxSize = 11;
+                AddTextShadow(ui.enemyPowerText);
+
+                ui.enemyHandCountText = CreateText(statusBox.transform, "EnemyHandLabel", "🎴 Hand: 6  |  Deck: 44", 10,
+                    new Color(0.84f, 0.85f, 0.92f), TextAnchor.MiddleCenter, new Vector2(0, -11), new Vector2(196, 18));
                 ui.enemyHandCountText.horizontalOverflow = HorizontalWrapMode.Wrap;
                 ui.enemyHandCountText.resizeTextForBestFit = true;
-                ui.enemyHandCountText.resizeTextMinSize = 8;
-                ui.enemyHandCountText.resizeTextMaxSize = 11;
+                ui.enemyHandCountText.resizeTextMinSize = 7;
+                ui.enemyHandCountText.resizeTextMaxSize = 10;
                 AddTextShadow(ui.enemyHandCountText);
             }
         }

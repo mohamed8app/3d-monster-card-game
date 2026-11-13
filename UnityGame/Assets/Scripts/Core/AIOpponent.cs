@@ -20,53 +20,43 @@ namespace MonsterCardGame.Core
         private IEnumerator PlayTurnCoroutine(int currentTurn, EnvironmentCardData activeEnv, Action onTurnFinished)
         {
             Debug.Log("🤖 AI Warlord is calculating tactical moves...");
-            yield return new WaitForSeconds(0.6f);
+            yield return new WaitForSeconds(0.55f);
 
-            // 1. Tactical Sacrifice
-            DecideSacrifice();
-            if (MonsterCardGame.UI.BattleUIManager.Instance != null) MonsterCardGame.UI.BattleUIManager.Instance.UpdateUI();
-            yield return new WaitForSeconds(0.4f);
+            // 1. Tactical Sacrifice (+1 Power & +1 Mana) with smooth card flight from hand to Enemy Power bar
+            yield return DecideSacrificeCoroutine();
 
-            // 2. Activate Environment Weather if available
-            DecideEnvironment();
-            if (MonsterCardGame.UI.BattleUIManager.Instance != null) MonsterCardGame.UI.BattleUIManager.Instance.UpdateUI();
-            yield return new WaitForSeconds(0.4f);
+            // 2. Activate Environment Weather with visible flip & flight to Shared Environment Slot
+            yield return DecideEnvironmentCoroutine();
 
-            // 3. Cast Tactical Spells
-            DecideSpells();
-            if (MonsterCardGame.UI.BattleUIManager.Instance != null) MonsterCardGame.UI.BattleUIManager.Instance.UpdateUI();
-            yield return new WaitForSeconds(0.5f);
+            // 3. Cast Tactical Spells step-by-step with flip & flight into the arena
+            yield return DecideSpellsCoroutine();
+            if (!aiPlayer.IsAlive || !humanPlayer.IsAlive) yield break;
 
-            // 4. Field Summons in optimal slots
-            DecideSummons(currentTurn);
-            if (MonsterCardGame.UI.BattleUIManager.Instance != null) MonsterCardGame.UI.BattleUIManager.Instance.UpdateUI();
-            yield return new WaitForSeconds(0.4f);
+            // 4. Field Summons step-by-step: each card flies visibly from Enemy Hand to its Battle Slot
+            yield return DecideSummonsCoroutine(currentTurn);
+            if (!aiPlayer.IsAlive || !humanPlayer.IsAlive) yield break;
 
-            // 5. Execute Active Skills
+            // 5. Execute Active Skills step-by-step with live Mana/Power UI refresh
             if (CombatSystem.Instance != null)
             {
-                CombatSystem.Instance.ExecuteActiveSkills(aiPlayer, humanPlayer);
+                yield return CombatSystem.Instance.ExecuteActiveSkillsAnimated(aiPlayer, humanPlayer);
             }
+            if (!aiPlayer.IsAlive || !humanPlayer.IsAlive) yield break;
             if (MonsterCardGame.UI.BattleUIManager.Instance != null) MonsterCardGame.UI.BattleUIManager.Instance.UpdateUI();
-            yield return new WaitForSeconds(0.4f);
+            yield return new WaitForSeconds(0.35f);
 
             // 6. Execute Animated Combat Phase
             yield return CombatSystem.Instance.ExecuteCombatPhaseAnimated(aiPlayer, humanPlayer, GameManager.Instance.activeEnvironment, onTurnFinished);
         }
 
-        private void DecideSacrifice()
+        private IEnumerator DecideSacrificeCoroutine()
         {
             if (aiPlayer.hand.Count < 2 || aiPlayer.denyDrawSacTurns > 0)
-                return;
+                yield break;
 
             // Count affordable monsters & check whether AI actually needs mana or is overflowing hand
             int affordableMonsters = 0;
             bool hasHighCostMonster = false;
-            int emptySlots = 0;
-            foreach (var s in aiPlayer.slots)
-            {
-                if (s != null && !s.IsOccupied) emptySlots++;
-            }
 
             CardData unplayableHighCost = null;
             CardData extraNonMonster = null;
@@ -96,7 +86,7 @@ namespace MonsterCardGame.Core
             bool needsMana = (aiPlayer.power == 0)
                 || (hasHighCostMonster && affordableMonsters == 0)
                 || (aiPlayer.power < 8 && aiPlayer.hand.Count >= 5);
-            if (!needsMana && aiPlayer.hand.Count < 7) return;
+            if (!needsMana && aiPlayer.hand.Count < 7) yield break;
 
             CardData bestSacrifice = unplayableHighCost ?? extraNonMonster;
             if (bestSacrifice == null && (needsMana || aiPlayer.hand.Count >= 5) && aiPlayer.hand.Count > 0)
@@ -104,29 +94,55 @@ namespace MonsterCardGame.Core
                 bestSacrifice = aiPlayer.hand[aiPlayer.hand.Count - 1];
             }
 
-            if (bestSacrifice != null)
+            if (bestSacrifice != null && aiPlayer.hand.Contains(bestSacrifice) && !aiPlayer.hasSacrificedThisTurn)
             {
-                aiPlayer.SacrificeCard(bestSacrifice);
+                var ui = MonsterCardGame.UI.BattleUIManager.Instance;
+                if (ui != null)
+                {
+                    yield return ui.AnimateEnemyCardSacrificeRoutine();
+                }
+
+                if (aiPlayer.SacrificeCard(bestSacrifice) && ui != null)
+                {
+                    ui.LogCombatMessage(
+                        $"🔥 Enemy sacrificed a card (+1 Power / +1 Mana -> Mana: {aiPlayer.currentMana}, Power: {aiPlayer.power}).");
+                    ui.UpdateUI();
+                }
+                yield return new WaitForSeconds(0.35f);
             }
         }
 
-        private void DecideEnvironment()
+        private IEnumerator DecideEnvironmentCoroutine()
         {
-            if (GameManager.Instance == null) return;
+            if (GameManager.Instance == null) yield break;
 
+            CardData chosenEnv = null;
             foreach (var card in new List<CardData>(aiPlayer.hand))
             {
                 if (card.cardType == CardType.Environment && card.cost <= aiPlayer.currentMana)
                 {
-                    GameManager.Instance.PlayEnvironmentCard(aiPlayer, card);
+                    chosenEnv = card;
                     break;
                 }
             }
+
+            if (chosenEnv != null)
+            {
+                var ui = MonsterCardGame.UI.BattleUIManager.Instance;
+                if (ui != null)
+                {
+                    yield return ui.AnimateEnemyCardPlayRoutine(chosenEnv, ui.GetEnvironmentTargetWorldPos(), 0.50f, 0.08f, 0.85f);
+                }
+
+                GameManager.Instance.PlayEnvironmentCard(aiPlayer, chosenEnv);
+                if (ui != null) ui.UpdateUI();
+                yield return new WaitForSeconds(0.35f);
+            }
         }
 
-        private void DecideSpells()
+        private IEnumerator DecideSpellsCoroutine()
         {
-            if (GameManager.Instance == null) return;
+            if (GameManager.Instance == null) yield break;
 
             var spellCards = new List<CardData>();
             foreach (var c in aiPlayer.hand)
@@ -139,6 +155,7 @@ namespace MonsterCardGame.Core
 
             foreach (var spell in spellCards)
             {
+                if (!aiPlayer.IsAlive || !humanPlayer.IsAlive) yield break;
                 if (spell.cost <= aiPlayer.currentMana)
                 {
                     if (spell.spellType == SpellType.LeaderHeal && aiPlayer.currentHp > (aiPlayer.maxHp * 0.8f))
@@ -146,12 +163,22 @@ namespace MonsterCardGame.Core
                         continue;
                     }
 
-                    GameManager.Instance.CastSpell(aiPlayer, humanPlayer, spell);
+                    var ui = MonsterCardGame.UI.BattleUIManager.Instance;
+                    if (ui != null)
+                    {
+                        yield return ui.AnimateEnemyCardPlayRoutine(spell, ui.GetCenterArenaWorldPos(), 0.48f, 0.18f, 1.12f);
+                    }
+
+                    if (GameManager.Instance.CastSpell(aiPlayer, humanPlayer, spell))
+                    {
+                        if (ui != null) ui.UpdateUI();
+                        yield return new WaitForSeconds(0.35f);
+                    }
                 }
             }
         }
 
-        private void DecideSummons(int currentTurn)
+        private IEnumerator DecideSummonsCoroutine(int currentTurn)
         {
             var monsterCards = new List<CardData>();
             foreach (var c in aiPlayer.hand)
@@ -163,15 +190,36 @@ namespace MonsterCardGame.Core
 
             foreach (var card in monsterCards)
             {
+                if (!aiPlayer.IsAlive || !humanPlayer.IsAlive) yield break;
                 if (card.cost <= aiPlayer.currentMana)
                 {
                     int bestSlot = FindBestSlotForCard(card);
-                    if (bestSlot != -1 && aiPlayer.SummonMonster(card, bestSlot, currentTurn))
+                    if (bestSlot == -1) continue;
+
+                    var ui = MonsterCardGame.UI.BattleUIManager.Instance;
+                    if (ui != null && ui.enemySlotViews != null && bestSlot < ui.enemySlotViews.Length && ui.enemySlotViews[bestSlot] != null)
+                    {
+                        yield return ui.AnimateEnemyCardPlayRoutine(card, ui.enemySlotViews[bestSlot].transform.position, 0.52f, 0f, 1.02f);
+                    }
+
+                    if (aiPlayer.SummonMonster(card, bestSlot, currentTurn))
                     {
                         if (MonsterCardGame.Audio.SoundManager.Instance != null)
                         {
                             MonsterCardGame.Audio.SoundManager.Instance.TryPlayMonsterSignatureClip(card, "summon");
                         }
+
+                        if (ui != null)
+                        {
+                            ui.LogCombatMessage($"👹 Enemy summoned [{card.name}] (-{card.cost} Mana | Left: {aiPlayer.currentMana}).");
+                            ui.UpdateUI();
+                            if (ui.enemySlotViews != null && bestSlot < ui.enemySlotViews.Length && ui.enemySlotViews[bestSlot] != null)
+                            {
+                                ui.StartCoroutine(MonsterCardGame.UI.BattleAnimations.AnimateCardSettle(ui.enemySlotViews[bestSlot].transform, 0.16f));
+                            }
+                        }
+
+                        yield return new WaitForSeconds(0.30f);
                     }
                 }
             }

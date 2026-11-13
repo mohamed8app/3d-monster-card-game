@@ -27,6 +27,7 @@ namespace MonsterCardGame.UI
         private bool isHovered = false;
         private bool isSelected = false;
         private bool isDragging = false;
+        private int dragHandGeneration = -1;
 
         private float targetVisualY = 0f;
         private float targetVisualScale = 1.0f;
@@ -139,14 +140,28 @@ namespace MonsterCardGame.UI
         {
             if (isDragging) return;
 
-            // Right Click: Direct card sacrifice for +1 Max Mana & +1 Power
+            // Right Click: Direct card sacrifice for +1 Power & +1 Mana
             if (eventData.button == PointerEventData.InputButton.Right)
             {
                 if (BattleUIManager.Instance != null && cardData != null)
                 {
-                    BattleUIManager.Instance.SacrificeCardDirectly(cardData);
+                    BattleUIManager.Instance.SacrificeCardDirectly(cardData, transform.position);
                 }
                 return;
+            }
+
+            // Double Left Click on Spell / Environment / Leader: Instant play directly from hand
+            if (eventData.clickCount >= 2 && cardData != null && cardData.cardType != CardType.Monster)
+            {
+                bool played = false;
+                if (cardData.cardType == CardType.Spell) played = TryCastSpell();
+                else if (cardData.cardType == CardType.Environment) played = TryActivateEnvironment();
+                else if (cardData.cardType == CardType.Leader) played = TrySummonLeader();
+                if (played)
+                {
+                    Destroy(gameObject);
+                    return;
+                }
             }
 
             // Left Click: Select card in hand and display details in Inspector
@@ -184,11 +199,20 @@ namespace MonsterCardGame.UI
 
         public void OnBeginDrag(PointerEventData eventData)
         {
-            if (cardData == null) return;
+            var gm = GameManager.Instance;
+            if (cardData == null || gm == null || !gm.isPlayerTurn || gm.currentPhase != GamePhase.ActionPhase)
+                return;
 
             isDragging = true;
             originalParent = transform.parent;
             originalSiblingIndex = transform.GetSiblingIndex();
+            dragHandGeneration = BattleUIManager.Instance != null ? BattleUIManager.Instance.HandRenderGeneration : -1;
+
+            gm.CancelAutoEndTurn();
+            if (BattleUIManager.Instance != null)
+            {
+                BattleUIManager.Instance.SetDraggingCard(this);
+            }
 
             if (visualRoot != null && visualRoot != rectTransform)
             {
@@ -230,15 +254,18 @@ namespace MonsterCardGame.UI
 
         public void OnDrag(PointerEventData eventData)
         {
+            if (!isDragging) return;
             transform.position = eventData.position;
         }
 
         public void OnEndDrag(PointerEventData eventData)
         {
+            if (!isDragging) return;
             isDragging = false;
 
             if (BattleUIManager.Instance != null)
             {
+                BattleUIManager.Instance.SetDraggingCard(null);
                 BattleUIManager.Instance.HighlightAvailableSlots(false);
             }
 
@@ -250,6 +277,7 @@ namespace MonsterCardGame.UI
             transform.localScale = Vector3.one;
 
             bool handled = false;
+            bool triedDirectSlot = false;
 
             // 1. Raycast elements under cursor
             var results = new List<RaycastResult>();
@@ -264,8 +292,7 @@ namespace MonsterCardGame.UI
                 {
                     if (BattleUIManager.Instance != null)
                     {
-                        BattleUIManager.Instance.OnCardSelectedInHand(cardData);
-                        BattleUIManager.Instance.SendMessage("OnSacrificeClicked");
+                        BattleUIManager.Instance.SacrificeCardDirectly(cardData, transform.position);
                         Destroy(gameObject);
                         return;
                     }
@@ -276,6 +303,7 @@ namespace MonsterCardGame.UI
                     var slotView = hit.gameObject.GetComponentInParent<SlotView>();
                     if (slotView != null && slotView.isPlayerSide)
                     {
+                        triedDirectSlot = true;
                         handled = TrySummonToSlot(slotView.slotIndex);
                         if (handled) break;
                     }
@@ -315,8 +343,8 @@ namespace MonsterCardGame.UI
                 }
             }
 
-            // 3. Proximity snap distance for monster drops near player slots
-            if (!handled && cardData.cardType == CardType.Monster && BattleUIManager.Instance != null)
+            // 3. Proximity snap distance for monster drops near player slots (skip if player already dropped directly on a slot that refused)
+            if (!handled && !triedDirectSlot && cardData.cardType == CardType.Monster && BattleUIManager.Instance != null)
             {
                 for (int i = 0; i < BattleUIManager.Instance.playerSlotViews.Length; i++)
                 {
@@ -327,22 +355,39 @@ namespace MonsterCardGame.UI
                         if (dist < 160f)
                         {
                             handled = TrySummonToSlot(i);
-                            if (handled) break;
+                            break;
                         }
                     }
                 }
             }
 
-            // 4. Return card to hand if not played
+            // 4. Safely return card to hand only if hand was not rebuilt during drag (prevents phantom duplicate cards!)
             if (!handled)
             {
-                if (originalParent != null)
+                var gm = GameManager.Instance;
+                var ui = BattleUIManager.Instance;
+                bool canReturn = originalParent != null
+                    && ui != null
+                    && dragHandGeneration == ui.HandRenderGeneration
+                    && gm != null
+                    && gm.humanPlayer != null
+                    && gm.humanPlayer.hand != null
+                    && gm.humanPlayer.hand.Contains(cardData)
+                    && originalParent.childCount < gm.humanPlayer.hand.Count;
+
+                if (canReturn)
                 {
                     transform.SetParent(originalParent, false);
-                    transform.SetSiblingIndex(originalSiblingIndex);
+                    transform.SetSiblingIndex(Mathf.Clamp(originalSiblingIndex, 0, originalParent.childCount));
                     LayoutRebuilder.ForceRebuildLayoutImmediate(originalParent as RectTransform);
+                    UpdateVisualState();
+                    gm.EvaluateAutoEndTurn();
                 }
-                UpdateVisualState();
+                else
+                {
+                    Destroy(gameObject);
+                    gm?.EvaluateAutoEndTurn();
+                }
             }
             else
             {
@@ -355,11 +400,12 @@ namespace MonsterCardGame.UI
             var gm = GameManager.Instance;
             if (gm == null || !gm.isPlayerTurn) return false;
 
+            Vector3 dropPos = transform.position;
             if (gm.humanPlayer.SummonMonster(cardData, slotIndex, gm.currentTurn))
             {
                 if (BattleUIManager.Instance != null)
                 {
-                    BattleUIManager.Instance.OnPlayerMonsterSummoned(cardData, slotIndex);
+                    BattleUIManager.Instance.OnPlayerMonsterSummoned(cardData, slotIndex, dropPos, true);
                 }
                 return true;
             }
@@ -378,9 +424,11 @@ namespace MonsterCardGame.UI
             var gm = GameManager.Instance;
             if (gm == null || !gm.isPlayerTurn) return false;
 
+            Vector3 startPos = transform.position;
             bool success = gm.CastSpell(gm.humanPlayer, gm.aiPlayer, cardData);
             if (success && BattleUIManager.Instance != null)
             {
+                BattleUIManager.Instance.LaunchPlayerUtilityCardFlight(cardData, startPos);
                 BattleUIManager.Instance.DeselectHandCards();
             }
             return success;
@@ -391,9 +439,11 @@ namespace MonsterCardGame.UI
             var gm = GameManager.Instance;
             if (gm == null || !gm.isPlayerTurn) return false;
 
+            Vector3 startPos = transform.position;
             bool success = gm.PlayEnvironmentCard(gm.humanPlayer, cardData);
             if (success && BattleUIManager.Instance != null)
             {
+                BattleUIManager.Instance.LaunchPlayerUtilityCardFlight(cardData, startPos);
                 BattleUIManager.Instance.DeselectHandCards();
             }
             return success;
@@ -404,9 +454,11 @@ namespace MonsterCardGame.UI
             var gm = GameManager.Instance;
             if (gm == null || !gm.isPlayerTurn) return false;
 
+            Vector3 startPos = transform.position;
             bool success = gm.PlayLeaderCard(gm.humanPlayer, cardData);
             if (success && BattleUIManager.Instance != null)
             {
+                BattleUIManager.Instance.LaunchPlayerUtilityCardFlight(cardData, startPos);
                 BattleUIManager.Instance.DeselectHandCards();
             }
             return success;

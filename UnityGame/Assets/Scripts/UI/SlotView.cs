@@ -52,12 +52,48 @@ namespace MonsterCardGame.UI
         private bool isSelectedOnBoard = false;
         private bool isHovered = false;
         private bool isHighlightedForSummon = false;
+        private bool isFlightHidden = false;
+        private CanvasGroup tokenCanvasGroup;
+        private Coroutine hitFlashCoroutine;
         private float circleRotation = 0f;
         private float auraRotation = 0f;
 
         public void SetSummonHighlight(bool active)
         {
             isHighlightedForSummon = active && (currentCardData == null) && isPlayerSide;
+        }
+
+        /// <summary>
+        /// Temporarily hides the landed token & aura while the card is flying from hand/deck into this slot.
+        /// Keeps the summoning circle visible until touch-down so no sudden flash occurs.
+        /// </summary>
+        public void SetFlightHidden(bool hidden)
+        {
+            isFlightHidden = hidden;
+            if (fieldCardToken != null && tokenCanvasGroup == null)
+            {
+                tokenCanvasGroup = fieldCardToken.GetComponent<CanvasGroup>() ?? fieldCardToken.AddComponent<CanvasGroup>();
+            }
+
+            if (hidden)
+            {
+                if (tokenCanvasGroup != null) tokenCanvasGroup.alpha = 0f;
+                if (auraRoot != null) auraRoot.SetActive(false);
+                if (abilitySigilObj != null) abilitySigilObj.SetActive(false);
+                if (summoningCircleImage != null) summoningCircleImage.gameObject.SetActive(true);
+            }
+            else
+            {
+                if (tokenCanvasGroup != null) tokenCanvasGroup.alpha = 1f;
+                if (currentCardData != null && summoningCircleImage != null)
+                {
+                    summoningCircleImage.gameObject.SetActive(false);
+                }
+                if (currentMonsterInstance != null && currentCardData != null)
+                {
+                    UpdateAbilityAuraAndSigil(currentMonsterInstance, MonsterArtLoader.GetElementColor(currentCardData.element));
+                }
+            }
         }
 
         public void SetBoardSelected(bool selected)
@@ -364,6 +400,11 @@ namespace MonsterCardGame.UI
 
             // 6. Living Elemental Aura & Clickable Star-Flash Sigil on Player Board Monsters
             UpdateAbilityAuraAndSigil(instance, elemColor);
+
+            if (isFlightHidden)
+            {
+                SetFlightHidden(true);
+            }
         }
 
         private void EnsureAbilityAuraAndSigilCreated()
@@ -610,6 +651,7 @@ namespace MonsterCardGame.UI
             // Astral Masters Style Full-Art Field Token (148x184)
             fieldCardToken = GameBootstrapper.CreatePanel(transform, "FieldCardToken", new Color(0.04f, 0.05f, 0.08f, 1f),
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(148, 184));
+            tokenCanvasGroup = fieldCardToken.AddComponent<CanvasGroup>();
 
             tokenOutline = fieldCardToken.AddComponent<Outline>();
             tokenOutline.effectColor = new Color(0.48f, 0.68f, 0.82f, 0.90f);
@@ -701,15 +743,93 @@ namespace MonsterCardGame.UI
             }
         }
 
+        /// <summary>
+        /// Shakes and flashes only the live monster token artwork/frame (never tints the empty slot backdrop red),
+        /// and cancels cleanly on monster death in ClearDisplay().
+        /// </summary>
+        public void PlayHitFlashAndShake(Color flashColor, float intensity = 10f)
+        {
+            if (hitFlashCoroutine != null)
+            {
+                StopCoroutine(hitFlashCoroutine);
+                hitFlashCoroutine = null;
+                ResetHitFlashVisuals();
+            }
+
+            if (fieldCardToken == null || !fieldCardToken.activeSelf || !gameObject.activeInHierarchy)
+            {
+                ResetHitFlashVisuals();
+                return;
+            }
+
+            hitFlashCoroutine = StartCoroutine(HitFlashAndShakeRoutine(flashColor, intensity));
+        }
+
+        private System.Collections.IEnumerator HitFlashAndShakeRoutine(Color flashColor, float intensity)
+        {
+            float duration = 0.28f;
+            float t = 0f;
+
+            while (t < duration && fieldCardToken != null && fieldCardToken.activeSelf && currentMonsterInstance != null)
+            {
+                t += Mathf.Min(Time.deltaTime, 0.05f);
+                float p = Mathf.Clamp01(1f - (t / duration));
+                float offsetX = Mathf.Sin(t * 50f) * intensity * p;
+                fieldCardToken.transform.localPosition = new Vector3(offsetX, 0f, 0f);
+
+                if (tokenArtImage != null)
+                {
+                    tokenArtImage.color = Color.Lerp(Color.white, flashColor, p * 0.65f);
+                }
+                if (tokenFrameImage != null)
+                {
+                    tokenFrameImage.color = Color.Lerp(Color.white, flashColor, p * 0.70f);
+                }
+                yield return null;
+            }
+
+            ResetHitFlashVisuals();
+            hitFlashCoroutine = null;
+        }
+
+        private void ResetHitFlashVisuals()
+        {
+            var slotBg = GetComponent<Image>();
+            if (slotBg != null) slotBg.color = Color.clear;
+
+            if (fieldCardToken != null)
+            {
+                fieldCardToken.transform.localPosition = Vector3.zero;
+            }
+            if (tokenArtImage != null)
+            {
+                tokenArtImage.color = (tokenArtImage.sprite != null)
+                    ? Color.white
+                    : (currentCardData != null ? MonsterArtLoader.GetEnvironmentAtmosphereColor(currentCardData.element) : Color.white);
+            }
+            if (tokenFrameImage != null)
+            {
+                tokenFrameImage.color = Color.white;
+            }
+        }
+
         public void ClearDisplay()
         {
+            if (hitFlashCoroutine != null)
+            {
+                StopCoroutine(hitFlashCoroutine);
+                hitFlashCoroutine = null;
+            }
             currentCardData = null;
             currentMonsterInstance = null;
             isHighlightedForSummon = false;
+            isFlightHidden = false;
+            if (tokenCanvasGroup != null) tokenCanvasGroup.alpha = 1f;
             isAbilityReady = false;
             isSigilHovered = false;
             isSelectedOnBoard = false;
             standbyAnimator?.ClearStandby();
+            ResetHitFlashVisuals();
             if (auraRoot != null)
             {
                 auraRoot.SetActive(false);
