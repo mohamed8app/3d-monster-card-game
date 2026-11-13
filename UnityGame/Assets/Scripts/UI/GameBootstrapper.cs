@@ -30,6 +30,9 @@ namespace MonsterCardGame.UI
         private static Sprite _abilityFlashCoreSprite;
         private static Sprite _abilityShockwaveRingSprite;
         private static Sprite _crossedSwordsSprite;
+        private static Sprite _circularSpiritRimSprite;
+        private static Sprite _rightwardFlameGlowSprite;
+        private static Sprite _spiritCrestSprite;
 
         public static Font GetFont()
         {
@@ -359,35 +362,38 @@ namespace MonsterCardGame.UI
             // Top-Left: Compact Enemy Commander HUD (320 x 126, y = -18 from top)
             BuildCommanderCitadel(leftWing.transform, ui, false, null);
 
-            // Middle-Left: Matte Dark Slate Card Inspector (Header + 724px Inspector)
+            // Middle-Left: Matte Dark Slate Card Inspector (Header + 488px Inspector)
             var reconHeader = CreateOrnatePanel(leftWing.transform, "ReconHeaderBanner",
                 new Color(0.07f, 0.09f, 0.14f, 0.96f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 369), new Vector2(320, 28));
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 378), new Vector2(320, 24));
             var rhText = CreateText(reconHeader.transform, "ReconHeaderText", "CARD INSPECTOR", 11,
-                new Color(0.76f, 0.82f, 0.90f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(304, 24));
+                new Color(0.76f, 0.82f, 0.90f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(304, 22));
             AddTextShadow(rhText);
 
             var detailsPanel = CreateOrnatePanel(leftWing.transform, "CardDetailsInspectorPanel",
                 new Color(0.05f, 0.06f, 0.09f, 0.96f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -16), new Vector2(320, 724));
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 116), new Vector2(320, 488));
             ui.cardDetailsPanel = detailsPanel;
 
             // 1. Card Name Bar & Sapphire Mana Cost Medallion
             var detailHeaderBar = CreateOrnatePanel(detailsPanel.transform, "DetailHeaderBar",
                 new Color(0.08f, 0.10f, 0.15f, 0.96f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 334), new Vector2(300, 40));
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 220), new Vector2(300, 34));
 
-            ui.detailNameText = CreateText(detailHeaderBar.transform, "DetailName", "Select a Monster or Card", 14,
-                new Color(0.90f, 0.94f, 0.98f), TextAnchor.MiddleLeft, new Vector2(-18, 0), new Vector2(224, 32));
+            ui.detailNameText = CreateText(detailHeaderBar.transform, "DetailName", "Select a Monster or Card", 13,
+                new Color(0.90f, 0.94f, 0.98f), TextAnchor.MiddleLeft, new Vector2(-18, 0), new Vector2(224, 28));
+            ui.detailNameText.resizeTextForBestFit = true;
+            ui.detailNameText.resizeTextMinSize = 10;
+            ui.detailNameText.resizeTextMaxSize = 13;
             AddTextShadow(ui.detailNameText);
 
             var fullCostCircle = CreateMedallion(detailHeaderBar.transform, "FullCostCircle",
-                new Color(0.14f, 0.34f, 0.64f, 1f), new Vector2(124, 0), new Vector2(34, 34), "-", 15);
+                new Color(0.14f, 0.34f, 0.64f, 1f), new Vector2(124, 0), new Vector2(30, 30), "-", 14);
             ui.detailCostText = fullCostCircle.transform.Find("MedallionText").GetComponent<Text>();
 
-            // 2. Full-Width Enlarged Artwork Window (272 x 310, clean dark slate bevel — no gold frame)
+            // 2. Crisp Portrait Artwork Window (216 x 204)
             var artWindow = CreatePanel(detailsPanel.transform, "ArtWindow", new Color(0.03f, 0.04f, 0.06f, 1f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 150), new Vector2(272, 310));
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 93), new Vector2(216, 204));
             var artWinOutline = artWindow.AddComponent<Outline>();
             artWinOutline.effectColor = new Color(0.28f, 0.32f, 0.40f, 0.95f);
             artWinOutline.effectDistance = new Vector2(1.5f, 1.5f);
@@ -404,63 +410,72 @@ namespace MonsterCardGame.UI
             // 3. Element, Tribe, Role & Cost Meta Bar
             var metaBar = CreateOrnatePanel(detailsPanel.transform, "MetaBar",
                 new Color(0.08f, 0.11f, 0.16f, 0.96f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -28), new Vector2(300, 30));
-            ui.detailMetaText = CreateText(metaBar.transform, "DetailMeta", "Click any card on board, hand, or side slots", 11,
-                new Color(0.70f, 0.84f, 0.96f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(288, 24));
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -24), new Vector2(300, 24));
+            ui.detailMetaText = CreateText(metaBar.transform, "DetailMeta", "Click any card on board, hand, or chronicle", 10,
+                new Color(0.70f, 0.84f, 0.96f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(288, 20));
+            ui.detailMetaText.resizeTextForBestFit = true;
+            ui.detailMetaText.resizeTextMinSize = 8;
+            ui.detailMetaText.resizeTextMaxSize = 11;
             AddTextShadow(ui.detailMetaText);
 
-            // 4. Ability & Effect Scroll Box (216 height)
+            // 4. Ability & Effect Box (146 height, BestFit so full abilities remain legible)
             var descBox = CreateOrnatePanel(detailsPanel.transform, "DescBox",
                 new Color(0.04f, 0.05f, 0.08f, 0.96f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -160), new Vector2(300, 216));
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -114), new Vector2(300, 146));
 
-            var descHeader = CreateText(descBox.transform, "DescBoxHeader", "SIDE ABILITY & EFFECT", 10,
-                new Color(0.68f, 0.74f, 0.82f, 0.92f), TextAnchor.MiddleCenter, new Vector2(0, -14), new Vector2(280, 18));
+            var descHeader = CreateText(descBox.transform, "DescBoxHeader", "ABILITY & EFFECT", 10,
+                new Color(0.68f, 0.74f, 0.82f, 0.92f), TextAnchor.MiddleCenter, new Vector2(0, -11), new Vector2(280, 16));
             descHeader.rectTransform.anchorMin = new Vector2(0.5f, 1f);
             descHeader.rectTransform.anchorMax = new Vector2(0.5f, 1f);
-            descHeader.rectTransform.anchoredPosition = new Vector2(0, -14);
+            descHeader.rectTransform.anchoredPosition = new Vector2(0, -11);
 
-            ui.detailDescText = CreateText(descBox.transform, "DetailDesc", "Full monster abilities, leader passive auras, and spell/environment effects will appear here.", 12,
+            ui.detailDescText = CreateText(descBox.transform, "DetailDesc", "Monster abilities, Commander Spirit passive auras, and spell/environment effects will appear here.", 11,
                 new Color(0.90f, 0.93f, 0.96f), TextAnchor.UpperLeft, Vector2.zero, Vector2.zero);
             ui.detailDescText.rectTransform.anchorMin = Vector2.zero;
             ui.detailDescText.rectTransform.anchorMax = Vector2.one;
-            ui.detailDescText.rectTransform.offsetMin = new Vector2(12, 10);
-            ui.detailDescText.rectTransform.offsetMax = new Vector2(-12, -26);
+            ui.detailDescText.rectTransform.offsetMin = new Vector2(10, 8);
+            ui.detailDescText.rectTransform.offsetMax = new Vector2(-10, -22);
             ui.detailDescText.horizontalOverflow = HorizontalWrapMode.Wrap;
             ui.detailDescText.verticalOverflow = VerticalWrapMode.Truncate;
+            ui.detailDescText.resizeTextForBestFit = true;
+            ui.detailDescText.resizeTextMinSize = 8;
+            ui.detailDescText.resizeTextMaxSize = 11;
 
             // 5. Bottom ATK / Status / DEF Plaques (matte dark slate)
             var atkBadge = CreateOrnatePanel(detailsPanel.transform, "FullAtkBadge",
                 new Color(0.28f, 0.11f, 0.13f, 0.96f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-104, -318), new Vector2(88, 44));
-            ui.detailAtkText = CreateText(atkBadge.transform, "AtkText", "⚔️ -", 15,
-                new Color(0.96f, 0.88f, 0.88f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(82, 38));
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-104, -214), new Vector2(88, 38));
+            ui.detailAtkText = CreateText(atkBadge.transform, "AtkText", "⚔️ -", 14,
+                new Color(0.96f, 0.88f, 0.88f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(82, 34));
             AddTextShadow(ui.detailAtkText);
 
             var statusBadge = CreateOrnatePanel(detailsPanel.transform, "DetailStatusBadge",
                 new Color(0.08f, 0.11f, 0.16f, 0.96f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -318), new Vector2(114, 44));
-            ui.detailStatusText = CreateText(statusBadge.transform, "DetailStatus", "Ready", 11,
-                new Color(0.52f, 0.88f, 0.68f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(106, 38));
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -214), new Vector2(114, 38));
+            ui.detailStatusText = CreateText(statusBadge.transform, "DetailStatus", "Ready", 10,
+                new Color(0.52f, 0.88f, 0.68f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(106, 34));
             ui.detailStatusText.horizontalOverflow = HorizontalWrapMode.Wrap;
             ui.detailStatusText.verticalOverflow = VerticalWrapMode.Truncate;
             ui.detailStatusText.resizeTextForBestFit = true;
-            ui.detailStatusText.resizeTextMinSize = 8;
-            ui.detailStatusText.resizeTextMaxSize = 11;
+            ui.detailStatusText.resizeTextMinSize = 7;
+            ui.detailStatusText.resizeTextMaxSize = 10;
             ui.detailStatsText = ui.detailStatusText;
 
             var defBadge = CreateOrnatePanel(detailsPanel.transform, "FullDefBadge",
                 new Color(0.11f, 0.25f, 0.16f, 0.96f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(104, -318), new Vector2(88, 44));
-            ui.detailDefText = CreateText(defBadge.transform, "DefText", "🛡️ -", 15,
-                new Color(0.88f, 0.96f, 0.90f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(82, 38));
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(104, -214), new Vector2(88, 38));
+            ui.detailDefText = CreateText(defBadge.transform, "DefText", "🛡️ -", 14,
+                new Color(0.88f, 0.96f, 0.90f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(82, 34));
             AddTextShadow(ui.detailDefText);
+
+            // Bottom-Middle-Left: Scrollable Battle Chronicle directly beneath the Card Inspector (y = -263, 320 x 246)
+            BuildScrollableCombatLog(leftWing.transform, ui, -263f, 246f);
 
             // Bottom-Left: Compact Player Commander HUD (320 x 126, y = +18 from bottom)
             BuildCommanderCitadel(leftWing.transform, ui, true, null);
 
             // =========================================================================
-            // ZONE 5: Right Wing — Leaders Side Slots, Chronicle, Shared Environment & Orders
+            // ZONE 5: Right Wing — Enemy Commander Spirit, Shared Environment, Player Commander Spirit
             // =========================================================================
             var rightWing = CreatePanel(screenRoot.transform, "RightWingPanel", Color.white,
                 new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-180, 0), new Vector2(360, 1080));
@@ -478,10 +493,10 @@ namespace MonsterCardGame.UI
                 new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(1, 0), new Vector2(2, 1080));
             rightEdgeDiv.GetComponent<Image>().raycastTarget = false;
 
-            // Top Utility Row (Full-Width Centered Turn Badge at y = +506 — clean symmetrical top-right header)
+            // Top Utility Row (Full-Width Centered Turn Badge at y = +504)
             var turnBadgePanel = CreateOrnatePanel(rightWing.transform, "TopTurnBar",
                 new Color(0.07f, 0.09f, 0.14f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 506), new Vector2(320, 32));
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 504), new Vector2(320, 34));
             ui.turnInfoText = CreateText(turnBadgePanel.transform, "TurnInfoText", "TURN 1 • YOUR MOVE", 11,
                 new Color(0.84f, 0.90f, 0.98f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(300, 28));
             AddTextShadow(ui.turnInfoText);
@@ -489,31 +504,14 @@ namespace MonsterCardGame.UI
             ui.endTurnButton = null;
             ui.quitButton = null;
 
-            // Zone A: Enemy Leader Side Slot (y = +382, 320 x 196)
-            BuildSideLeaderSlot(rightWing.transform, ui, false, 382f, 196f);
+            // Zone A: Enemy Circular Commander Spirit Altar (y = +322, 320 x 270)
+            BuildSideLeaderSlot(rightWing.transform, ui, false, 322f, 270f);
 
-            // Zone B: Expanded Battle Chronicle Log (y = +148, 320 x 228)
-            var logPanel = CreateOrnatePanel(rightWing.transform, "CombatLogPanel",
-                new Color(0.05f, 0.06f, 0.09f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 148), new Vector2(320, 228));
+            // Zone B: Shared Environment Card Slot cleanly centered on Right Wing (y = +12, 320 x 266)
+            BuildSharedEnvironmentSlot(rightWing.transform, ui, 12f, 266f);
 
-            var logHeaderBar = CreatePanel(logPanel.transform, "LogHeaderBar",
-                new Color(0.08f, 0.10f, 0.15f, 0.96f),
-                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0, -14), new Vector2(304, 22));
-            var lhTxt = CreateText(logHeaderBar.transform, "LogHeader", "BATTLE CHRONICLE", 10,
-                new Color(0.72f, 0.78f, 0.86f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(290, 20));
-            AddTextShadow(lhTxt);
-
-            ui.combatLogText = CreateText(logPanel.transform, "CombatLogText", "Match started — drag cards or right-click to sacrifice. Turns auto-complete when no actions remain.", 10,
-                new Color(0.86f, 0.90f, 0.95f), TextAnchor.UpperLeft, new Vector2(0, -12), new Vector2(296, 188));
-            ui.combatLogText.horizontalOverflow = HorizontalWrapMode.Wrap;
-            ui.combatLogText.verticalOverflow = VerticalWrapMode.Truncate;
-
-            // Zone C: Shared Environment Card Slot centered cleanly on Right Wing (y = -114, 320 x 256)
-            BuildSharedEnvironmentSlot(rightWing.transform, ui, -114f, 256f);
-
-            // Zone D: Player Leader Side Slot (y = -384, 320 x 236)
-            BuildSideLeaderSlot(rightWing.transform, ui, true, -384f, 236f);
+            // Zone C: Player Circular Commander Spirit Altar (y = -312, 320 x 286)
+            BuildSideLeaderSlot(rightWing.transform, ui, true, -312f, 286f);
 
             // 10.2 Center Seam Astral Hourglass Medallion (integrated on BottomArenaSeamDivider at x = 0, y = -310)
             BuildAstralHourglassMedallion(screenRoot.transform, ui);
@@ -653,94 +651,361 @@ namespace MonsterCardGame.UI
             ui.hourglassControl = ctrl;
         }
 
+        private static void BuildScrollableCombatLog(Transform parent, BattleUIManager ui, float centerY, float height)
+        {
+            var logPanel = CreateOrnatePanel(parent, "CombatLogPanel",
+                new Color(0.05f, 0.06f, 0.09f, 0.96f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, centerY), new Vector2(320, height));
+
+            var logHeaderBar = CreatePanel(logPanel.transform, "LogHeaderBar",
+                new Color(0.08f, 0.11f, 0.16f, 0.96f),
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0, -14), new Vector2(304, 22));
+            var lhTxt = CreateText(logHeaderBar.transform, "LogHeader", "BATTLE CHRONICLE", 10,
+                new Color(0.78f, 0.86f, 0.96f), TextAnchor.MiddleLeft, new Vector2(-46, 0), new Vector2(190, 20));
+            AddTextShadow(lhTxt);
+
+            var hintTxt = CreateText(logHeaderBar.transform, "LogScrollHint", "↕ Scroll • Click Card", 9,
+                new Color(0.54f, 0.74f, 0.92f), TextAnchor.MiddleRight, new Vector2(72, 0), new Vector2(148, 18));
+            hintTxt.raycastTarget = false;
+
+            // ScrollRect container spanning interior underneath header bar
+            var scrollObj = new GameObject("LogScrollView");
+            scrollObj.transform.SetParent(logPanel.transform, false);
+            var scrollRt = scrollObj.AddComponent<RectTransform>();
+            scrollRt.anchorMin = Vector2.zero;
+            scrollRt.anchorMax = Vector2.one;
+            scrollRt.offsetMin = new Vector2(8, 8);
+            scrollRt.offsetMax = new Vector2(-8, -28);
+
+            var scrollRect = scrollObj.AddComponent<ScrollRect>();
+            scrollRect.horizontal = false;
+            scrollRect.vertical = true;
+            scrollRect.movementType = ScrollRect.MovementType.Clamped;
+            scrollRect.scrollSensitivity = 28f;
+            scrollRect.inertia = true;
+            scrollRect.decelerationRate = 0.135f;
+
+            // Clipped Viewport leaving room on right for scrollbar
+            var viewportObj = new GameObject("Viewport");
+            viewportObj.transform.SetParent(scrollObj.transform, false);
+            var vpRt = viewportObj.AddComponent<RectTransform>();
+            vpRt.anchorMin = Vector2.zero;
+            vpRt.anchorMax = Vector2.one;
+            vpRt.offsetMin = Vector2.zero;
+            vpRt.offsetMax = new Vector2(-12, 0);
+            var vpImg = viewportObj.AddComponent<Image>();
+            vpImg.color = new Color(0.02f, 0.03f, 0.05f, 0.45f);
+            viewportObj.AddComponent<RectMask2D>();
+            scrollRect.viewport = vpRt;
+
+            // Vertical Content Stack
+            var contentObj = new GameObject("LogContent");
+            contentObj.transform.SetParent(viewportObj.transform, false);
+            var contentRt = contentObj.AddComponent<RectTransform>();
+            contentRt.anchorMin = new Vector2(0f, 1f);
+            contentRt.anchorMax = new Vector2(1f, 1f);
+            contentRt.pivot = new Vector2(0.5f, 1f);
+            contentRt.anchoredPosition = Vector2.zero;
+            contentRt.sizeDelta = new Vector2(0f, 0f);
+
+            var vlg = contentObj.AddComponent<VerticalLayoutGroup>();
+            vlg.padding = new RectOffset(4, 4, 4, 4);
+            vlg.spacing = 4f;
+            vlg.childAlignment = TextAnchor.UpperLeft;
+            vlg.childControlWidth = true;
+            vlg.childControlHeight = true;
+            vlg.childForceExpandWidth = true;
+            vlg.childForceExpandHeight = false;
+
+            var csf = contentObj.AddComponent<ContentSizeFitter>();
+            csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            scrollRect.content = contentRt;
+
+            // Slim right vertical Scrollbar
+            var sbObj = new GameObject("LogScrollbarVertical");
+            sbObj.transform.SetParent(scrollObj.transform, false);
+            var sbRt = sbObj.AddComponent<RectTransform>();
+            sbRt.anchorMin = new Vector2(1f, 0f);
+            sbRt.anchorMax = new Vector2(1f, 1f);
+            sbRt.pivot = new Vector2(1f, 0.5f);
+            sbRt.anchoredPosition = Vector2.zero;
+            sbRt.sizeDelta = new Vector2(8f, 0f);
+            var sbTrack = sbObj.AddComponent<Image>();
+            sbTrack.color = new Color(0.08f, 0.11f, 0.16f, 0.90f);
+
+            var slideArea = new GameObject("Sliding Area");
+            slideArea.transform.SetParent(sbObj.transform, false);
+            var saRt = slideArea.AddComponent<RectTransform>();
+            saRt.anchorMin = Vector2.zero;
+            saRt.anchorMax = Vector2.one;
+            saRt.offsetMin = new Vector2(1, 2);
+            saRt.offsetMax = new Vector2(-1, -2);
+
+            var handleObj = new GameObject("Handle");
+            handleObj.transform.SetParent(slideArea.transform, false);
+            var hRt = handleObj.AddComponent<RectTransform>();
+            hRt.anchorMin = Vector2.zero;
+            hRt.anchorMax = Vector2.one;
+            hRt.sizeDelta = Vector2.zero;
+            var hImg = handleObj.AddComponent<Image>();
+            hImg.color = new Color(0.32f, 0.62f, 0.92f, 0.92f);
+
+            var sb = sbObj.AddComponent<Scrollbar>();
+            sb.direction = Scrollbar.Direction.BottomToTop;
+            sb.targetGraphic = hImg;
+            sb.handleRect = hRt;
+            scrollRect.verticalScrollbar = sb;
+            scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+
+            ui.combatLogScrollRect = scrollRect;
+            ui.combatLogContent = contentRt;
+            ui.combatLogScrollbar = sb;
+            ui.combatLogText = null;
+        }
+
         private static void BuildSideLeaderSlot(Transform parent, BattleUIManager ui, bool isPlayerSide, float centerY, float height)
         {
             string panelName = isPlayerSide ? "PlayerLeaderSlotPanel" : "EnemyLeaderSlotPanel";
             string cardBtnName = isPlayerSide ? "PlayerLeaderCardSlot" : "EnemyLeaderCardSlot";
-            Color bgCol = isPlayerSide ? new Color(0.07f, 0.10f, 0.14f, 0.96f) : new Color(0.11f, 0.06f, 0.08f, 0.96f);
-            Color outlineCol = isPlayerSide ? new Color(0.28f, 0.38f, 0.48f, 0.92f) : new Color(0.38f, 0.20f, 0.23f, 0.92f);
+            Color bgCol = isPlayerSide ? new Color(0.06f, 0.08f, 0.13f, 0.96f) : new Color(0.10f, 0.06f, 0.08f, 0.96f);
+            Color baseBorderCol = isPlayerSide ? new Color(0.24f, 0.42f, 0.62f, 0.92f) : new Color(0.52f, 0.22f, 0.28f, 0.92f);
 
             var panel = CreateOrnatePanel(parent, panelName, bgCol,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, centerY), new Vector2(320, height));
             var panelOut = panel.AddComponent<Outline>();
-            panelOut.effectColor = outlineCol;
+            panelOut.effectColor = baseBorderCol;
             panelOut.effectDistance = new Vector2(1.2f, 1.2f);
 
-            string hdrStr = isPlayerSide ? "YOUR LEADER SLOT (SIDE)" : "ENEMY LEADER SLOT (SIDE)";
-            Color hdrCol = isPlayerSide ? new Color(0.78f, 0.88f, 0.98f) : new Color(0.88f, 0.68f, 0.70f);
+            // Clipped Interior Aura Container so rightward flame plume & embers stay crisp inside altar bounds
+            var auraClipObj = new GameObject("SpiritFlameClipArea");
+            auraClipObj.transform.SetParent(panel.transform, false);
+            var auraClipRt = auraClipObj.AddComponent<RectTransform>();
+            auraClipRt.anchorMin = Vector2.zero;
+            auraClipRt.anchorMax = Vector2.one;
+            auraClipRt.offsetMin = new Vector2(4, 4);
+            auraClipRt.offsetMax = new Vector2(-4, -30);
+            auraClipObj.AddComponent<RectMask2D>();
+
+            var panelTint = CreatePanel(auraClipObj.transform, "SpiritPanelTint", new Color(0.24f, 0.72f, 1.0f, 0.05f),
+                Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            var panelTintImg = panelTint.GetComponent<Image>();
+            panelTintImg.raycastTarget = false;
+
+            // Directional Flame Glow anchored around circular slot (-80, -10) trailing toward RIGHT side
+            Sprite flameSprite = GetRightwardFlameGlowSprite();
+            var flamePrimary = CreatePanel(auraClipObj.transform, "FlamePlumePrimary",
+                new Color(0.24f, 0.72f, 1.0f, 0.55f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-2, -10), new Vector2(304, 164));
+            var flamePrimaryImg = flamePrimary.GetComponent<Image>();
+            flamePrimaryImg.sprite = flameSprite;
+            flamePrimaryImg.raycastTarget = false;
+
+            var flameSecondary = CreatePanel(auraClipObj.transform, "FlamePlumeSecondary",
+                new Color(0.45f, 0.45f, 1.0f, 0.42f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(8, -10), new Vector2(288, 138));
+            var flameSecondaryImg = flameSecondary.GetComponent<Image>();
+            flameSecondaryImg.sprite = flameSprite;
+            flameSecondaryImg.raycastTarget = false;
+
+            var flameCorona = CreatePanel(auraClipObj.transform, "FlameCoronaGlow",
+                new Color(0.45f, 0.85f, 1.0f, 0.42f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-80, -10), new Vector2(170, 170));
+            var flameCoronaImg = flameCorona.GetComponent<Image>();
+            flameCoronaImg.sprite = GetCircularBlueFlareSprite();
+            flameCoronaImg.raycastTarget = false;
+
+            // 6 Floating Rightward Flame Ember Sparks
+            const int sparkCount = 6;
+            var sparkRects = new RectTransform[sparkCount];
+            var sparkImgs = new Image[sparkCount];
+            Sprite circleSp = GetCircleSprite();
+            Sprite flareSp = GetAbilityFlashCoreSprite();
+            for (int i = 0; i < sparkCount; i++)
+            {
+                var spObj = new GameObject($"FlameSpark_{i}");
+                spObj.transform.SetParent(auraClipObj.transform, false);
+                var spRt = spObj.AddComponent<RectTransform>();
+                spRt.anchorMin = new Vector2(0.5f, 0.5f);
+                spRt.anchorMax = new Vector2(0.5f, 0.5f);
+                float sz = (i % 2 == 0) ? 10f : 15f;
+                spRt.sizeDelta = new Vector2(sz, sz);
+                var spImg = spObj.AddComponent<Image>();
+                spImg.sprite = (i % 3 == 0) ? flareSp : circleSp;
+                spImg.color = Color.clear;
+                spImg.raycastTarget = false;
+                sparkRects[i] = spRt;
+                sparkImgs[i] = spImg;
+            }
+
+            // Header Bar (Matches Shared Environment sleek top header)
             float hdrY = (height * 0.5f) - 16f;
-            var hdr = CreateText(panel.transform, "LeaderSlotHeader", hdrStr, 10,
-                hdrCol, TextAnchor.MiddleCenter, new Vector2(0, hdrY), new Vector2(300, 20));
+            var spiritHdrBar = CreatePanel(panel.transform, "SpiritHeaderBar",
+                isPlayerSide ? new Color(0.08f, 0.12f, 0.18f, 0.96f) : new Color(0.14f, 0.08f, 0.10f, 0.96f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, hdrY), new Vector2(304, 24));
+            spiritHdrBar.GetComponent<Image>().raycastTarget = false;
+
+            string hdrStr = isPlayerSide ? "COMMANDER SPIRIT (ALLY)" : "COMMANDER SPIRIT (FOE)";
+            Color hdrCol = isPlayerSide ? new Color(0.78f, 0.90f, 1.0f) : new Color(0.95f, 0.72f, 0.74f);
+            var hdr = CreateText(spiritHdrBar.transform, "LeaderSlotHeader", hdrStr, 10,
+                hdrCol, TextAnchor.MiddleLeft, new Vector2(isPlayerSide ? -14f : 0f, 0f), new Vector2(260, 20));
             AddTextShadow(hdr);
 
-            float cardH = isPlayerSide ? 154f : 140f;
-            var cardObj = CreatePanel(panel.transform, cardBtnName, new Color(0.04f, 0.05f, 0.08f, 0.98f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-88, -11), new Vector2(114, cardH));
-            var cardOut = cardObj.AddComponent<Outline>();
-            cardOut.effectColor = outlineCol;
-            cardOut.effectDistance = new Vector2(1.5f, 1.5f);
+            if (isPlayerSide)
+            {
+                CreateBeveledButton(spiritHdrBar.transform, "TestCycleSpiritBtn", "⟳",
+                    new Color(0.14f, 0.24f, 0.36f, 0.95f), new Color(0.88f, 0.94f, 1f),
+                    new Vector2(132, 0), new Vector2(24, 20), 11,
+                    () => { if (BattleUIManager.Instance != null) BattleUIManager.Instance.OnTestCycleSpiritClicked(); });
+            }
+
+            // Center-Left Circular Commander Spirit Anchor (x = -80, y = -10)
+            Vector2 circleCenter = new Vector2(-80f, -10f);
+            var circleAnchor = new GameObject("SpiritCircleRoot");
+            circleAnchor.transform.SetParent(panel.transform, false);
+            var circleAnchorRt = circleAnchor.AddComponent<RectTransform>();
+            circleAnchorRt.anchorMin = new Vector2(0.5f, 0.5f);
+            circleAnchorRt.anchorMax = new Vector2(0.5f, 0.5f);
+            circleAnchorRt.anchoredPosition = circleCenter;
+            circleAnchorRt.sizeDelta = new Vector2(148f, 148f);
+
+            // Outer Rotating Arcane Rune Ring
+            var runeObj = new GameObject("SpiritRuneRing");
+            runeObj.transform.SetParent(circleAnchor.transform, false);
+            var runeRt = runeObj.AddComponent<RectTransform>();
+            runeRt.anchorMin = new Vector2(0.5f, 0.5f);
+            runeRt.anchorMax = new Vector2(0.5f, 0.5f);
+            runeRt.sizeDelta = new Vector2(142f, 142f);
+            var runeImg = runeObj.AddComponent<Image>();
+            runeImg.sprite = GetSummoningCircleSprite();
+            runeImg.color = isPlayerSide ? new Color(0.28f, 0.76f, 1.0f, 0.45f) : new Color(0.95f, 0.32f, 0.32f, 0.45f);
+            runeImg.raycastTarget = false;
+
+            // Masked Circular Card Surface (122 x 122) — True Circle, Zero Square Corners
+            var cardObj = CreateCirclePanel(circleAnchor.transform, cardBtnName, new Color(0.04f, 0.05f, 0.09f, 0.98f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(122f, 122f));
+            var circleMask = cardObj.AddComponent<Mask>();
+            circleMask.showMaskGraphic = true;
             var cardBtn = cardObj.AddComponent<Button>();
             cardBtn.targetGraphic = cardObj.GetComponent<Image>();
 
-            // Empty placeholder inset
-            var emptyGrp = CreatePanel(cardObj.transform, "EmptyGroup", new Color(0.06f, 0.07f, 0.10f, 0.95f),
-                Vector2.zero, Vector2.one, Vector2.zero, new Vector2(-8, -8));
+            // Empty Seal Interior (subtle crest + summon label)
+            var emptyGrp = CreateCirclePanel(cardObj.transform, "EmptyGroup", new Color(0.05f, 0.06f, 0.10f, 0.96f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(114f, 114f));
             emptyGrp.GetComponent<Image>().raycastTarget = false;
-            var emptyTxt = CreateText(emptyGrp.transform, "EmptyLabel",
-                isPlayerSide ? "EMPTY\nLEADER\n(Drag / Play)" : "EMPTY\nLEADER", 10,
-                isPlayerSide ? new Color(0.56f, 0.64f, 0.74f) : new Color(0.58f, 0.44f, 0.48f),
-                TextAnchor.MiddleCenter, Vector2.zero, new Vector2(100, 80));
-            emptyTxt.raycastTarget = false;
 
-            // Summoned Leader Art Layer
+            var emptyCrest = CreatePanel(emptyGrp.transform, "EmptySpiritCrest",
+                isPlayerSide ? new Color(0.26f, 0.68f, 0.96f, 0.26f) : new Color(0.92f, 0.28f, 0.32f, 0.26f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(88f, 88f));
+            emptyCrest.GetComponent<Image>().sprite = GetSpiritCrestSprite();
+            emptyCrest.GetComponent<Image>().raycastTarget = false;
+
+            var emptyTxt = CreateText(emptyGrp.transform, "EmptyLabel",
+                isPlayerSide ? "SUMMON\nCOMMANDER\nSPIRIT" : "NO\nSPIRIT", 10,
+                isPlayerSide ? new Color(0.68f, 0.84f, 0.98f) : new Color(0.84f, 0.56f, 0.60f),
+                TextAnchor.MiddleCenter, Vector2.zero, new Vector2(96, 76));
+            emptyTxt.raycastTarget = false;
+            AddTextShadow(emptyTxt);
+
+            // Summoned Spirit Circular Art Layer (automatically cropped circularly by Mask above)
             var artObj = new GameObject("LeaderCardArt");
             artObj.transform.SetParent(cardObj.transform, false);
             var artRt = artObj.AddComponent<RectTransform>();
             artRt.anchorMin = Vector2.zero;
             artRt.anchorMax = Vector2.one;
-            artRt.sizeDelta = new Vector2(-6, -6);
+            artRt.sizeDelta = new Vector2(-4f, -4f);
             var artImg = artObj.AddComponent<Image>();
             artImg.preserveAspect = false;
             artImg.raycastTarget = false;
             artObj.SetActive(false);
 
-            // Top-right Cost Badge
-            var costOrb = CreateCirclePanel(cardObj.transform, "LeaderCostBadge", new Color(0.12f, 0.30f, 0.58f, 0.96f),
-                new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-16, -16), new Vector2(24, 24));
+            // Sculpted Circular Metallic Bezel Rim OVER the circle mask
+            var rimObj = new GameObject("SpiritCircularRim");
+            rimObj.transform.SetParent(circleAnchor.transform, false);
+            var rimRt = rimObj.AddComponent<RectTransform>();
+            rimRt.anchorMin = new Vector2(0.5f, 0.5f);
+            rimRt.anchorMax = new Vector2(0.5f, 0.5f);
+            rimRt.sizeDelta = new Vector2(132f, 132f);
+            var rimImg = rimObj.AddComponent<Image>();
+            rimImg.sprite = GetCircularSpiritRimSprite();
+            rimImg.color = isPlayerSide ? new Color(0.32f, 0.80f, 1.0f, 0.95f) : new Color(0.96f, 0.34f, 0.34f, 0.95f);
+            rimImg.raycastTarget = false;
+
+            // Circular Cost Badge perched on the top-right curve of the circular medallion (outside Mask)
+            var costOrb = CreateCirclePanel(circleAnchor.transform, "LeaderCostBadge", new Color(0.12f, 0.32f, 0.64f, 0.98f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(44f, 44f), new Vector2(26f, 26f));
+            costOrb.GetComponent<Image>().raycastTarget = false;
             var costTxt = CreateText(costOrb.transform, "CostText", "0", 12,
-                new Color(0.92f, 0.96f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(24, 24));
+                new Color(0.94f, 0.98f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(24, 24));
             costTxt.raycastTarget = false;
+            AddTextShadow(costTxt);
             costTxt.gameObject.SetActive(false);
             costOrb.SetActive(false);
 
-            // Right Info Column
-            var nameTxt = CreateText(panel.transform, "LeaderNameText", isPlayerSide ? "No Leader Summoned" : "No Enemy Leader", 12,
-                isPlayerSide ? new Color(0.84f, 0.92f, 1f) : new Color(0.88f, 0.68f, 0.70f),
-                TextAnchor.MiddleLeft, new Vector2(64, 42), new Vector2(170, 24));
+            // Subtle dark legibility veil on the right side so Spirit Name/Text pops crisply in front of the flame glow
+            var rightBackdrop = CreatePanel(panel.transform, "SpiritTextBackdrop", new Color(0.03f, 0.04f, 0.07f, 0.42f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(70f, -12f), new Vector2(166f, height - 48f));
+            rightBackdrop.GetComponent<Image>().raycastTarget = false;
+
+            // Right Info Column (x = +70, width 158)
+            var nameTxt = CreateText(panel.transform, "LeaderNameText", isPlayerSide ? "No Commander Spirit" : "No Enemy Spirit", 12,
+                isPlayerSide ? new Color(0.86f, 0.94f, 1f) : new Color(0.95f, 0.72f, 0.74f),
+                TextAnchor.MiddleLeft, new Vector2(70f, 68f), new Vector2(158f, 34f));
             nameTxt.fontStyle = FontStyle.Bold;
+            nameTxt.horizontalOverflow = HorizontalWrapMode.Wrap;
+            nameTxt.verticalOverflow = VerticalWrapMode.Truncate;
+            nameTxt.resizeTextForBestFit = true;
+            nameTxt.resizeTextMinSize = 10;
+            nameTxt.resizeTextMaxSize = 12;
             AddTextShadow(nameTxt);
 
-            Text tribeTxt = null;
-            if (isPlayerSide)
-            {
-                tribeTxt = CreateText(panel.transform, "LeaderTribeText", "Passive Side Aura Slot", 10,
-                    new Color(0.64f, 0.76f, 0.88f), TextAnchor.MiddleLeft, new Vector2(64, 20), new Vector2(170, 18));
-            }
+            // Category Color Pill Badge
+            var catPill = CreateOrnatePanel(panel.transform, "SpiritCategoryPill", new Color(0.07f, 0.11f, 0.18f, 0.94f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(70f, 38f), new Vector2(158f, 22f));
+            var catPillOut = catPill.AddComponent<Outline>();
+            catPillOut.effectColor = new Color(0.32f, 0.68f, 0.96f, 0.75f);
+            catPillOut.effectDistance = new Vector2(1f, 1f);
+            var tribeTxt = CreateText(catPill.transform, "LeaderTribeText", "✧ COMMANDER SEAL", 9,
+                new Color(0.74f, 0.88f, 1.0f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(150f, 18f));
+            tribeTxt.raycastTarget = false;
+            AddTextShadow(tribeTxt);
 
             var descTxt = CreateText(panel.transform, "LeaderDescText",
-                isPlayerSide ? "Drag or play a Leader card into this side slot." : "Side passive zone (Not targetable by lane attacks).", 10,
-                new Color(0.80f, 0.84f, 0.90f), TextAnchor.UpperLeft, new Vector2(64, isPlayerSide ? -32f : -16f), new Vector2(170, isPlayerSide ? 78f : 72f));
+                isPlayerSide
+                    ? "Summon a Commander Spirit card into this circular altar to ignite its category aura."
+                    : "Enemy Commander Spirit circular seal (Protected passive aura zone).", 10,
+                new Color(0.86f, 0.90f, 0.96f), TextAnchor.UpperLeft, new Vector2(70f, -24f), new Vector2(158f, 92f));
             descTxt.horizontalOverflow = HorizontalWrapMode.Wrap;
             descTxt.verticalOverflow = VerticalWrapMode.Truncate;
+            descTxt.resizeTextForBestFit = true;
+            descTxt.resizeTextMinSize = 8;
+            descTxt.resizeTextMaxSize = 10;
+            AddTextShadow(descTxt);
 
-            if (!isPlayerSide)
-            {
-                var passiveBadge = CreatePanel(panel.transform, "PassiveZoneBadge", new Color(0.16f, 0.08f, 0.10f, 0.95f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(64, -66), new Vector2(170, 22));
-                var pTxt = CreateText(passiveBadge.transform, "PassiveText", "PASSIVE • SIDE ZONE", 9,
-                    new Color(0.82f, 0.64f, 0.66f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(162, 18));
-                pTxt.raycastTarget = false;
-            }
+            var passiveBadge = CreatePanel(panel.transform, "PassiveZoneBadge",
+                isPlayerSide ? new Color(0.08f, 0.14f, 0.22f, 0.94f) : new Color(0.18f, 0.08f, 0.10f, 0.94f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(70f, -(height * 0.5f) + 22f), new Vector2(158f, 20f));
+            var pTxt = CreateText(passiveBadge.transform, "PassiveText", "PASSIVE • SPIRIT ALTAR", 9,
+                isPlayerSide ? new Color(0.72f, 0.88f, 1.0f) : new Color(0.90f, 0.68f, 0.70f),
+                TextAnchor.MiddleCenter, Vector2.zero, new Vector2(152f, 18f));
+            pTxt.raycastTarget = false;
+
+            // Attach Living Flame & Category Theme Controller
+            var spiritCtrl = panel.AddComponent<CommanderSpiritSlotController>();
+            spiritCtrl.isPlayerSide = isPlayerSide;
+            spiritCtrl.slotButton = cardBtn;
+            spiritCtrl.circleRoot = circleAnchorRt;
+            spiritCtrl.flameCoronaGlow = flameCoronaImg;
+            spiritCtrl.flamePlumePrimary = flamePrimaryImg;
+            spiritCtrl.flamePlumeSecondary = flameSecondaryImg;
+            spiritCtrl.flameSparks = sparkRects;
+            spiritCtrl.flameSparkImages = sparkImgs;
+            spiritCtrl.outerRuneRing = runeImg;
+            spiritCtrl.circularRim = rimImg;
+            spiritCtrl.categoryPillBg = catPill.GetComponent<Image>();
+            spiritCtrl.categoryPillText = tribeTxt;
+            spiritCtrl.panelTintOverlay = panelTintImg;
+            spiritCtrl.SetCategoryTheme(null);
 
             if (isPlayerSide)
             {
@@ -751,6 +1016,7 @@ namespace MonsterCardGame.UI
                 ui.playerLeaderNameText = nameTxt;
                 ui.playerLeaderTribeText = tribeTxt;
                 ui.playerLeaderDescText = descTxt;
+                ui.playerSpiritController = spiritCtrl;
             }
             else
             {
@@ -760,6 +1026,7 @@ namespace MonsterCardGame.UI
                 ui.enemyLeaderCostText = costTxt;
                 ui.enemyLeaderNameText = nameTxt;
                 ui.enemyLeaderDescText = descTxt;
+                ui.enemySpiritController = spiritCtrl;
             }
         }
 
@@ -1051,7 +1318,7 @@ namespace MonsterCardGame.UI
                 ui.enemyPowerText.resizeTextMaxSize = 11;
                 AddTextShadow(ui.enemyPowerText);
 
-                ui.enemyHandCountText = CreateText(statusBox.transform, "EnemyHandLabel", "🎴 Hand: 6  |  Deck: 44", 10,
+                ui.enemyHandCountText = CreateText(statusBox.transform, "EnemyHandLabel", "🎴 Hand: 6/7  |  Deck: 44", 10,
                     new Color(0.84f, 0.85f, 0.92f), TextAnchor.MiddleCenter, new Vector2(0, -11), new Vector2(196, 18));
                 ui.enemyHandCountText.horizontalOverflow = HorizontalWrapMode.Wrap;
                 ui.enemyHandCountText.resizeTextForBestFit = true;
@@ -1096,9 +1363,9 @@ namespace MonsterCardGame.UI
                     Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             }
 
-            // 2. 6 Subtle Recessed Card Bays across the matte hand dock
-            float[] dockX = { -420f, -252f, -84f, 84f, 252f, 420f };
-            for (int k = 0; k < 6; k++)
+            // 2. 7 Left-to-Right Recessed Card Bays (Max Hand Size = 7) across the 1200x196 matte hand dock
+            float[] dockX = { -474f, -316f, -158f, 0f, 158f, 316f, 474f };
+            for (int k = 0; k < dockX.Length; k++)
             {
                 var bay = CreatePanel(dock.transform, $"{prefix}CardBay_{k}",
                     new Color(0.02f, 0.02f, 0.04f, 0.30f),
@@ -1110,7 +1377,7 @@ namespace MonsterCardGame.UI
                 bayOutline.effectDistance = new Vector2(1.0f, 1.0f);
             }
 
-            // 3. Dynamic Cards Container with HorizontalLayoutGroup (Identical card sizes 138x182)
+            // 3. Left-Aligned Dynamic Cards Container (Identical card sizes 138x182; new draws pack from left)
             var cardsContainer = new GameObject(isPlayerSide ? "CardsContainer" : "EnemyCardsContainer");
             cardsContainer.transform.SetParent(dock.transform, false);
             var rectCC = cardsContainer.AddComponent<RectTransform>();
@@ -1121,10 +1388,13 @@ namespace MonsterCardGame.UI
             rectCC.anchoredPosition = Vector2.zero;
 
             var layout = cardsContainer.AddComponent<HorizontalLayoutGroup>();
-            layout.spacing = 30;
-            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.padding = new RectOffset(27, 27, 0, 0);
+            layout.spacing = 20;
+            layout.childAlignment = TextAnchor.MiddleLeft;
             layout.childControlWidth = false;
             layout.childControlHeight = false;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = false;
 
             if (isPlayerSide)
             {
@@ -1830,6 +2100,163 @@ namespace MonsterCardGame.UI
             tex.Apply();
             _mirageWaveSweepSprite = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f));
             return _mirageWaveSweepSprite;
+        }
+
+        public static Sprite GetCircularSpiritRimSprite()
+        {
+            if (_circularSpiritRimSprite != null) return _circularSpiritRimSprite;
+
+            int size = 192;
+            Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Bilinear;
+            float c = (size - 1) * 0.5f;
+            float maxR = size * 0.49f;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float nx = (x - c) / maxR;
+                    float ny = (y - c) / maxR;
+                    float r = Mathf.Sqrt(nx * nx + ny * ny);
+                    if (r < 0.72f || r > 0.99f)
+                    {
+                        tex.SetPixel(x, y, Color.clear);
+                        continue;
+                    }
+
+                    // Double sculpted ring with glowing inner & outer bezel edges and 4 compass prongs
+                    float innerEdge = Mathf.Exp(-Mathf.Pow((r - 0.785f) * 26f, 2f));
+                    float midBand = Mathf.Clamp01((r - 0.76f) * 14f) * Mathf.Clamp01((0.92f - r) * 14f);
+                    float outerEdge = Mathf.Exp(-Mathf.Pow((r - 0.905f) * 24f, 2f));
+                    float haloGlow = Mathf.Exp(-Mathf.Pow((r - 0.93f) * 14f, 2f)) * 0.55f;
+
+                    float angle = Mathf.Atan2(ny, nx);
+                    float prongPattern = Mathf.Pow(Mathf.Abs(Mathf.Cos(angle * 2f)), 18f);
+                    float prongs = prongPattern * Mathf.Clamp01((r - 0.77f) * 16f) * Mathf.Clamp01((0.97f - r) * 16f) * 0.85f;
+
+                    float bevelShade = Mathf.Lerp(0.32f, 1.0f, Mathf.Clamp01(innerEdge * 0.85f + outerEdge * 0.95f + prongs * 0.75f));
+                    float alpha = Mathf.Clamp01(midBand * 0.92f + innerEdge * 0.88f + outerEdge * 0.95f + haloGlow + prongs);
+                    tex.SetPixel(x, y, new Color(bevelShade, bevelShade, bevelShade, alpha));
+                }
+            }
+
+            tex.Apply();
+            _circularSpiritRimSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+            return _circularSpiritRimSprite;
+        }
+
+        public static Sprite GetRightwardFlameGlowSprite()
+        {
+            if (_rightwardFlameGlowSprite != null) return _rightwardFlameGlowSprite;
+
+            int w = 256, h = 128;
+            Texture2D tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Bilinear;
+
+            for (int y = 0; y < h; y++)
+            {
+                float v = y / (float)(h - 1);
+                float dy = v - 0.50f;
+                float edgeV = Mathf.Clamp01((0.49f - Mathf.Abs(dy)) / 0.14f);
+                edgeV = edgeV * edgeV * (3f - 2f * edgeV);
+
+                for (int x = 0; x < w; x++)
+                {
+                    float u = x / (float)(w - 1);
+                    float dx = (u - 0.255f) * 2.0f; // aspect-normalized distance from circular medallion center
+                    float r = Mathf.Sqrt(dx * dx + dy * dy);
+
+                    // Soft circular ember rim hugging around the circular card
+                    float circleHalo = Mathf.Exp(-Mathf.Pow((r - 0.39f) * 5.2f, 2f)) * 0.78f;
+
+                    float plume = 0f;
+                    float core = 0f;
+                    if (dx >= -0.22f)
+                    {
+                        float along = Mathf.Clamp01((dx + 0.08f) / 1.54f);
+                        float wave1 = Mathf.Sin(dx * 6.8f + dy * 10.5f) * 0.13f;
+                        float wave2 = Mathf.Cos(dx * 11.2f - dy * 14.0f) * 0.08f;
+                        float flameWick = (wave1 + wave2) * Mathf.Clamp01(along * 2.4f);
+                        float spread = Mathf.Max(0.11f, 0.45f * (1f - along * 0.65f) + flameWick);
+
+                        float streakTex = 0.76f + 0.24f * Mathf.Sin(dy * 24f - dx * 5.5f);
+                        float envelope = Mathf.Pow(Mathf.Clamp01(1f - along), 1.30f);
+                        plume = Mathf.Exp(-Mathf.Pow(dy / spread, 2.0f)) * envelope * streakTex * 0.88f;
+
+                        // Focused hotter core trailing right off the eastern semicircle
+                        core = Mathf.Exp(-Mathf.Pow(dy / Mathf.Max(0.08f, spread * 0.48f), 2.0f)) * Mathf.Pow(Mathf.Clamp01(1f - along), 2.2f) * 0.65f;
+                    }
+
+                    float edgeU = Mathf.Clamp01((u - 0.01f) / 0.10f) * Mathf.Clamp01((0.99f - u) / 0.16f);
+                    float alpha = Mathf.Clamp01((circleHalo + plume) * edgeV * edgeU);
+                    float lum = Mathf.Clamp01(0.74f + core * 0.32f + circleHalo * 0.20f);
+                    tex.SetPixel(x, y, new Color(lum, lum * 0.96f, lum * 0.94f, alpha));
+                }
+            }
+
+            tex.Apply();
+            _rightwardFlameGlowSprite = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f));
+            return _rightwardFlameGlowSprite;
+        }
+
+        public static Sprite GetSpiritCrestSprite()
+        {
+            if (_spiritCrestSprite != null) return _spiritCrestSprite;
+
+            int size = 128;
+            Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Bilinear;
+            float c = (size - 1) * 0.5f;
+            float maxR = size * 0.46f;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float nx = (x - c) / maxR;
+                    float ny = (y - c) / maxR;
+                    float r = Mathf.Sqrt(nx * nx + ny * ny);
+                    if (r > 1.0f)
+                    {
+                        tex.SetPixel(x, y, Color.clear);
+                        continue;
+                    }
+
+                    // Stylized ethereal hooded spirit crest + swirling spectral flame cloak
+                    float crownY = ny - 0.32f;
+                    float headDist = Mathf.Sqrt(nx * nx * 1.45f + crownY * crownY * 1.25f);
+                    float headGlow = Mathf.Clamp01((0.30f - headDist) * 7f);
+
+                    // Cloak body widening cleanly toward shoulders & tapering downward into twin wisps
+                    float cloakW = 0.24f + Mathf.Clamp01((0.36f - ny) * 0.85f) * 0.30f;
+                    float taper = Mathf.Clamp01((ny + 0.68f) * 3.5f);
+                    float wispTail = Mathf.Sin(ny * 8f + nx * 5f) * 0.06f * Mathf.Clamp01(-ny);
+                    float cloakDist = Mathf.Abs(nx + wispTail) / cloakW;
+                    float cloakMask = (ny <= 0.42f && ny >= -0.70f)
+                        ? Mathf.Clamp01((1.0f - cloakDist) * 4.5f) * taper
+                        : 0f;
+
+                    // Subtle glowing eye slits
+                    float eyeL = Mathf.Sqrt(Mathf.Pow((nx + 0.11f) * 2.2f, 2f) + Mathf.Pow((ny - 0.30f) * 3.8f, 2f));
+                    float eyeR = Mathf.Sqrt(Mathf.Pow((nx - 0.11f) * 2.2f, 2f) + Mathf.Pow((ny - 0.30f) * 3.8f, 2f));
+                    float eyeCut = Mathf.Clamp01((Mathf.Min(eyeL, eyeR) - 0.12f) * 14f);
+
+                    // Outer swirling flame wisp halo
+                    float angle = Mathf.Atan2(ny, nx);
+                    float halo = Mathf.Exp(-Mathf.Pow((r - 0.72f + Mathf.Sin(angle * 3f) * 0.06f) * 7.5f, 2f)) * 0.55f;
+
+                    float body = Mathf.Max(headGlow, cloakMask) * Mathf.Lerp(0.35f, 1.0f, eyeCut);
+                    float eyeGlow = (1f - eyeCut) * headGlow * 1.0f;
+                    float alpha = Mathf.Clamp01((body * 0.85f + halo + eyeGlow) * Mathf.Clamp01((1.0f - r) * 5f));
+                    float shade = Mathf.Clamp01(0.75f + eyeGlow * 0.25f + halo * 0.2f);
+                    tex.SetPixel(x, y, new Color(shade, shade, shade, alpha));
+                }
+            }
+
+            tex.Apply();
+            _spiritCrestSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+            return _spiritCrestSprite;
         }
 
         public static Sprite GetAbilityFlashCoreSprite()

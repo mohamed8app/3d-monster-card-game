@@ -535,6 +535,107 @@ namespace MonsterCardGame.Utils
             };
         }
 
+        public static Color GetSpiritCategoryColor(CardData spirit, bool isPlayerFallback = true)
+        {
+            if (spirit == null)
+            {
+                return isPlayerFallback
+                    ? new Color(0.24f, 0.76f, 1.00f)
+                    : new Color(0.96f, 0.28f, 0.28f);
+            }
+
+            string tribe = (spirit.tribe ?? "").Trim().ToLowerInvariant();
+            switch (tribe)
+            {
+                case "ghosts":
+                case "ghost":
+                    return new Color(0.28f, 0.92f, 1.00f); // Spectral Ectoplasm Cyan
+                case "demons":
+                case "demon":
+                    return new Color(1.00f, 0.22f, 0.26f); // Hellfire Abyssal Crimson
+                case "celestials":
+                case "celestial":
+                    return new Color(1.00f, 0.88f, 0.34f); // Radiant Solar Gold
+                case "mages":
+                case "mage":
+                    return new Color(0.78f, 0.36f, 1.00f); // Arcane Mystic Violet
+                case "warriors":
+                case "warrior":
+                    return new Color(1.00f, 0.44f, 0.14f); // Blazing Battle Orange-Flame
+                case "beasts":
+                case "beast":
+                    return new Color(0.96f, 0.64f, 0.18f); // Feral Savage Amber
+                case "elves":
+                case "elf":
+                    return new Color(0.24f, 0.96f, 0.62f); // Sylvan Emerald Flame
+                case "dwarves":
+                case "dwarf":
+                    return new Color(0.92f, 0.56f, 0.22f); // Molten Forge Copper
+                case "giants":
+                case "giant":
+                    return new Color(0.86f, 0.48f, 0.24f); // Tectonic Magma Ochre
+                case "insects":
+                case "insect":
+                    return new Color(0.48f, 0.96f, 0.24f); // Venomous Neon Jade
+            }
+
+            if (!string.IsNullOrEmpty(spirit.element))
+            {
+                return GetElementColor(spirit.element);
+            }
+
+            return isPlayerFallback
+                ? new Color(0.24f, 0.76f, 1.00f)
+                : new Color(0.96f, 0.28f, 0.28f);
+        }
+
+        public static Color GetSpiritCategorySecondaryColor(CardData spirit, bool isPlayerFallback = true)
+        {
+            if (spirit == null)
+            {
+                return isPlayerFallback
+                    ? new Color(0.38f, 0.46f, 1.00f)
+                    : new Color(1.00f, 0.48f, 0.16f);
+            }
+
+            string tribe = (spirit.tribe ?? "").Trim().ToLowerInvariant();
+            return tribe switch
+            {
+                "ghosts" or "ghost" => new Color(0.56f, 0.36f, 1.00f),
+                "demons" or "demon" => new Color(1.00f, 0.52f, 0.12f),
+                "celestials" or "celestial" => new Color(1.00f, 0.68f, 0.22f),
+                "mages" or "mage" => new Color(0.36f, 0.72f, 1.00f),
+                "warriors" or "warrior" => new Color(1.00f, 0.20f, 0.16f),
+                "beasts" or "beast" => new Color(0.42f, 0.88f, 0.28f),
+                "elves" or "elf" => new Color(0.36f, 0.85f, 1.00f),
+                "dwarves" or "dwarf" => new Color(1.00f, 0.36f, 0.14f),
+                "giants" or "giant" => new Color(0.96f, 0.28f, 0.18f),
+                "insects" or "insect" => new Color(0.20f, 0.86f, 0.68f),
+                _ => Color.Lerp(GetSpiritCategoryColor(spirit, isPlayerFallback), new Color(1f, 0.55f, 0.25f), 0.22f)
+            };
+        }
+
+        public static string FormatSpiritTitle(CardData spirit)
+        {
+            if (spirit == null) return "Commander Spirit";
+            bool hasCustomName = !string.IsNullOrEmpty(spirit.name) && !int.TryParse(spirit.name.Trim(), out _);
+            if (hasCustomName)
+            {
+                return spirit.name.IndexOf("Spirit", System.StringComparison.OrdinalIgnoreCase) >= 0
+                    ? spirit.name
+                    : $"Spirit: {spirit.name}";
+            }
+            if (!string.IsNullOrEmpty(spirit.tribe))
+            {
+                return $"Commander Spirit: {spirit.tribe}";
+            }
+            if (!string.IsNullOrEmpty(spirit.element))
+            {
+                return $"Commander Spirit: {spirit.element}";
+            }
+            return $"Commander Spirit #{spirit.id}";
+        }
+
         public static Color GetEnvironmentAtmosphereColor(string element)
         {
             return element switch

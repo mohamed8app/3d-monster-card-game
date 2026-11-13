@@ -145,7 +145,7 @@ namespace MonsterCardGame.Core
                 {
                     if (oppM.HasPassiveSubstr("Earth Steadfastness") == null)
                     {
-                        if (opponent.hand.Count < 10) opponent.hand.Add(oppM.data);
+                        opponent.AddCardToHandWithBurnLimit(oppM.data);
                         oppSlot.ClearSlot();
                     }
                 }
@@ -702,7 +702,7 @@ namespace MonsterCardGame.Core
                 }
                 if (BattleUIManager.Instance != null)
                 {
-                    BattleUIManager.Instance.LogCombatMessage(msg);
+                    BattleUIManager.Instance.LogCombatMessage(msg, m.data);
                 }
                 return true;
             }
@@ -1107,7 +1107,7 @@ namespace MonsterCardGame.Core
                     if (best.currentMonster.HasPassiveSubstr("Earth Steadfastness") == null)
                     {
                         if (showVfx) SpawnSlotStatusVfx(oppIsHuman, best.slotIndex, "🌪️ BOUNCED!", new Color(0.5f, 0.95f, 0.8f));
-                        if (opponent.hand.Count < 10) opponent.hand.Add(best.currentMonster.data);
+                        opponent.AddCardToHandWithBurnLimit(best.currentMonster.data);
                         best.ClearSlot();
                     }
                     else

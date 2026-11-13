@@ -182,11 +182,13 @@ namespace MonsterCardGame.Core
             humanPlayer.getCardDrawWeightMultiplier = GetCardPityWeight;
             humanPlayer.onCardDrawnCallback = RecordCardDrawnForPity;
             humanPlayer.onCardDrawnToHand = (p, c) => BattleUIManager.Instance?.NotifyCardDrawn(true, c);
+            humanPlayer.onOldestCardBurned = (p, burned, incoming) => BattleUIManager.Instance?.NotifyOldestCardBurned(true, burned, incoming);
 
             aiPlayer.onDeckExhaustedRefill = RefillPlayerDeck;
             aiPlayer.getCardDrawWeightMultiplier = GetCardPityWeight;
             aiPlayer.onCardDrawnCallback = null;
             aiPlayer.onCardDrawnToHand = (p, c) => BattleUIManager.Instance?.NotifyCardDrawn(false, c);
+            aiPlayer.onOldestCardBurned = (p, burned, incoming) => BattleUIManager.Instance?.NotifyOldestCardBurned(false, burned, incoming);
 
             BattleUIManager.Instance?.ClearFlightAnimations();
 
@@ -681,7 +683,7 @@ namespace MonsterCardGame.Core
             if (BattleUIManager.Instance != null)
             {
                 BattleUIManager.Instance.ShowSpellBanner(spellCard, caster.playerName);
-                BattleUIManager.Instance.LogCombatMessage($"🔮 [{caster.playerName}] cast Spell #{spellCard.name} ({spellCard.cost}💧): {spellCard.description}");
+                BattleUIManager.Instance.LogCombatMessage($"🔮 [{caster.playerName}] cast Spell #{spellCard.name} ({spellCard.cost}💧): {spellCard.description}", spellCard);
             }
 
             int val = Mathf.Max(10, spellCard.spellPower);
@@ -957,10 +959,11 @@ namespace MonsterCardGame.Core
                                 fallenMonster = g;
                         }
                     }
-                    if (fallenMonster != null && caster.hand.Count < 10)
+                    if (fallenMonster != null)
                     {
                         caster.graveyard.Remove(fallenMonster);
-                        caster.hand.Add(fallenMonster);
+                        caster.AddCardToHandWithBurnLimit(fallenMonster);
+                        caster.onCardDrawnToHand?.Invoke(caster, fallenMonster);
                     }
                     else
                     {
@@ -1140,7 +1143,7 @@ namespace MonsterCardGame.Core
                 if (BattleUIManager.Instance != null)
                 {
                     BattleUIManager.Instance.ShowEnvironmentBanner(activeEnvironment, player.playerName);
-                    BattleUIManager.Instance.LogCombatMessage($"⚡ [{activeEnvironment.name}] escalated to Level {activeEnvironment.level} ({activeEnvironment.turnsRemaining} turns remaining)!");
+                    BattleUIManager.Instance.LogCombatMessage($"⚡ [{activeEnvironment.name}] escalated to Level {activeEnvironment.level} ({activeEnvironment.turnsRemaining} turns remaining)!", activeEnvironmentCard);
                 }
             }
             else
@@ -1151,7 +1154,7 @@ namespace MonsterCardGame.Core
                 if (BattleUIManager.Instance != null)
                 {
                     BattleUIManager.Instance.ShowEnvironmentBanner(activeEnvironment, player.playerName);
-                    BattleUIManager.Instance.LogCombatMessage($"🌍 [{player.playerName}] shifted shared battlefield environment to [{activeEnvironment.name}] (Level 1)! Buffs {activeEnvironment.buffedElement} by +30%.");
+                    BattleUIManager.Instance.LogCombatMessage($"🌍 [{player.playerName}] shifted shared battlefield environment to [{activeEnvironment.name}] (Level 1)! Buffs {activeEnvironment.buffedElement} by +30%.", envCard);
                 }
             }
 
@@ -1176,12 +1179,14 @@ namespace MonsterCardGame.Core
                             string.Equals(leaderCard.card_type, "leader", StringComparison.OrdinalIgnoreCase);
             if (!isLeader) return false;
 
+            string spiritTitle = MonsterArtLoader.FormatSpiritTitle(leaderCard);
+
             if (leaderCard.cost > player.currentMana)
             {
                 MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
                 if (BattleUIManager.Instance != null)
                 {
-                    BattleUIManager.Instance.LogCombatMessage($"❌ Not enough Mana to deploy Leader [{leaderCard.name}]! (Req: {leaderCard.cost}💧, Avail: {player.currentMana}💧)");
+                    BattleUIManager.Instance.LogCombatMessage($"❌ Not enough Mana to summon Commander Spirit [{spiritTitle}]! (Req: {leaderCard.cost}💧, Avail: {player.currentMana}💧)", leaderCard);
                 }
                 return false;
             }
@@ -1200,9 +1205,14 @@ namespace MonsterCardGame.Core
             if (BattleUIManager.Instance != null)
             {
                 string who = (player == humanPlayer) ? "You" : "Enemy";
-                BattleUIManager.Instance.LogCombatMessage($"👑 [{who}] deployed Side Leader [{leaderCard.name}] to Leader Slot!");
-                BattleUIManager.Instance.ShowBanner($"👑 LEADER DEPLOYED: {leaderCard.name}", new Color(0.75f, 0.85f, 0.96f));
+                Color spiritColor = MonsterArtLoader.GetSpiritCategoryColor(leaderCard, player == humanPlayer);
+                BattleUIManager.Instance.LogCombatMessage($"🔥 [{who}] summoned Commander Spirit [{spiritTitle}] to the Spirit Altar!", leaderCard);
+                BattleUIManager.Instance.ShowBanner($"🔥 SPIRIT SUMMONED: {spiritTitle}", spiritColor);
                 BattleUIManager.Instance.UpdateLeaderSlotsUI();
+                if (player == humanPlayer && BattleUIManager.Instance.playerSpiritController != null)
+                    BattleUIManager.Instance.playerSpiritController.TriggerSummonFlare();
+                else if (player != humanPlayer && BattleUIManager.Instance.enemySpiritController != null)
+                    BattleUIManager.Instance.enemySpiritController.TriggerSummonFlare();
                 BattleUIManager.Instance.UpdateUI();
             }
 
@@ -1484,6 +1494,7 @@ namespace MonsterCardGame.Core
 
             if (BattleUIManager.Instance != null)
             {
+                BattleUIManager.Instance.ClearCombatLog();
                 BattleUIManager.Instance.ClearFlightAnimations();
                 if (BattleUIManager.Instance.gameOverPanel != null)
                 {

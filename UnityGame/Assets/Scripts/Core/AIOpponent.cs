@@ -215,7 +215,7 @@ namespace MonsterCardGame.Core
 
                         if (ui != null)
                         {
-                            ui.LogCombatMessage($"👹 Enemy summoned [{card.name}] (-{card.cost} Mana | Left: {aiPlayer.currentMana}).");
+                            ui.LogCombatMessage($"👹 Enemy summoned [{card.name}] (-{card.cost} Mana | Left: {aiPlayer.currentMana}).", card);
                             ui.UpdateUI();
                             if (ui.enemySlotViews != null && bestSlot < ui.enemySlotViews.Length && ui.enemySlotViews[bestSlot] != null)
                             {

@@ -60,6 +60,7 @@
     <Compile Include="Assets\Scripts\UI\DraggableCard.cs" />
     <Compile Include="Assets\Scripts\Data\SpellDatabase.cs" />
     <Compile Include="Assets\Scripts\UI\AstralHourglassControl.cs" />
+    <Compile Include="Assets\Scripts\UI\CommanderSpiritSlotController.cs" />
     <Compile Include="Assets\Scripts\UI\CardPulseEffect.cs" />
     <Compile Include="Assets\Scripts\UI\CardView.cs" />
     <Compile Include="Assets\Scripts\UI\BattlefieldAtmosphereEngine.cs" />

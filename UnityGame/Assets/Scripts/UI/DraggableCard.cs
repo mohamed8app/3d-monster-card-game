@@ -319,7 +319,9 @@ namespace MonsterCardGame.UI
                 }
                 else if (cardData.cardType == CardType.Leader)
                 {
-                    if (hit.gameObject.name.Contains("PlayerLeaderSlot") || hit.gameObject.name.Contains("PlayerLeaderCardSlot"))
+                    if (hit.gameObject.name.Contains("PlayerLeaderSlot") ||
+                        hit.gameObject.name.Contains("PlayerLeaderCardSlot") ||
+                        hit.gameObject.name.Contains("PlayerSpirit"))
                     {
                         handled = TrySummonLeader();
                         if (handled) break;

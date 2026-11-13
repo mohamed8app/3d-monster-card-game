@@ -25,8 +25,10 @@ namespace MonsterCardGame.Core
         public int teamImmuneTurns = 0;
         public int freeSkillBonus = 0;
 
+        public const int DefaultMaxHandSize = 7;
+
         [Header("Card Collections")]
-        public int maxHandSize = 10;
+        public int maxHandSize = DefaultMaxHandSize;
         public List<CardData> deck = new List<CardData>();
         public List<CardData> hand = new List<CardData>();
         public List<CardData> graveyard = new List<CardData>();
@@ -52,6 +54,7 @@ namespace MonsterCardGame.Core
         public Func<int, float> getCardDrawWeightMultiplier;
         public Action<int> onCardDrawnCallback;
         public Action<PlayerState, CardData> onCardDrawnToHand;
+        public Action<PlayerState, CardData, CardData> onOldestCardBurned;
 
         public bool IsAlive => currentHp > 0;
 
@@ -179,6 +182,33 @@ namespace MonsterCardGame.Core
             }
         }
 
+        /// <summary>
+        /// Adds an incoming card to the end (newest/rightmost) of hand while enforcing maxHandSize.
+        /// If hand is already at capacity, burns the oldest card (index 0, leftmost) to graveyard first.
+        /// </summary>
+        public CardData AddCardToHandWithBurnLimit(CardData incomingCard)
+        {
+            if (incomingCard == null) return null;
+
+            int cap = maxHandSize > 0 ? maxHandSize : DefaultMaxHandSize;
+            CardData lastBurned = null;
+
+            while (hand.Count >= cap && hand.Count > 0)
+            {
+                lastBurned = hand[0];
+                hand.RemoveAt(0);
+                if (lastBurned != null)
+                {
+                    graveyard.Add(lastBurned);
+                    onOldestCardBurned?.Invoke(this, lastBurned, incomingCard);
+                    Debug.Log($"🔥 [{playerName}] Hand limit ({cap}) exceeded! Burned oldest card [{lastBurned.name}] to graveyard for [{incomingCard.name}].");
+                }
+            }
+
+            hand.Add(incomingCard);
+            return lastBurned;
+        }
+
         public bool DrawCard()
         {
             if (deck.Count == 0 && onDeckExhaustedRefill != null)
@@ -228,27 +258,18 @@ namespace MonsterCardGame.Core
 
                 onCardDrawnCallback?.Invoke(card.id);
 
-                if (hand.Count < maxHandSize)
+                AddCardToHandWithBurnLimit(card);
+                onCardDrawnToHand?.Invoke(this, card);
+                if (MonsterCardGame.Audio.SoundManager.Instance != null)
                 {
-                    hand.Add(card);
-                    onCardDrawnToHand?.Invoke(this, card);
-                    if (MonsterCardGame.Audio.SoundManager.Instance != null)
-                    {
-                        MonsterCardGame.Audio.SoundManager.Instance.PlayCardDraw();
-                    }
-                    if (wasFallenVeteran && MonsterCardGame.UI.BattleUIManager.Instance != null)
-                    {
-                        MonsterCardGame.UI.BattleUIManager.Instance.LogCombatMessage($"🔥💀 [{playerName}] Comeback Draw! Fallen Monster #{card.name} returned for a rematch!");
-                    }
-                    Debug.Log($"[{playerName}] drew card #{card.name} ({card.cardType}) | Deck left: {deck.Count}");
-                    return true;
+                    MonsterCardGame.Audio.SoundManager.Instance.PlayCardDraw();
                 }
-                else
+                if (wasFallenVeteran && MonsterCardGame.UI.BattleUIManager.Instance != null)
                 {
-                    graveyard.Add(card);
-                    Debug.Log($"[{playerName}] Hand is full ({maxHandSize})! Moved card {card.name} to graveyard.");
-                    return false;
+                    MonsterCardGame.UI.BattleUIManager.Instance.LogCombatMessage($"🔥💀 [{playerName}] Comeback Draw! Fallen Monster #{card.name} returned for a rematch!", card);
                 }
+                Debug.Log($"[{playerName}] drew card #{card.name} ({card.cardType}) | Hand: {hand.Count}/{maxHandSize} | Deck left: {deck.Count}");
+                return true;
             }
             else
             {
