@@ -7,9 +7,10 @@ namespace MonsterCardGame.Data
     [Serializable]
     public enum CardType
     {
-        Monster = 0,        // Field Monster Card occupying a tactical slot (1 to 240: 20 per Element)
-        Spell = 1,          // Instant Intermediary Tactical Spell Card (241 to 440: 40 per School)
-        Environment = 2     // Global Battlefield Weather Card (441 to 452: 12 Elements)
+        Monster = 0,        // Field Monster Card occupying a tactical slot
+        Spell = 1,          // Instant Intermediary Tactical Spell Card
+        Environment = 2,    // Shared Global Battlefield Environment Card
+        Leader = 3          // Dedicated Side Leader Card passive commander aura
     }
 
     [Serializable]
@@ -70,6 +71,7 @@ namespace MonsterCardGame.Data
         public string group = "🔥 Fire";
         public string group_en = "Fire";
         public int cost = 1;
+        public int powerCost = 0; // Optional permanent Power cost required on monster active skill
         public string description = "";
 
         // Monster & universal attributes (Tiers 1..7)

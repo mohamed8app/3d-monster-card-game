@@ -19,7 +19,7 @@ namespace MonsterCardGame.Utils
         private static readonly Dictionary<string, Texture2D> depthTextureCache = new Dictionary<string, Texture2D>();
         private static readonly HashSet<string> missingTextureKeys = new HashSet<string>();
         private static readonly string[] SupportedExtensions = { ".png", ".jpg", ".jpeg", ".webp" };
-        private static readonly string[] SubfolderCandidates = { "", "Monsters", "Spells", "Environments" };
+        private static readonly string[] SubfolderCandidates = { "", "Monsters", "Spells", "Environments", "Leaders" };
 
         public static string ResolveCardIdKey(CardData data)
         {

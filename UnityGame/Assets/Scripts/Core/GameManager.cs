@@ -31,12 +31,17 @@ namespace MonsterCardGame.Core
         public bool isPlayerTurn = true;
         public GamePhase currentPhase = GamePhase.StartingCoinToss;
         public EnvironmentCardData activeEnvironment = null;
+        public CardData activeEnvironmentCard = null;
+        public string activeEnvironmentOwner = "";
+        public List<CardData> allLeaders = new List<CardData>();
 
         [Header("Match Statistics")]
         public int playerSpellsCastCount = 0;
 
         [Header("Deck & Pity Draw Rules")]
         public int defaultDeckSize = 50;
+        public int firstPlayerOpeningHand = 5;
+        public int secondPlayerOpeningHand = 6;
         public int openingHandCount = 6;
 
         [Header("Database (452 Cards: 240 Monsters + 200 Spells + 12 Environments)")]
@@ -84,6 +89,7 @@ namespace MonsterCardGame.Core
                 if (wrapper != null && wrapper.cards != null && wrapper.cards.Count > 0)
                 {
                     allMonsters = new List<MonsterData>();
+                    allLeaders = new List<CardData>();
                     var allSpells = new List<CardData>();
 
                     foreach (var c in wrapper.cards)
@@ -106,6 +112,7 @@ namespace MonsterCardGame.Core
                                 tier_title = c.tier_title,
                                 tier_num = c.tier_num,
                                 cost = c.cost,
+                                powerCost = c.powerCost,
                                 atk = c.atk,
                                 def = c.def,
                                 passives_text = c.passives_text,
@@ -125,6 +132,12 @@ namespace MonsterCardGame.Core
                             c.name = c.id.ToString();
                             SpellDatabase.NormalizeSpellMetadata(c);
                             allSpells.Add(c);
+                        }
+                        else if (c.cardType == CardType.Leader || string.Equals(c.card_type, "leader", StringComparison.OrdinalIgnoreCase))
+                        {
+                            c.cardType = CardType.Leader;
+                            if (string.IsNullOrEmpty(c.name)) c.name = c.id.ToString();
+                            allLeaders.Add(c);
                         }
                     }
 
@@ -172,11 +185,15 @@ namespace MonsterCardGame.Core
             aiPlayer.getCardDrawWeightMultiplier = GetCardPityWeight;
             aiPlayer.onCardDrawnCallback = null;
 
-            // Draw 5 opening cards each (Player 1 skips Turn 1 draw -> stays at 5; Player 2 draws on Turn 2 -> 6)
-            int preTurnDraws = Mathf.Max(0, openingHandCount - 1);
-            for (int i = 0; i < preTurnDraws; i++)
+            // Player 1 begins with 5 cards (skips Turn 1 draw -> 5); Player 2 begins with 6 cards (skips Turn 2 draw -> 6)
+            int p1Draws = Mathf.Max(0, firstPlayerOpeningHand);
+            int p2Draws = Mathf.Max(0, secondPlayerOpeningHand);
+            for (int i = 0; i < p1Draws; i++)
             {
                 humanPlayer.DrawCard();
+            }
+            for (int i = 0; i < p2Draws; i++)
+            {
                 aiPlayer.DrawCard();
             }
 
@@ -184,13 +201,13 @@ namespace MonsterCardGame.Core
             currentTurn = 1;
             activeEnvironment = null;
 
-            // V1 Fair Starting Rule: Both players begin at 0 Mana Cap and 0 Power (Player 2 receives +1 temp Power once on Turn 2)
-            humanPlayer.manaCapacity = 0;
-            humanPlayer.currentPower = 0;
-            aiPlayer.manaCapacity = 0;
-            aiPlayer.currentPower = 0;
+            // V1 Fair Starting Rule: Both players begin at 0 Power and 0 Mana (Player 2 receives +1 temp Mana once on Turn 2)
+            humanPlayer.power = 0;
+            humanPlayer.currentMana = 0;
+            aiPlayer.power = 0;
+            aiPlayer.currentMana = 0;
 
-            Debug.Log($"🎲 Epic Battle Started! Decks: {defaultDeckSize} unique cards each | Opening Hand: {preTurnDraws} | V1 Fair Start (0/0, P2 +1 Power on Turn 2).");
+            Debug.Log($"🎲 Epic Battle Started! Decks: {defaultDeckSize} unique cards each | Opening Hands: P1={p1Draws}, P2={p2Draws} | Start Resources: 0 Power / 0 Mana (P2 +1 Mana on Turn 2).");
 
             StartTurn();
 
@@ -431,6 +448,7 @@ namespace MonsterCardGame.Core
                 tier_title = src.tier_title,
                 tier_num = src.tier_num,
                 cost = src.cost,
+                powerCost = src.powerCost,
                 atk = src.atk,
                 def = src.def,
                 passives_text = src.passives_text,
@@ -583,12 +601,12 @@ namespace MonsterCardGame.Core
                 otherPlayer.teamImmuneTurns--;
             }
 
-            // V1 Fair Starting Rule: P1 skips Turn 1 draw; P2 gets a one-time +1 Power bonus on Turn 2 only
-            bool skipTurnDraw = (currentTurn == 1 && isPlayerTurn);
+            // Fair Starting Rule: Both players skip their first-turn draw (P1 starts with 5, P2 starts with 6); P2 gets +1 temporary Mana on Turn 2 only
+            bool skipTurnDraw = (currentTurn == 1 && isPlayerTurn) || (currentTurn == 2 && !isPlayerTurn);
             activePlayer.StartTurn(currentTurn, skipTurnDraw);
             if (currentTurn == 2 && !isPlayerTurn)
             {
-                activePlayer.currentPower += 1;
+                activePlayer.currentMana += 1;
             }
 
             if (CombatSystem.Instance != null)
@@ -607,7 +625,7 @@ namespace MonsterCardGame.Core
             {
                 if (BattleUIManager.Instance != null)
                 {
-                    BattleUIManager.Instance.ShowBanner($"🟢 YOUR TURN (Round {currentTurn} - Unlimited Mana ∞)", new Color(0.2f, 0.95f, 0.5f));
+                    BattleUIManager.Instance.ShowBanner($"🟢 YOUR TURN (Round {currentTurn} • Mana: {activePlayer.currentMana} | Power: {activePlayer.power} ∞)", new Color(0.2f, 0.95f, 0.5f));
                 }
             }
             else
@@ -625,16 +643,16 @@ namespace MonsterCardGame.Core
         public bool CastSpell(PlayerState caster, PlayerState target, CardData spellCard)
         {
             if (spellCard == null || spellCard.cardType != CardType.Spell) return false;
-            if (spellCard.cost > caster.currentPower)
+            if (spellCard.cost > caster.currentMana)
             {
                 if (BattleUIManager.Instance != null)
                 {
-                    BattleUIManager.Instance.LogCombatMessage($"❌ Not enough Power to cast Spell [{spellCard.name}]! (Req: {spellCard.cost}⚡, Avail: {caster.currentPower}⚡)");
+                    BattleUIManager.Instance.LogCombatMessage($"❌ Not enough Mana to cast Spell [{spellCard.name}]! (Req: {spellCard.cost}💧, Avail: {caster.currentMana}💧)");
                 }
                 return false;
             }
 
-            caster.currentPower -= spellCard.cost;
+            caster.currentMana -= spellCard.cost;
             caster.hand.Remove(spellCard);
             caster.graveyard.Add(spellCard);
 
@@ -651,7 +669,7 @@ namespace MonsterCardGame.Core
             if (BattleUIManager.Instance != null)
             {
                 BattleUIManager.Instance.ShowSpellBanner(spellCard, caster.playerName);
-                BattleUIManager.Instance.LogCombatMessage($"🔮 [{caster.playerName}] cast Spell #{spellCard.name} ({spellCard.cost}⚡): {spellCard.description}");
+                BattleUIManager.Instance.LogCombatMessage($"🔮 [{caster.playerName}] cast Spell #{spellCard.name} ({spellCard.cost}💧): {spellCard.description}");
             }
 
             int val = Mathf.Max(10, spellCard.spellPower);
@@ -664,7 +682,7 @@ namespace MonsterCardGame.Core
                     if (bm.HasPassiveSubstr("Arcane Echo") != null) bm.bonusAtk += 3;
                     if (bm.HasPassiveSubstr("Arcane Overflow") != null) val += 8;
                     if (bm.HasPassiveSubstr("Spell Multiplier") != null && repeats == 1 && UnityEngine.Random.value < 0.50f) repeats = 2;
-                    if (bm.HasPassiveSubstr("Mana Recovery") != null) caster.currentPower += 1;
+                    if (bm.HasPassiveSubstr("Mana Recovery") != null) caster.currentMana += 1;
                 }
             }
 
@@ -709,7 +727,7 @@ namespace MonsterCardGame.Core
 
                 case SpellType.LeaderHeal:
                 case SpellType.SupportBatteryHeal:
-                    if (stype == SpellType.SupportBatteryHeal) caster.currentPower += 2;
+                    if (stype == SpellType.SupportBatteryHeal) caster.currentMana += 2;
                     caster.HealLeader(val, target);
                     foreach (var slot in allies) slot.currentMonster.HealDefense(12);
                     break;
@@ -751,12 +769,12 @@ namespace MonsterCardGame.Core
 
                 case SpellType.ManaTheft:
                 case SpellType.ManaStealAndAOE:
-                    if (target.manaCapacity > 1)
+                    if (target.power > 1)
                     {
-                        target.manaCapacity = Mathf.Max(1, target.manaCapacity - 1);
+                        target.power = Mathf.Max(1, target.power - 1);
                     }
-                    caster.manaCapacity++;
-                    caster.currentPower++;
+                    caster.power++;
+                    caster.currentMana++;
                     if (stype == SpellType.ManaStealAndAOE)
                     {
                         int aoeDmg = Mathf.Max(6, val / 3);
@@ -895,7 +913,7 @@ namespace MonsterCardGame.Core
 
                 // --- Category 4: Activate & Support Spell ---
                 case SpellType.ZeroSkillCostBoost:
-                    caster.currentPower += 1;
+                    caster.currentMana += 1;
                     caster.freeSkillBonus += val / 2;
                     if (allies.Count > 0)
                     {
@@ -1087,22 +1105,24 @@ namespace MonsterCardGame.Core
         {
             if (envCard == null || envCard.cardType != CardType.Environment) return false;
 
-            if (envCard.cost > player.currentPower)
+            if (envCard.cost > player.currentMana)
             {
                 if (BattleUIManager.Instance != null)
                 {
-                    BattleUIManager.Instance.LogCombatMessage($"❌ Not enough Power to activate [{envCard.name}]! (Req: {envCard.cost}⚡, Avail: {player.currentPower}⚡)");
+                    BattleUIManager.Instance.LogCombatMessage($"❌ Not enough Mana to activate [{envCard.name}]! (Req: {envCard.cost}💧, Avail: {player.currentMana}💧)");
                 }
                 return false;
             }
 
-            player.currentPower -= envCard.cost;
+            player.currentMana -= envCard.cost;
             player.hand.Remove(envCard);
             player.graveyard.Add(envCard);
 
             if (activeEnvironment != null && activeEnvironment.buffedElement == envCard.element)
             {
                 activeEnvironment.UpgradeLevel();
+                activeEnvironmentCard = envCard;
+                activeEnvironmentOwner = (player == humanPlayer) ? "You" : "Enemy";
                 if (BattleUIManager.Instance != null)
                 {
                     BattleUIManager.Instance.ShowEnvironmentBanner(activeEnvironment, player.playerName);
@@ -1112,10 +1132,12 @@ namespace MonsterCardGame.Core
             else
             {
                 activeEnvironment = new EnvironmentCardData(envCard.element, 1);
+                activeEnvironmentCard = envCard;
+                activeEnvironmentOwner = (player == humanPlayer) ? "You" : "Enemy";
                 if (BattleUIManager.Instance != null)
                 {
                     BattleUIManager.Instance.ShowEnvironmentBanner(activeEnvironment, player.playerName);
-                    BattleUIManager.Instance.LogCombatMessage($"🌍 [{player.playerName}] shifted battlefield weather to [{activeEnvironment.name}] (Level 1)! Buffs {activeEnvironment.buffedElement} by +30%.");
+                    BattleUIManager.Instance.LogCombatMessage($"🌍 [{player.playerName}] shifted shared battlefield environment to [{activeEnvironment.name}] (Level 1)! Buffs {activeEnvironment.buffedElement} by +30%.");
                 }
             }
 
@@ -1125,6 +1147,44 @@ namespace MonsterCardGame.Core
             if (BattleUIManager.Instance != null)
             {
                 BattleUIManager.Instance.UpdateEnvironmentVisuals();
+                BattleUIManager.Instance.UpdateUI();
+            }
+
+            return true;
+        }
+
+        public bool PlayLeaderCard(PlayerState player, CardData leaderCard)
+        {
+            if (player == null || leaderCard == null) return false;
+            bool isLeader = leaderCard.cardType == CardType.Leader ||
+                            string.Equals(leaderCard.card_type, "leader", StringComparison.OrdinalIgnoreCase);
+            if (!isLeader) return false;
+
+            if (leaderCard.cost > player.currentMana)
+            {
+                if (BattleUIManager.Instance != null)
+                {
+                    BattleUIManager.Instance.LogCombatMessage($"❌ Not enough Mana to deploy Leader [{leaderCard.name}]! (Req: {leaderCard.cost}💧, Avail: {player.currentMana}💧)");
+                }
+                return false;
+            }
+
+            player.currentMana -= leaderCard.cost;
+            player.hand.Remove(leaderCard);
+
+            if (player.activeLeader != null)
+            {
+                player.graveyard.Add(player.activeLeader);
+            }
+
+            player.activeLeader = leaderCard;
+
+            if (BattleUIManager.Instance != null)
+            {
+                string who = (player == humanPlayer) ? "You" : "Enemy";
+                BattleUIManager.Instance.LogCombatMessage($"👑 [{who}] deployed Side Leader [{leaderCard.name}] to Leader Slot!");
+                BattleUIManager.Instance.ShowBanner($"👑 LEADER DEPLOYED: {leaderCard.name}", new Color(0.75f, 0.85f, 0.96f));
+                BattleUIManager.Instance.UpdateLeaderSlotsUI();
                 BattleUIManager.Instance.UpdateUI();
             }
 
@@ -1230,6 +1290,8 @@ namespace MonsterCardGame.Core
                 {
                     string oldName = activeEnvironment.name;
                     activeEnvironment = null;
+                    activeEnvironmentCard = null;
+                    activeEnvironmentOwner = "";
                     if (BattleUIManager.Instance != null)
                     {
                         BattleUIManager.Instance.LogCombatMessage($"☀️ [{oldName}] has cleared—battlefield returned to Stable Weather.");
@@ -1265,7 +1327,7 @@ namespace MonsterCardGame.Core
                 if (BattleUIManager.Instance != null)
                 {
                     BattleUIManager.Instance.ShowGameOverScreen(true, currentTurn, humanPlayer.currentHp, aiPlayer.currentHp,
-                        humanPlayer.monstersSummonedTotal, playerSpellsCastCount, envName, humanPlayer.manaCapacity);
+                        humanPlayer.monstersSummonedTotal, playerSpellsCastCount, envName, humanPlayer.power);
                 }
             }
             else if (!humanPlayer.IsAlive)
@@ -1275,7 +1337,7 @@ namespace MonsterCardGame.Core
                 if (BattleUIManager.Instance != null)
                 {
                     BattleUIManager.Instance.ShowGameOverScreen(false, currentTurn, humanPlayer.currentHp, aiPlayer.currentHp,
-                        humanPlayer.monstersSummonedTotal, playerSpellsCastCount, envName, humanPlayer.manaCapacity);
+                        humanPlayer.monstersSummonedTotal, playerSpellsCastCount, envName, humanPlayer.power);
                 }
             }
         }
@@ -1290,6 +1352,10 @@ namespace MonsterCardGame.Core
 
             playerSpellsCastCount = 0;
             activeEnvironment = null;
+            activeEnvironmentCard = null;
+            activeEnvironmentOwner = "";
+            if (humanPlayer != null) humanPlayer.activeLeader = null;
+            if (aiPlayer != null) aiPlayer.activeLeader = null;
 
             if (BattleUIManager.Instance != null)
             {

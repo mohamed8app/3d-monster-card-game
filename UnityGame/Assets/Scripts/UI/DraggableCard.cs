@@ -169,11 +169,11 @@ namespace MonsterCardGame.UI
             {
                 if (isSelected)
                 {
-                    cardOutline.effectColor = new Color(1f, 0.92f, 0.25f, 1f);
+                    cardOutline.effectColor = new Color(0.45f, 0.76f, 0.92f, 0.95f);
                 }
                 else if (isHovered)
                 {
-                    cardOutline.effectColor = new Color(1f, 1f, 1f, 0.95f);
+                    cardOutline.effectColor = new Color(0.76f, 0.82f, 0.90f, 0.90f);
                 }
                 else
                 {
@@ -280,9 +280,25 @@ namespace MonsterCardGame.UI
                         if (handled) break;
                     }
                 }
+                else if (cardData.cardType == CardType.Environment)
+                {
+                    if (hit.gameObject.name.Contains("SharedEnvSlot") || hit.gameObject.name.Contains("SharedEnvCardSlot"))
+                    {
+                        handled = TryActivateEnvironment();
+                        if (handled) break;
+                    }
+                }
+                else if (cardData.cardType == CardType.Leader)
+                {
+                    if (hit.gameObject.name.Contains("PlayerLeaderSlot") || hit.gameObject.name.Contains("PlayerLeaderCardSlot"))
+                    {
+                        handled = TrySummonLeader();
+                        if (handled) break;
+                    }
+                }
             }
 
-            // 2. If Spell or Environment card is dragged to the arena above the hand dock
+            // 2. If Spell, Environment, or Leader card is dragged to the arena above the hand dock
             if (!handled)
             {
                 if (cardData.cardType == CardType.Spell && eventData.position.y > 220f)
@@ -292,6 +308,10 @@ namespace MonsterCardGame.UI
                 else if (cardData.cardType == CardType.Environment && eventData.position.y > 220f)
                 {
                     handled = TryActivateEnvironment();
+                }
+                else if (cardData.cardType == CardType.Leader && eventData.position.y > 220f)
+                {
+                    handled = TrySummonLeader();
                 }
             }
 
@@ -347,7 +367,7 @@ namespace MonsterCardGame.UI
             {
                 if (BattleUIManager.Instance != null)
                 {
-                    BattleUIManager.Instance.LogCombatMessage($"❌ Cannot summon monster to Slot {slotIndex} (Check Power & slot availability).");
+                    BattleUIManager.Instance.LogCombatMessage($"❌ Cannot summon monster to Slot {slotIndex} (Check Mana & slot availability).");
                 }
                 return false;
             }
@@ -372,6 +392,19 @@ namespace MonsterCardGame.UI
             if (gm == null || !gm.isPlayerTurn) return false;
 
             bool success = gm.PlayEnvironmentCard(gm.humanPlayer, cardData);
+            if (success && BattleUIManager.Instance != null)
+            {
+                BattleUIManager.Instance.DeselectHandCards();
+            }
+            return success;
+        }
+
+        private bool TrySummonLeader()
+        {
+            var gm = GameManager.Instance;
+            if (gm == null || !gm.isPlayerTurn) return false;
+
+            bool success = gm.PlayLeaderCard(gm.humanPlayer, cardData);
             if (success && BattleUIManager.Instance != null)
             {
                 BattleUIManager.Instance.DeselectHandCards();

@@ -39,10 +39,15 @@ namespace MonsterCardGame.UI
         public SlotView[] playerSlotViews = new SlotView[6];
         public SlotView[] enemySlotViews = new SlotView[6];
 
-        [Header("Environment Altar")]
+        [Header("Shared Environment Slot")]
         public GameObject envAltarPanel;
+        public Button envSlotButton;
+        public Image envCardArtImage;
+        public Text envCardTitleText;
+        public Text envCardCostText;
         public Text envIconText;
         public Text envNameText;
+        public Text envOwnerText;
         public Text envLevelText;
         public Text envDurationText;
         public Text envBuffText;
@@ -50,6 +55,22 @@ namespace MonsterCardGame.UI
         public Image envAtmosphereOverlay;
         public Button testCycleEnvButton;
         public Button testCycleLevelButton;
+
+        [Header("Side Leader Slots")]
+        public Button playerLeaderSlotButton;
+        public Image playerLeaderCardArt;
+        public GameObject playerLeaderEmptyGroup;
+        public Text playerLeaderCostText;
+        public Text playerLeaderNameText;
+        public Text playerLeaderTribeText;
+        public Text playerLeaderDescText;
+
+        public Button enemyLeaderSlotButton;
+        public Image enemyLeaderCardArt;
+        public GameObject enemyLeaderEmptyGroup;
+        public Text enemyLeaderCostText;
+        public Text enemyLeaderNameText;
+        public Text enemyLeaderDescText;
 
         private static readonly string[] AllTestElements = {
             "Fire", "Water", "Ice", "Earth", "Electric", "Air",
@@ -136,6 +157,22 @@ namespace MonsterCardGame.UI
                 quitButton.onClick.AddListener(OnQuitClicked);
             }
 
+            if (envSlotButton != null)
+            {
+                envSlotButton.onClick.RemoveAllListeners();
+                envSlotButton.onClick.AddListener(OnSharedEnvSlotClicked);
+            }
+            if (playerLeaderSlotButton != null)
+            {
+                playerLeaderSlotButton.onClick.RemoveAllListeners();
+                playerLeaderSlotButton.onClick.AddListener(OnPlayerLeaderSlotClicked);
+            }
+            if (enemyLeaderSlotButton != null)
+            {
+                enemyLeaderSlotButton.onClick.RemoveAllListeners();
+                enemyLeaderSlotButton.onClick.AddListener(OnEnemyLeaderSlotClicked);
+            }
+
             UpdateUI();
             StartCoroutine(DelayedInitialUpdate());
         }
@@ -146,6 +183,7 @@ namespace MonsterCardGame.UI
             EnsureAtmosphereEngine();
             UpdateUI();
             UpdateEnvironmentVisuals();
+            UpdateLeaderSlotsUI();
 
             var gm = GameManager.Instance;
             if (gm != null && gm.humanPlayer != null && gm.humanPlayer.hand != null && gm.humanPlayer.hand.Count > 0)
@@ -299,29 +337,32 @@ namespace MonsterCardGame.UI
             if (enemyHpText != null) enemyHpText.text = $"❤️ {gm.aiPlayer.currentHp} / {gm.aiPlayer.maxHp} HP";
             if (enemyHpSlider != null) enemyHpSlider.value = (float)gm.aiPlayer.currentHp / gm.aiPlayer.maxHp;
 
-            // 2. Update Mana & Power (Unlimited Mana Cap ∞)
+            // 2. Update Turn Mana & Permanent Power (Unlimited Power ∞)
             if (playerPowerText != null)
             {
                 string crystals = "";
-                int power = gm.humanPlayer.currentPower;
-                int maxCap = gm.humanPlayer.manaCapacity;
-                int displayIcons = Mathf.Min(Mathf.Max(maxCap, power), 8);
+                int mana = gm.humanPlayer.currentMana;
+                int permPower = gm.humanPlayer.power;
+                int displayIcons = Mathf.Min(Mathf.Max(permPower, mana), 8);
 
                 for (int i = 0; i < displayIcons; i++)
                 {
-                    crystals += (i < power) ? "💎" : "◇";
+                    crystals += (i < mana) ? "💎" : "◇";
                 }
-                if (Mathf.Max(maxCap, power) > 8) crystals += "+";
+                if (Mathf.Max(permPower, mana) > 8) crystals += "+";
 
-                playerPowerText.text = $"[ {crystals} ]  Power: {power}  |  Mana: {maxCap} (∞)  |  Deck: {gm.humanPlayer.deck.Count}";
+                playerPowerText.text = $"[ {crystals} ]  Mana: {mana}  |  Power: {permPower} (∞)  |  Deck: {gm.humanPlayer.deck.Count}";
             }
 
             // 3. Turn Indicator
             if (turnInfoText != null)
             {
                 turnInfoText.text = gm.isPlayerTurn
-                    ? "⚔️ YOUR TURN (Summon, Cast Spells, or Attack)"
-                    : "⏳ ENEMY TURN (Thinking...)";
+                    ? $"TURN {gm.currentTurn} • YOUR MOVE"
+                    : $"TURN {gm.currentTurn} • ENEMY TURN";
+                turnInfoText.color = gm.isPlayerTurn
+                    ? new Color(0.84f, 0.90f, 0.98f)
+                    : new Color(0.92f, 0.68f, 0.68f);
             }
 
             // 4. Control Buttons
@@ -343,8 +384,9 @@ namespace MonsterCardGame.UI
             // 7. Refresh Enemy Hand
             RefreshEnemyHand();
 
-            // 8. Update Environment Altar
+            // 8. Update Shared Environment & Side Leader Slots
             UpdateEnvironmentVisuals();
+            UpdateLeaderSlotsUI();
         }
 
         private void UpdateSlots()
@@ -397,34 +439,59 @@ namespace MonsterCardGame.UI
                 string envEmoji = MonsterArtLoader.GetEnvironmentEmoji(env.element);
                 Color elemColor = MonsterArtLoader.GetElementColor(env.element);
 
+                if (envCardArtImage != null)
+                {
+                    Sprite cardArt = (gm.activeEnvironmentCard != null ? MonsterArtLoader.GetCardSprite(gm.activeEnvironmentCard) : null)
+                                  ?? BattlefieldAtmosphereEngine.GetOrLoadGroundSprite(env.element, env.level);
+                    envCardArtImage.sprite = cardArt;
+                    envCardArtImage.color = (cardArt != null) ? Color.white : MonsterArtLoader.GetEnvironmentAtmosphereColor(env.element);
+                }
+                if (envCardTitleText != null)
+                {
+                    envCardTitleText.text = env.element.ToUpperInvariant();
+                }
+                if (envCardCostText != null)
+                {
+                    int costVal = gm.activeEnvironmentCard != null ? gm.activeEnvironmentCard.cost : env.cost;
+                    envCardCostText.text = costVal > 0 ? costVal.ToString() : "E";
+                }
+                if (envOwnerText != null)
+                {
+                    string ownerStr = string.IsNullOrEmpty(gm.activeEnvironmentOwner) ? "Arena" : gm.activeEnvironmentOwner;
+                    envOwnerText.text = $"Controlled by: {ownerStr}";
+                    envOwnerText.color = ownerStr == "Enemy"
+                        ? new Color(0.92f, 0.64f, 0.64f)
+                        : new Color(0.74f, 0.84f, 0.94f);
+                }
+
                 if (envIconText != null) envIconText.text = envEmoji;
                 if (envNameText != null)
                 {
                     envNameText.text = $"{env.name}";
-                    envNameText.color = elemColor;
+                    envNameText.color = Color.Lerp(elemColor, Color.white, 0.35f);
                 }
                 if (envLevelText != null)
                 {
                     string stars = new string('★', env.level);
                     envLevelText.text = $"{stars} Level {env.level}";
-                    envLevelText.color = new Color(1f, 0.9f, 0.4f);
+                    envLevelText.color = new Color(0.78f, 0.86f, 0.96f);
                 }
                 if (envDurationText != null)
                 {
-                    envDurationText.text = $"⏳ Remaining: {env.turnsRemaining} Turns";
+                    envDurationText.text = $"Remaining: {env.turnsRemaining} Turns";
                 }
                 if (envBuffText != null)
                 {
                     int buffPercent = Mathf.RoundToInt(env.buffPct * 100);
-                    envBuffText.text = $"⬆️ {env.buffedElement}: +{buffPercent}% ATK";
-                    envBuffText.color = new Color(0.2f, 1f, 0.45f);
+                    envBuffText.text = $"+{buffPercent}% {env.buffedElement}";
+                    envBuffText.color = new Color(0.45f, 0.94f, 0.62f);
                 }
                 if (envDebuffText != null)
                 {
                     int debuffPercent = Mathf.RoundToInt(env.debuffPct * 100);
                     string debuffedStr = string.Join(", ", env.debuffedElements);
-                    envDebuffText.text = $"⬇️ {debuffedStr}: -{debuffPercent}%";
-                    envDebuffText.color = new Color(1f, 0.45f, 0.45f);
+                    envDebuffText.text = $"-{debuffPercent}% {debuffedStr}";
+                    envDebuffText.color = new Color(0.96f, 0.56f, 0.56f);
                 }
 
                 EnsureAtmosphereEngine();
@@ -435,27 +502,43 @@ namespace MonsterCardGame.UI
             }
             else
             {
+                if (envCardArtImage != null)
+                {
+                    Sprite neutralSprite = BattlefieldAtmosphereEngine.GetOrLoadGroundSprite("", 0);
+                    envCardArtImage.sprite = neutralSprite;
+                    envCardArtImage.color = neutralSprite != null
+                        ? new Color(0.62f, 0.66f, 0.74f, 0.92f)
+                        : new Color(0.10f, 0.12f, 0.16f, 1f);
+                }
+                if (envCardTitleText != null) envCardTitleText.text = "NEUTRAL ARENA";
+                if (envCardCostText != null) envCardCostText.text = "-";
+                if (envOwnerText != null)
+                {
+                    envOwnerText.text = "Controlled by: Arena (Neutral)";
+                    envOwnerText.color = new Color(0.66f, 0.72f, 0.80f);
+                }
+
                 if (envIconText != null) envIconText.text = "☀️";
                 if (envNameText != null)
                 {
-                    envNameText.text = "Weather: Stable";
-                    envNameText.color = new Color(0.85f, 0.9f, 1f);
+                    envNameText.text = "Stable Arena";
+                    envNameText.color = new Color(0.84f, 0.88f, 0.95f);
                 }
                 if (envLevelText != null)
                 {
-                    envLevelText.text = "Natural (Neutral)";
-                    envLevelText.color = new Color(0.65f, 0.75f, 0.85f);
+                    envLevelText.text = "No Active Weather";
+                    envLevelText.color = new Color(0.62f, 0.70f, 0.78f);
                 }
-                if (envDurationText != null) envDurationText.text = "⏳ Permanent";
+                if (envDurationText != null) envDurationText.text = "Either player can override";
                 if (envBuffText != null)
                 {
-                    envBuffText.text = "• No Active Buffs";
-                    envBuffText.color = new Color(0.7f, 0.75f, 0.8f);
+                    envBuffText.text = "No Active Buffs";
+                    envBuffText.color = new Color(0.68f, 0.74f, 0.80f);
                 }
                 if (envDebuffText != null)
                 {
-                    envDebuffText.text = "• All Elements Balanced";
-                    envDebuffText.color = new Color(0.7f, 0.75f, 0.8f);
+                    envDebuffText.text = "All Elements Balanced";
+                    envDebuffText.color = new Color(0.68f, 0.74f, 0.80f);
                 }
 
                 EnsureAtmosphereEngine();
@@ -463,6 +546,162 @@ namespace MonsterCardGame.UI
                 {
                     BattlefieldAtmosphereEngine.Instance.ApplyEnvironmentProfile(null);
                 }
+            }
+        }
+
+        public void UpdateLeaderSlotsUI()
+        {
+            var gm = GameManager.Instance;
+            if (gm == null) return;
+
+            UpdateSingleLeaderSlot(
+                gm.humanPlayer != null ? gm.humanPlayer.activeLeader : null,
+                true,
+                playerLeaderCardArt,
+                playerLeaderEmptyGroup,
+                playerLeaderCostText,
+                playerLeaderNameText,
+                playerLeaderTribeText,
+                playerLeaderDescText);
+
+            UpdateSingleLeaderSlot(
+                gm.aiPlayer != null ? gm.aiPlayer.activeLeader : null,
+                false,
+                enemyLeaderCardArt,
+                enemyLeaderEmptyGroup,
+                enemyLeaderCostText,
+                enemyLeaderNameText,
+                null,
+                enemyLeaderDescText);
+        }
+
+        private void UpdateSingleLeaderSlot(
+            CardData leader,
+            bool isPlayer,
+            Image artImg,
+            GameObject emptyGroup,
+            Text costTxt,
+            Text nameTxt,
+            Text tribeTxt,
+            Text descTxt)
+        {
+            if (leader != null)
+            {
+                if (emptyGroup != null) emptyGroup.SetActive(false);
+                if (artImg != null)
+                {
+                    artImg.gameObject.SetActive(true);
+                    Sprite sp = MonsterArtLoader.GetCardSprite(leader);
+                    artImg.sprite = sp;
+                    artImg.color = sp != null ? Color.white : MonsterArtLoader.GetEnvironmentAtmosphereColor(leader.element);
+                }
+                if (costTxt != null)
+                {
+                    if (costTxt.transform.parent != null) costTxt.transform.parent.gameObject.SetActive(true);
+                    costTxt.gameObject.SetActive(true);
+                    costTxt.text = leader.cost.ToString();
+                }
+                if (nameTxt != null)
+                {
+                    nameTxt.text = $"Leader #{leader.name}";
+                    nameTxt.color = isPlayer ? new Color(0.84f, 0.92f, 1f) : new Color(0.95f, 0.74f, 0.76f);
+                }
+                if (tribeTxt != null)
+                {
+                    string tPart = string.IsNullOrEmpty(leader.tribe) ? leader.element : $"{leader.element} • {leader.tribe}";
+                    tribeTxt.text = tPart;
+                }
+                if (descTxt != null)
+                {
+                    descTxt.text = string.IsNullOrEmpty(leader.description)
+                        ? "Active side commander passive aura."
+                        : leader.description;
+                }
+            }
+            else
+            {
+                if (emptyGroup != null) emptyGroup.SetActive(true);
+                if (artImg != null)
+                {
+                    artImg.sprite = null;
+                    artImg.gameObject.SetActive(false);
+                }
+                if (costTxt != null)
+                {
+                    costTxt.gameObject.SetActive(false);
+                    if (costTxt.transform.parent != null) costTxt.transform.parent.gameObject.SetActive(false);
+                }
+                if (nameTxt != null)
+                {
+                    nameTxt.text = isPlayer ? "No Leader Summoned" : "No Enemy Leader";
+                    nameTxt.color = isPlayer ? new Color(0.76f, 0.84f, 0.92f) : new Color(0.84f, 0.66f, 0.68f);
+                }
+                if (tribeTxt != null)
+                {
+                    tribeTxt.text = "Passive Side Aura Slot";
+                }
+                if (descTxt != null)
+                {
+                    descTxt.text = isPlayer
+                        ? "Drag or play a Leader card into this side slot."
+                        : "Side passive zone (Not targetable by lane attacks).";
+                }
+            }
+        }
+
+        private void OnSharedEnvSlotClicked()
+        {
+            var gm = GameManager.Instance;
+            if (gm == null) return;
+
+            if (selectedCardForAction != null && selectedCardForAction.cardType == CardType.Environment && gm.isPlayerTurn)
+            {
+                if (gm.PlayEnvironmentCard(gm.humanPlayer, selectedCardForAction))
+                {
+                    DeselectHandCards();
+                    UpdateUI();
+                }
+                return;
+            }
+
+            CardData envToInspect = gm.activeEnvironmentCard ?? gm.activeEnvironment;
+            if (envToInspect != null)
+            {
+                ShowCardDetails(envToInspect);
+            }
+        }
+
+        private void OnPlayerLeaderSlotClicked()
+        {
+            var gm = GameManager.Instance;
+            if (gm == null || gm.humanPlayer == null) return;
+
+            if (selectedCardForAction != null &&
+                (selectedCardForAction.cardType == CardType.Leader || string.Equals(selectedCardForAction.card_type, "leader", StringComparison.OrdinalIgnoreCase)) &&
+                gm.isPlayerTurn)
+            {
+                if (gm.PlayLeaderCard(gm.humanPlayer, selectedCardForAction))
+                {
+                    DeselectHandCards();
+                    UpdateUI();
+                }
+                return;
+            }
+
+            if (gm.humanPlayer.activeLeader != null)
+            {
+                ShowCardDetails(gm.humanPlayer.activeLeader);
+            }
+        }
+
+        private void OnEnemyLeaderSlotClicked()
+        {
+            var gm = GameManager.Instance;
+            if (gm == null || gm.aiPlayer == null) return;
+
+            if (gm.aiPlayer.activeLeader != null)
+            {
+                ShowCardDetails(gm.aiPlayer.activeLeader);
             }
         }
 
@@ -545,7 +784,7 @@ namespace MonsterCardGame.UI
             {
                 cardImg.color = new Color(0.12f, 0.08f, 0.16f, 1f);
                 var glyph = GameBootstrapper.CreateText(cardObj.transform, "BackGlyph", "❖", 32,
-                    new Color(0.95f, 0.80f, 0.35f, 0.6f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(80, 80));
+                    new Color(0.65f, 0.70f, 0.78f, 0.5f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(80, 80));
                 glyph.raycastTarget = false;
             }
 
@@ -560,6 +799,7 @@ namespace MonsterCardGame.UI
             {
                 CardType.Spell => new Color(0.12f, 0.08f, 0.20f, 0.98f),
                 CardType.Environment => new Color(0.06f, 0.12f, 0.16f, 0.98f),
+                CardType.Leader => new Color(0.10f, 0.12f, 0.18f, 0.98f),
                 _ => new Color(0.09f, 0.10f, 0.15f, 0.98f)
             };
 
@@ -578,8 +818,8 @@ namespace MonsterCardGame.UI
 
             var outline = cardObj.AddComponent<Outline>();
             outline.effectColor = (card.cardType == CardType.Spell)
-                ? new Color(0.95f, 0.75f, 0.25f, 0.95f)
-                : elemColor;
+                ? new Color(0.45f, 0.36f, 0.62f, 0.90f)
+                : (card.cardType == CardType.Leader ? new Color(0.48f, 0.62f, 0.78f, 0.92f) : elemColor);
             outline.effectDistance = new Vector2(2, 2);
             if (card.cardType == CardType.Monster)
             {
@@ -650,7 +890,7 @@ namespace MonsterCardGame.UI
 
                 // Top-Center Summon Cost Number (Inscribed inside top medallion socket)
                 var txtCost = GameBootstrapper.CreateText(cardObj.transform, "CostText", card.cost.ToString(), 14,
-                    new Color(1f, 0.96f, 0.72f), TextAnchor.MiddleCenter, new Vector2(0, -11f), new Vector2(28, 22));
+                    new Color(0.92f, 0.95f, 1f), TextAnchor.MiddleCenter, new Vector2(0, -11f), new Vector2(28, 22));
                 txtCost.rectTransform.anchorMin = new Vector2(0.5f, 1f);
                 txtCost.rectTransform.anchorMax = new Vector2(0.5f, 1f);
                 txtCost.rectTransform.anchoredPosition = new Vector2(0, -11f);
@@ -692,7 +932,7 @@ namespace MonsterCardGame.UI
 
                     // Top-Center Cost Number inside the Sapphire Scroll Medallion
                     var txtCost = GameBootstrapper.CreateText(cardObj.transform, "CostText", card.cost.ToString(), 14,
-                        new Color(1f, 0.96f, 0.72f), TextAnchor.MiddleCenter, new Vector2(0f, -9.5f), new Vector2(28f, 22f));
+                        new Color(0.92f, 0.95f, 1f), TextAnchor.MiddleCenter, new Vector2(0f, -9.5f), new Vector2(28f, 22f));
                     txtCost.rectTransform.anchorMin = new Vector2(0.5f, 1f);
                     txtCost.rectTransform.anchorMax = new Vector2(0.5f, 1f);
                     txtCost.rectTransform.anchoredPosition = new Vector2(0f, -9.5f);
@@ -758,17 +998,17 @@ namespace MonsterCardGame.UI
                     var costCircle = GameBootstrapper.CreateCirclePanel(cardObj.transform, "CostCircle", new Color(0.10f, 0.28f, 0.65f, 0.96f),
                         new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-18, -18), new Vector2(32, 32));
                     var costOutline = costCircle.AddComponent<Outline>();
-                    costOutline.effectColor = new Color(0.95f, 0.75f, 0.35f, 1f);
+                    costOutline.effectColor = new Color(0.45f, 0.56f, 0.72f, 1f);
                     costOutline.effectDistance = new Vector2(1.5f, 1.5f);
                     var txtCost = GameBootstrapper.CreateText(costCircle.transform, "CostText", card.cost.ToString(), 16,
-                        new Color(1f, 0.95f, 0.70f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(32, 32));
+                        new Color(0.92f, 0.95f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(32, 32));
                     txtCost.fontStyle = FontStyle.Bold;
                     txtCost.raycastTarget = false;
 
                     if (customArt == null)
                     {
                         var iconObj = GameBootstrapper.CreateText(cardObj.transform, "SpellIdCenter", card.name, 26,
-                            new Color(1f, 0.9f, 0.35f), TextAnchor.MiddleCenter, new Vector2(0, 26), new Vector2(124, 42));
+                            new Color(0.84f, 0.88f, 0.96f), TextAnchor.MiddleCenter, new Vector2(0, 26), new Vector2(124, 42));
                         iconObj.fontStyle = FontStyle.Bold;
                         iconObj.raycastTarget = false;
                     }
@@ -776,7 +1016,7 @@ namespace MonsterCardGame.UI
                     var namePanel = GameBootstrapper.CreatePanel(cardObj.transform, "NamePlate", new Color(0.18f, 0.12f, 0.28f, 0.92f),
                         new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -10), new Vector2(130, 22));
                     var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", $"{card.name} • T{Mathf.Max(1, card.tier_num)}", 12,
-                        new Color(1f, 0.9f, 0.4f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(126, 22));
+                        new Color(0.88f, 0.92f, 0.98f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(126, 22));
                     txtName.fontStyle = FontStyle.Bold;
                     txtName.raycastTarget = false;
 
@@ -797,6 +1037,63 @@ namespace MonsterCardGame.UI
             }
             else if (card.cardType == CardType.Environment)
             {
+                Sprite envArt = customArt ?? BattlefieldAtmosphereEngine.GetOrLoadGroundSprite(card.element, 1);
+                if (envArt != null)
+                {
+                    var artObj = new GameObject("CardArt");
+                    artObj.transform.SetParent(cardObj.transform, false);
+                    var rectArt = artObj.AddComponent<RectTransform>();
+                    rectArt.anchorMin = Vector2.zero;
+                    rectArt.anchorMax = Vector2.one;
+                    rectArt.sizeDelta = Vector2.zero;
+                    rectArt.anchoredPosition = Vector2.zero;
+                    var artImg = artObj.AddComponent<Image>();
+                    artImg.sprite = envArt;
+                    artImg.color = Color.white;
+                    artImg.raycastTarget = false;
+                }
+
+                var costCircle = GameBootstrapper.CreateCirclePanel(cardObj.transform, "CostCircle", new Color(0.10f, 0.28f, 0.65f, 0.96f),
+                    new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-18, -18), new Vector2(32, 32));
+                var costOutline = costCircle.AddComponent<Outline>();
+                costOutline.effectColor = elemColor;
+                costOutline.effectDistance = new Vector2(1.5f, 1.5f);
+                var txtCost = GameBootstrapper.CreateText(costCircle.transform, "CostText", card.cost.ToString(), 16,
+                    new Color(0.92f, 0.95f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(32, 32));
+                txtCost.fontStyle = FontStyle.Bold;
+                txtCost.raycastTarget = false;
+
+                if (envArt == null)
+                {
+                    string envEmoji = MonsterArtLoader.GetEnvironmentEmoji(card.element);
+                    var iconObj = GameBootstrapper.CreateText(cardObj.transform, "EnvIcon", envEmoji, 38,
+                        elemColor, TextAnchor.MiddleCenter, new Vector2(0, 22), new Vector2(110, 46));
+                    iconObj.raycastTarget = false;
+                }
+
+                var namePanel = GameBootstrapper.CreatePanel(cardObj.transform, "NamePlate", new Color(0.08f, 0.14f, 0.18f, 0.92f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -16), new Vector2(130, 22));
+                var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", card.name, 13,
+                    Color.Lerp(elemColor, Color.white, 0.35f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(126, 22));
+                txtName.fontStyle = FontStyle.Bold;
+                txtName.raycastTarget = false;
+
+                var descPanel = GameBootstrapper.CreatePanel(cardObj.transform, "DescPanel", new Color(0.05f, 0.08f, 0.11f, 0.85f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -46), new Vector2(130, 40));
+                var txtDesc = GameBootstrapper.CreateText(descPanel.transform, "DescText", card.description, 12,
+                    new Color(0.9f, 0.95f, 0.95f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(126, 38));
+                txtDesc.fontStyle = FontStyle.Bold;
+                txtDesc.raycastTarget = false;
+
+                var actionBadge = GameBootstrapper.CreatePanel(cardObj.transform, "ActionBadge", new Color(0.15f, 0.34f, 0.48f, 0.95f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -72), new Vector2(124, 22));
+                var txtAction = GameBootstrapper.CreateText(actionBadge.transform, "ActionText", $"Shared Arena • {card.duration}T", 11,
+                    new Color(0.9f, 0.98f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(120, 20));
+                txtAction.fontStyle = FontStyle.Bold;
+                txtAction.raycastTarget = false;
+            }
+            else if (card.cardType == CardType.Leader)
+            {
                 if (customArt != null)
                 {
                     var artObj = new GameObject("CardArt");
@@ -812,42 +1109,42 @@ namespace MonsterCardGame.UI
                     artImg.raycastTarget = false;
                 }
 
-                var costCircle = GameBootstrapper.CreateCirclePanel(cardObj.transform, "CostCircle", new Color(0.10f, 0.28f, 0.65f, 0.96f),
-                    new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-18, -18), new Vector2(32, 32));
+                var tagBadge = GameBootstrapper.CreatePanel(cardObj.transform, "LeaderBadge", new Color(0.14f, 0.22f, 0.34f, 0.95f),
+                    new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(36, -16), new Vector2(58, 18));
+                var txtTag = GameBootstrapper.CreateText(tagBadge.transform, "TagText", "LEADER", 9,
+                    new Color(0.86f, 0.94f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(54, 16));
+                txtTag.fontStyle = FontStyle.Bold;
+                txtTag.raycastTarget = false;
+
+                var costCircle = GameBootstrapper.CreateCirclePanel(cardObj.transform, "CostCircle", new Color(0.12f, 0.28f, 0.58f, 0.96f),
+                    new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-18, -18), new Vector2(30, 30));
                 var costOutline = costCircle.AddComponent<Outline>();
-                costOutline.effectColor = elemColor;
+                costOutline.effectColor = new Color(0.55f, 0.72f, 0.90f, 1f);
                 costOutline.effectDistance = new Vector2(1.5f, 1.5f);
-                var txtCost = GameBootstrapper.CreateText(costCircle.transform, "CostText", card.cost.ToString(), 16,
-                    new Color(1f, 0.95f, 0.70f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(32, 32));
+                var txtCost = GameBootstrapper.CreateText(costCircle.transform, "CostText", card.cost.ToString(), 15,
+                    new Color(0.92f, 0.96f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(30, 30));
                 txtCost.fontStyle = FontStyle.Bold;
                 txtCost.raycastTarget = false;
 
-                if (customArt == null)
-                {
-                    string envEmoji = MonsterArtLoader.GetEnvironmentEmoji(card.element);
-                    var iconObj = GameBootstrapper.CreateText(cardObj.transform, "EnvIcon", envEmoji, 38,
-                        elemColor, TextAnchor.MiddleCenter, new Vector2(0, 22), new Vector2(110, 46));
-                    iconObj.raycastTarget = false;
-                }
-
-                var namePanel = GameBootstrapper.CreatePanel(cardObj.transform, "NamePlate", new Color(0.08f, 0.14f, 0.18f, 0.92f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -16), new Vector2(130, 22));
-                var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", card.name, 13,
-                    elemColor, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(126, 22));
+                var namePanel = GameBootstrapper.CreatePanel(cardObj.transform, "NamePlate", new Color(0.08f, 0.11f, 0.17f, 0.94f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -18), new Vector2(130, 22));
+                var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", $"Leader #{card.name}", 12,
+                    new Color(0.86f, 0.94f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(126, 20));
                 txtName.fontStyle = FontStyle.Bold;
                 txtName.raycastTarget = false;
 
-                var descPanel = GameBootstrapper.CreatePanel(cardObj.transform, "DescPanel", new Color(0.05f, 0.08f, 0.11f, 0.85f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -46), new Vector2(130, 40));
-                var txtDesc = GameBootstrapper.CreateText(descPanel.transform, "DescText", card.description, 12,
-                    new Color(0.9f, 0.95f, 0.95f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(126, 38));
+                var descPanel = GameBootstrapper.CreatePanel(cardObj.transform, "DescPanel", new Color(0.05f, 0.07f, 0.11f, 0.88f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -48), new Vector2(130, 38));
+                var txtDesc = GameBootstrapper.CreateText(descPanel.transform, "DescText", card.description, 10,
+                    new Color(0.88f, 0.92f, 0.96f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(126, 36));
                 txtDesc.fontStyle = FontStyle.Bold;
                 txtDesc.raycastTarget = false;
 
-                var actionBadge = GameBootstrapper.CreatePanel(cardObj.transform, "ActionBadge", new Color(0.15f, 0.40f, 0.55f, 0.95f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -72), new Vector2(124, 22));
-                var txtAction = GameBootstrapper.CreateText(actionBadge.transform, "ActionText", $"🌍 {card.duration} Turns", 12,
-                    new Color(0.9f, 0.98f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(120, 20));
+                var actionBadge = GameBootstrapper.CreatePanel(cardObj.transform, "ActionBadge", new Color(0.18f, 0.28f, 0.42f, 0.95f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -74), new Vector2(124, 18));
+                var txtAction = GameBootstrapper.CreateText(actionBadge.transform, "ActionText",
+                    string.IsNullOrEmpty(card.tribe) ? "Side Slot Aura" : $"{card.tribe} Leader", 10,
+                    new Color(0.88f, 0.95f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(120, 16));
                 txtAction.fontStyle = FontStyle.Bold;
                 txtAction.raycastTarget = false;
             }
@@ -859,6 +1156,10 @@ namespace MonsterCardGame.UI
         {
             if (detailCardArt == null || data == null) return;
             Sprite customArt = MonsterArtLoader.GetInspectorSprite(data);
+            if (customArt == null && data.cardType == CardType.Environment)
+            {
+                customArt = BattlefieldAtmosphereEngine.GetOrLoadGroundSprite(data.element, Mathf.Max(1, data.envLevel));
+            }
             detailCardArt.gameObject.SetActive(true);
 
             var numTr = detailCardArt.transform.Find("DetailBigNumber");
@@ -986,7 +1287,7 @@ namespace MonsterCardGame.UI
             {
                 string sideEmoji = isPlayer ? "👑" : "💀";
                 detailNameText.text = $"{sideEmoji} Card #{data.name}";
-                detailNameText.color = isPlayer ? new Color(1f, 0.90f, 0.45f) : new Color(1f, 0.55f, 0.55f);
+                detailNameText.color = isPlayer ? new Color(0.88f, 0.94f, 1f) : new Color(0.95f, 0.62f, 0.64f);
             }
 
             if (detailMetaText != null)
@@ -1112,14 +1413,17 @@ namespace MonsterCardGame.UI
             string typeName = data.cardType switch
             {
                 CardType.Spell => "Magic Spell 🔮",
-                CardType.Environment => "Weather & Environment 🌍",
+                CardType.Environment => "Shared Environment 🌍",
+                CardType.Leader => "Side Leader 👑",
                 _ => "Monster Card 🐉"
             };
 
             if (detailNameText != null)
             {
-                detailNameText.text = $"Card #{data.name}";
-                detailNameText.color = new Color(1f, 0.90f, 0.45f);
+                detailNameText.text = data.cardType == CardType.Environment
+                    ? data.name
+                    : $"Card #{data.name}";
+                detailNameText.color = new Color(0.90f, 0.95f, 1f);
             }
 
             if (detailMetaText != null)
@@ -1140,9 +1444,13 @@ namespace MonsterCardGame.UI
                 {
                     detailStatsText.text = $"Spell Type: {data.spellType} (Instant Effect)";
                 }
+                else if (data.cardType == CardType.Leader)
+                {
+                    detailStatsText.text = "Side Leader Slot • Passive Aura";
+                }
                 else
                 {
-                    detailStatsText.text = $"Duration: {data.duration} Weather Turns";
+                    detailStatsText.text = $"Shared Slot • {data.duration} Turns";
                 }
             }
 
@@ -1157,10 +1465,10 @@ namespace MonsterCardGame.UI
             if (detailStatusText != null)
             {
                 var gm = GameManager.Instance;
-                bool canAfford = (gm != null && gm.humanPlayer.currentPower >= data.cost);
+                bool canAfford = (gm != null && gm.humanPlayer.currentMana >= data.cost);
                 detailStatusText.text = canAfford
-                    ? "✨ Ready to play (Enough Power available)."
-                    : "⚠️ Insufficient Power to play this card.";
+                    ? "✨ Ready to play (Enough Mana available)."
+                    : "⚠️ Insufficient Mana to play this card.";
                 detailStatusText.color = canAfford ? new Color(0.2f, 1f, 0.5f) : new Color(1f, 0.45f, 0.45f);
             }
         }
@@ -1204,7 +1512,11 @@ namespace MonsterCardGame.UI
                 }
                 else if (card.cardType == CardType.Environment)
                 {
-                    LogCombatMessage($"Selected Weather: [{card.name}] (Cost: {card.cost}) — Click 'Activate Weather' or drag upward, or Right-Click to sacrifice.");
+                    LogCombatMessage($"Selected Environment: [{card.name}] (Cost: {card.cost}) — Drag to Shared Environment Slot or click 'Activate Environment'.");
+                }
+                else if (card.cardType == CardType.Leader)
+                {
+                    LogCombatMessage($"Selected Leader: [{card.name}] (Cost: {card.cost}) — Drag to Your Leader Slot, click it, or click 'Deploy Leader'.");
                 }
             }
 
@@ -1263,19 +1575,23 @@ namespace MonsterCardGame.UI
 
             if (selectedCardForAction != null)
             {
-                bool canPlaySelected = gm != null && gm.isPlayerTurn &&
-                    (selectedCardForAction.cardType == CardType.Spell || selectedCardForAction.cardType == CardType.Environment) &&
-                    selectedCardForAction.cost <= gm.humanPlayer.currentPower;
+                bool isInstantPlayType = selectedCardForAction.cardType == CardType.Spell ||
+                                         selectedCardForAction.cardType == CardType.Environment ||
+                                         selectedCardForAction.cardType == CardType.Leader;
+                bool canPlaySelected = gm != null && gm.isPlayerTurn && isInstantPlayType &&
+                    selectedCardForAction.cost <= gm.humanPlayer.currentMana;
 
                 playCardButton.interactable = canPlaySelected;
                 if (txt != null)
                 {
                     if (selectedCardForAction.cardType == CardType.Spell)
-                        txt.text = $"🔮 Cast Spell ({selectedCardForAction.cost}⚡)";
+                        txt.text = $"Cast Spell ({selectedCardForAction.cost}💧)";
                     else if (selectedCardForAction.cardType == CardType.Environment)
-                        txt.text = $"🌍 Activate Weather ({selectedCardForAction.cost}⚡)";
+                        txt.text = $"Activate Environment ({selectedCardForAction.cost}💧)";
+                    else if (selectedCardForAction.cardType == CardType.Leader)
+                        txt.text = $"Deploy Leader ({selectedCardForAction.cost}💧)";
                     else
-                        txt.text = "✨ Select Slot to Summon";
+                        txt.text = "Select Slot to Summon";
                 }
                 return;
             }
@@ -1290,13 +1606,14 @@ namespace MonsterCardGame.UI
                     {
                         txt.text = state switch
                         {
-                            CombatSystem.AbilityReadyState.Ready => $"⚡ Activate Ability ({cost}⚡)",
+                            CombatSystem.AbilityReadyState.Ready => $"⚡ Activate Ability ({cost})",
                             CombatSystem.AbilityReadyState.AlreadyUsed => "✓ Ability Used This Turn",
+                            CombatSystem.AbilityReadyState.NotEnoughMana => $"💧 Need {cost}💧 Mana",
                             CombatSystem.AbilityReadyState.NotEnoughPower => $"⚡ Need {cost}⚡ Power",
                             CombatSystem.AbilityReadyState.NoValidTarget => "🎯 Needs Enemy Target",
                             CombatSystem.AbilityReadyState.Silenced => "🔒 Ability Silenced",
                             CombatSystem.AbilityReadyState.Frozen => "❄️ Monster Frozen",
-                            _ => $"⏳ Ability ({cost}⚡)"
+                            _ => $"⏳ Ability ({cost})"
                         };
                     }
                     return;
@@ -1501,6 +1818,14 @@ namespace MonsterCardGame.UI
                         UpdateUI();
                     }
                 }
+                else if (chosenCard.cardType == CardType.Leader)
+                {
+                    if (gm.PlayLeaderCard(gm.humanPlayer, chosenCard))
+                    {
+                        DeselectHandCards();
+                        UpdateUI();
+                    }
+                }
             }
             else if (selectedBoardSlotIndex >= 0)
             {
@@ -1509,7 +1834,7 @@ namespace MonsterCardGame.UI
         }
 
         /// <summary>
-        /// Direct sacrifice of any card in hand via Right-Click (+1 Max Mana & +1 Power).
+        /// Direct sacrifice of any card in hand via Right-Click (+1 Power & +1 Mana).
         /// </summary>
         public void SacrificeCardDirectly(CardData card)
         {
@@ -1533,7 +1858,7 @@ namespace MonsterCardGame.UI
             if (gm.humanPlayer.SacrificeCard(card))
             {
                 MonsterCardGame.Audio.SoundManager.Instance.PlayCardSacrifice();
-                LogCombatMessage($"🔥 Sacrificed [{card.name}] via Right-Click! Gained +1 Max Mana & +1 Power.");
+                LogCombatMessage($"🔥 Sacrificed [{card.name}] via Right-Click! Gained +1 Power & +1 Mana.");
                 DeselectHandCards();
                 UpdateUI();
             }
@@ -1688,7 +2013,7 @@ namespace MonsterCardGame.UI
 
         #region Game Over & Conclusion
 
-        public void ShowGameOverScreen(bool isVictory, int turns, int playerHp, int enemyHp, int monstersSummoned, int spellsCast, string envName, int manaCap)
+        public void ShowGameOverScreen(bool isVictory, int turns, int playerHp, int enemyHp, int monstersSummoned, int spellsCast, string envName, int finalPower)
         {
             if (gameOverPanel == null) return;
 
@@ -1699,7 +2024,7 @@ namespace MonsterCardGame.UI
                 if (gameOverTitleText != null)
                 {
                     gameOverTitleText.text = "🏆 LEGENDARY VICTORY!";
-                    gameOverTitleText.color = new Color(1f, 0.88f, 0.35f);
+                    gameOverTitleText.color = new Color(0.88f, 0.94f, 1f);
                 }
                 if (gameOverSubtitleText != null)
                 {
@@ -1708,7 +2033,7 @@ namespace MonsterCardGame.UI
                 }
                 if (gameOverModalOutline != null)
                 {
-                    gameOverModalOutline.effectColor = new Color(1f, 0.85f, 0.25f, 0.95f);
+                    gameOverModalOutline.effectColor = new Color(0.42f, 0.56f, 0.72f, 0.95f);
                 }
             }
             else
@@ -1738,7 +2063,7 @@ namespace MonsterCardGame.UI
                     $"⚔️ Monsters Summoned: {monstersSummoned}\n" +
                     $"🔮 Spells Cast: {spellsCast}\n" +
                     $"🌍 Final Weather: {envName}\n" +
-                    $"💎 Final Mana Capacity: {manaCap} (Unlimited ∞)";
+                    $"⚡ Final Power Capacity: {finalPower} (Unlimited ∞)";
 
                 gameOverStatsText.text = stats;
             }

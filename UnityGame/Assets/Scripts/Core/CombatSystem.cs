@@ -119,13 +119,13 @@ namespace MonsterCardGame.Core
                 }
                 else if (p.Contains("Nourishing Roots"))
                 {
-                    player.manaCapacity++;
-                    player.currentPower++;
+                    player.power++;
+                    player.currentMana++;
                 }
                 else if (p.Contains("Psychic Drain"))
                 {
-                    int drained = Mathf.Min(2, Mathf.Max(0, opponent.manaCapacity - 1));
-                    opponent.manaCapacity -= drained;
+                    int drained = Mathf.Min(2, Mathf.Max(0, opponent.power - 1));
+                    opponent.power -= drained;
                 }
                 else if (p.Contains("Black Nightmare"))
                 {
@@ -249,7 +249,7 @@ namespace MonsterCardGame.Core
                         }
                         else if (p.Contains("Supercharge"))
                         {
-                            player.currentPower += 1;
+                            player.currentMana += 1;
                         }
                         else if (p.Contains("Booster Engine"))
                         {
@@ -342,8 +342,8 @@ namespace MonsterCardGame.Core
                     }
                     else if (p.Contains("Scrap Recycling"))
                     {
-                        owner.currentPower += 2;
-                        owner.manaCapacity += 1;
+                        owner.currentMana += 2;
+                        owner.power += 1;
                     }
                     else if (p.Contains("Curse of Doom") && killerM != null && killerM.IsAlive)
                     {
@@ -385,6 +385,7 @@ namespace MonsterCardGame.Core
             Silenced,
             Frozen,
             AlreadyUsed,
+            NotEnoughMana,
             NotEnoughPower,
             NoValidTarget
         }
@@ -449,12 +450,33 @@ namespace MonsterCardGame.Core
         public int GetActiveSkillCost(PlayerState player, PlayerState opponent, int slotIndex, string act)
         {
             if (string.IsNullOrEmpty(act)) return 0;
-            int baseSkillCost = act.Contains("(Cost 3 Power)") ? 3 : (act.Contains("(Cost 2 Power)") ? 2 : 1);
+            bool hasPowerConditionOnly = GetParsedPermanentPowerCost(act) > 0 && !act.ToLowerInvariant().Contains("mana");
+            int baseSkillCost = hasPowerConditionOnly ? 0 :
+                ((act.Contains("(Cost 3 Mana)") || act.Contains("(Cost 3 Power)")) ? 3 :
+                ((act.Contains("(Cost 2 Mana)") || act.Contains("(Cost 2 Power)")) ? 2 : 1));
             var oppSlot = (opponent != null && slotIndex >= 0 && slotIndex < 6) ? opponent.slots[slotIndex] : null;
             var oppM = (oppSlot != null && oppSlot.IsOccupied) ? oppSlot.currentMonster : null;
             int extraCost = (oppM != null && oppM.HasPassiveSubstr("Frost Aura") != null) ? 1 : 0;
             int discount = (player != null && player.freeSkillBonus > 0) ? 1 : 0;
             return Mathf.Max(0, baseSkillCost + extraCost - discount);
+        }
+
+        private static int GetParsedPermanentPowerCost(string act)
+        {
+            if (string.IsNullOrEmpty(act)) return 0;
+            if (act.Contains("(Requires 3 Power)") || act.Contains("(Cost 3 Permanent Power)") || act.Contains("(Spend 3 Power)") || act.Contains("(Drain 3 Power)") || act.Contains("يتطلب 3 باور") || act.Contains("يستهلك 3 باور")) return 3;
+            if (act.Contains("(Requires 2 Power)") || act.Contains("(Cost 2 Permanent Power)") || act.Contains("(Spend 2 Power)") || act.Contains("(Drain 2 Power)") || act.Contains("يتطلب 2 باور") || act.Contains("يستهلك 2 باور")) return 2;
+            if (act.Contains("(Requires 1 Power)") || act.Contains("(Cost 1 Permanent Power)") || act.Contains("(Spend 1 Power)") || act.Contains("(Drain 1 Power)") || act.Contains("يتطلب 1 باور") || act.Contains("يستهلك 1 باور")) return 1;
+            return 0;
+        }
+
+        public int GetActiveSkillPowerCost(MonsterInstance m, string act)
+        {
+            if (m != null && m.data != null && m.data.powerCost > 0)
+            {
+                return m.data.powerCost;
+            }
+            return GetParsedPermanentPowerCost(act);
         }
 
         public bool SkillRequiresEnemyMonster(string act)
@@ -501,7 +523,9 @@ namespace MonsterCardGame.Core
             }
 
             string act = m.actives[0];
-            totalCost = GetActiveSkillCost(owner, opponent, slotIndex, act);
+            int manaCost = GetActiveSkillCost(owner, opponent, slotIndex, act);
+            int pwrCost = GetActiveSkillPowerCost(m, act);
+            totalCost = pwrCost > 0 ? pwrCost : manaCost;
 
             var gm = GameManager.Instance;
             if (gm != null)
@@ -544,13 +568,21 @@ namespace MonsterCardGame.Core
                 return AbilityReadyState.NoValidTarget;
             }
 
-            if (owner.currentPower < totalCost)
+            if (owner.currentMana < manaCost)
             {
-                reason = $"❌ Not enough Power for [{m.data.name}]'s ability! Need {totalCost}⚡, have {owner.currentPower}⚡.";
+                reason = $"❌ Not enough Mana for [{m.data.name}]'s ability! Need {manaCost}💧 Mana, have {owner.currentMana}💧.";
+                return AbilityReadyState.NotEnoughMana;
+            }
+
+            if (pwrCost > 0 && owner.power < pwrCost)
+            {
+                reason = $"❌ Not enough Power for [{m.data.name}]'s ability! Need {pwrCost}⚡ Power, have {owner.power}⚡.";
                 return AbilityReadyState.NotEnoughPower;
             }
 
-            reason = $"⚡ Ready to activate ({totalCost}⚡ Power)!";
+            reason = pwrCost > 0
+                ? $"⚡ Ready to activate (Requires {pwrCost}⚡ Power" + (manaCost > 0 ? $" + {manaCost}💧 Mana" : "") + ")!"
+                : $"💧 Ready to activate ({manaCost}💧 Mana)!";
             return AbilityReadyState.Ready;
         }
 
@@ -571,16 +603,18 @@ namespace MonsterCardGame.Core
             foreach (var act in m.actives)
             {
                 int actCost = GetActiveSkillCost(player, opponent, slotIndex, act);
-                if (player.currentPower < actCost) continue;
+                int actPowerCost = GetActiveSkillPowerCost(m, act);
+                if (player.currentMana < actCost || player.power < actPowerCost) continue;
                 if (SkillRequiresEnemyMonster(act) && GetAliveSlots(opponent).Count == 0) continue;
 
-                player.currentPower -= actCost;
+                player.currentMana -= actCost;
+                if (actPowerCost > 0) player.power -= actPowerCost;
                 int bonusEff = player.freeSkillBonus;
                 player.freeSkillBonus = 0;
 
                 if (m.HasPassiveSubstr("Mana Recovery") != null)
                 {
-                    player.currentPower += 1;
+                    player.currentMana += 1;
                 }
 
                 foreach (var s in player.slots)
@@ -599,7 +633,7 @@ namespace MonsterCardGame.Core
 
                 activatedAny = true;
                 primaryAct = act;
-                if (player.currentPower <= 0) break;
+                if (player.currentMana <= 0 && player.power <= 0) break;
             }
 
             if (!activatedAny)
@@ -615,7 +649,7 @@ namespace MonsterCardGame.Core
 
         public void ExecuteActiveSkills(PlayerState player, PlayerState opponent)
         {
-            if (player.currentPower <= 0) return;
+            if (player.currentMana <= 0 && player.power <= 0) return;
 
             for (int slot = 0; slot < 6; slot++)
             {
@@ -637,7 +671,7 @@ namespace MonsterCardGame.Core
                     }
                 }
 
-                if (player.currentPower <= 0) break;
+                if (player.currentMana <= 0 && player.power <= 0) break;
             }
         }
 
@@ -1586,7 +1620,7 @@ namespace MonsterCardGame.Core
                 defender.TakeLeaderDamage(atkPower);
                 if (attackerMonster.HasPassiveSubstr("Mana Steal") != null)
                 {
-                    attacker.currentPower += 1;
+                    attacker.currentMana += 1;
                 }
                 if (MonsterCardGame.Audio.SoundManager.Instance != null)
                     MonsterCardGame.Audio.SoundManager.Instance.PlayHpDamage();

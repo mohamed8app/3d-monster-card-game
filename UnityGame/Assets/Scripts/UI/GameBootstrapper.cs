@@ -315,16 +315,13 @@ namespace MonsterCardGame.UI
             BuildSlotsRow(centerBoard.transform, ui, ai, false);
             BuildSlotsRow(centerBoard.transform, ui, human, true);
 
-            // 1.7 Sculpted Gold Outer Frame & 4 Corner Bastion Medallions
-            var boardOuterFrame = CreateHollowOrnatePanel(centerBoard.transform, "BoardSculptedFrame",
-                new Color(1f, 0.85f, 0.42f, 0.98f),
-                Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-            boardOuterFrame.transform.SetAsLastSibling();
-
-            BuildCornerBastionMedallion(boardOuterFrame.transform, "BastionTL", new Vector2(0f, 1f), new Vector2(22, -22), "⚔️");
-            BuildCornerBastionMedallion(boardOuterFrame.transform, "BastionTR", new Vector2(1f, 1f), new Vector2(-22, -22), "⚔️");
-            BuildCornerBastionMedallion(boardOuterFrame.transform, "BastionBL", new Vector2(0f, 0f), new Vector2(22, 22), "🛡️");
-            BuildCornerBastionMedallion(boardOuterFrame.transform, "BastionBR", new Vector2(1f, 0f), new Vector2(-22, 22), "🛡️");
+            // Subtle matte gunmetal hairline dividers framing the untouched center battlefield
+            var topSeam = CreatePanel(screenRoot.transform, "TopArenaSeamDivider", new Color(0.20f, 0.23f, 0.29f, 0.92f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 344), new Vector2(1200, 3));
+            topSeam.GetComponent<Image>().raycastTarget = false;
+            var bottomSeam = CreatePanel(screenRoot.transform, "BottomArenaSeamDivider", new Color(0.20f, 0.23f, 0.29f, 0.92f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -344), new Vector2(1200, 3));
+            bottomSeam.GetComponent<Image>().raycastTarget = false;
 
             // =========================================================================
             // ZONE 2: Top Dock — Pure Opponent Hidden Card Hand Tray (1200 x 196)
@@ -337,7 +334,7 @@ namespace MonsterCardGame.UI
             BuildHandDock(screenRoot.transform, ui, true, handTrayArtSprite);
 
             // =========================================================================
-            // ZONE 4: Left Wing — Isolated Top/Bottom Command Citadels & Inspector (360 x 1080)
+            // ZONE 4: Left Wing — Compact Citadels & Card Inspector (360 x 1080)
             // =========================================================================
             var leftWing = CreatePanel(screenRoot.transform, "LeftWingPanel", Color.white,
                 new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(180, 0), new Vector2(360, 1080));
@@ -345,85 +342,82 @@ namespace MonsterCardGame.UI
             {
                 var lwImg = leftWing.GetComponent<Image>();
                 lwImg.sprite = sidebarArtSprite;
-                lwImg.color = Color.white;
+                lwImg.color = new Color(0.46f, 0.49f, 0.56f, 1f);
             }
             else
             {
-                leftWing.GetComponent<Image>().color = new Color(0.06f, 0.07f, 0.11f, 0.98f);
+                leftWing.GetComponent<Image>().color = new Color(0.05f, 0.06f, 0.09f, 0.98f);
             }
-            CreateHollowOrnatePanel(leftWing.transform, "LeftWingSculptedRim",
-                new Color(0.95f, 0.78f, 0.35f, 0.92f), Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            var leftEdgeDiv = CreatePanel(leftWing.transform, "LeftWingEdgeDivider", new Color(0.18f, 0.21f, 0.27f, 0.92f),
+                new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-1, 0), new Vector2(2, 1080));
+            leftEdgeDiv.GetComponent<Image>().raycastTarget = false;
 
-            // Top-Left: Isolated Enemy Commander Citadel
+            // Top-Left: Compact Enemy Commander HUD (320 x 126, y = -18 from top)
             BuildCommanderCitadel(leftWing.transform, ui, false, null);
 
-            var topLeftDivider = CreateText(leftWing.transform, "TopLeftWingDivider", "━━━◆ 💀 ◆━━━", 13,
-                new Color(0.95f, 0.45f, 0.42f, 0.88f), TextAnchor.MiddleCenter, new Vector2(0, 344), new Vector2(320, 22));
-            topLeftDivider.raycastTarget = false;
-
-            // Middle-Left: Reconnaissance & Card Inspector
+            // Middle-Left: Matte Dark Slate Card Inspector (Header + 724px Inspector)
             var reconHeader = CreateOrnatePanel(leftWing.transform, "ReconHeaderBanner",
-                new Color(0.08f, 0.12f, 0.22f, 0.96f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 316), new Vector2(336, 32));
-            var rhText = CreateText(reconHeader.transform, "ReconHeaderText", "⚜️ RECONNAISSANCE & INSPECTOR ⚜️", 12,
-                new Color(1f, 0.92f, 0.62f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(320, 28));
+                new Color(0.07f, 0.09f, 0.14f, 0.96f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 369), new Vector2(320, 28));
+            var rhText = CreateText(reconHeader.transform, "ReconHeaderText", "CARD INSPECTOR", 11,
+                new Color(0.76f, 0.82f, 0.90f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(304, 24));
             AddTextShadow(rhText);
 
             var detailsPanel = CreateOrnatePanel(leftWing.transform, "CardDetailsInspectorPanel",
-                new Color(0.05f, 0.07f, 0.12f, 0.94f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -18), new Vector2(336, 630));
+                new Color(0.05f, 0.06f, 0.09f, 0.96f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -16), new Vector2(320, 724));
             ui.cardDetailsPanel = detailsPanel;
 
             // 1. Card Name Bar & Sapphire Mana Cost Medallion
             var detailHeaderBar = CreateOrnatePanel(detailsPanel.transform, "DetailHeaderBar",
-                new Color(0.10f, 0.13f, 0.22f, 0.96f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 284), new Vector2(314, 40));
+                new Color(0.08f, 0.10f, 0.15f, 0.96f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 334), new Vector2(300, 40));
 
-            ui.detailNameText = CreateText(detailHeaderBar.transform, "DetailName", "Select a Monster or Card", 15,
-                new Color(1f, 0.92f, 0.48f), TextAnchor.MiddleLeft, new Vector2(-18, 0), new Vector2(236, 32));
+            ui.detailNameText = CreateText(detailHeaderBar.transform, "DetailName", "Select a Monster or Card", 14,
+                new Color(0.90f, 0.94f, 0.98f), TextAnchor.MiddleLeft, new Vector2(-18, 0), new Vector2(224, 32));
             AddTextShadow(ui.detailNameText);
 
             var fullCostCircle = CreateMedallion(detailHeaderBar.transform, "FullCostCircle",
-                new Color(0.12f, 0.42f, 0.88f, 1f), new Vector2(128, 0), new Vector2(38, 38), "-", 16);
+                new Color(0.14f, 0.34f, 0.64f, 1f), new Vector2(124, 0), new Vector2(34, 34), "-", 15);
             ui.detailCostText = fullCostCircle.transform.Find("MedallionText").GetComponent<Text>();
 
-            // 2. Full-Width Enlarged Artwork Window (314 x 256) with Double Gold Frame
-            var artWindow = CreatePanel(detailsPanel.transform, "ArtWindow", new Color(0.03f, 0.04f, 0.08f, 1f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 126), new Vector2(314, 256));
+            // 2. Full-Width Enlarged Artwork Window (272 x 310, clean dark slate bevel — no gold frame)
+            var artWindow = CreatePanel(detailsPanel.transform, "ArtWindow", new Color(0.03f, 0.04f, 0.06f, 1f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 150), new Vector2(272, 310));
+            var artWinOutline = artWindow.AddComponent<Outline>();
+            artWinOutline.effectColor = new Color(0.28f, 0.32f, 0.40f, 0.95f);
+            artWinOutline.effectDistance = new Vector2(1.5f, 1.5f);
 
             var artObj = new GameObject("FullCardArtImage");
             artObj.transform.SetParent(artWindow.transform, false);
             var rectArt = artObj.AddComponent<RectTransform>();
             rectArt.anchorMin = Vector2.zero;
             rectArt.anchorMax = Vector2.one;
-            rectArt.sizeDelta = new Vector2(-8, -8);
+            rectArt.sizeDelta = new Vector2(-6, -6);
             ui.detailCardArt = artObj.AddComponent<Image>();
             ui.detailCardArt.preserveAspect = false;
 
-            CreateHollowOrnatePanel(artWindow.transform, "ArtWindowGoldFrame",
-                new Color(0.98f, 0.82f, 0.38f, 0.98f), Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-
-            // 3. Element, Role & Cost Meta Bar
+            // 3. Element, Tribe, Role & Cost Meta Bar
             var metaBar = CreateOrnatePanel(detailsPanel.transform, "MetaBar",
-                new Color(0.08f, 0.15f, 0.26f, 0.96f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -24), new Vector2(314, 28));
-            ui.detailMetaText = CreateText(metaBar.transform, "DetailMeta", "Click any monster on the board or card in hand", 11,
-                new Color(0.48f, 0.90f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(300, 22));
+                new Color(0.08f, 0.11f, 0.16f, 0.96f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -28), new Vector2(300, 30));
+            ui.detailMetaText = CreateText(metaBar.transform, "DetailMeta", "Click any card on board, hand, or side slots", 11,
+                new Color(0.70f, 0.84f, 0.96f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(288, 24));
             AddTextShadow(ui.detailMetaText);
 
-            // 4. Tactical Ability & Spell Effect Scroll Box (192 height)
+            // 4. Ability & Effect Scroll Box (216 height)
             var descBox = CreateOrnatePanel(detailsPanel.transform, "DescBox",
-                new Color(0.04f, 0.05f, 0.09f, 0.96f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -142), new Vector2(314, 192));
+                new Color(0.04f, 0.05f, 0.08f, 0.96f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -160), new Vector2(300, 216));
 
-            var descHeader = CreateText(descBox.transform, "DescBoxHeader", "─── ❖ TACTICAL ABILITY & EFFECT ❖ ───", 11,
-                new Color(0.95f, 0.80f, 0.40f, 0.90f), TextAnchor.MiddleCenter, new Vector2(0, -14), new Vector2(290, 18));
+            var descHeader = CreateText(descBox.transform, "DescBoxHeader", "SIDE ABILITY & EFFECT", 10,
+                new Color(0.68f, 0.74f, 0.82f, 0.92f), TextAnchor.MiddleCenter, new Vector2(0, -14), new Vector2(280, 18));
             descHeader.rectTransform.anchorMin = new Vector2(0.5f, 1f);
             descHeader.rectTransform.anchorMax = new Vector2(0.5f, 1f);
             descHeader.rectTransform.anchoredPosition = new Vector2(0, -14);
 
-            ui.detailDescText = CreateText(descBox.transform, "DetailDesc", "Full monster abilities, tactical passives, and spell effects will appear here.", 12,
-                new Color(0.92f, 0.95f, 0.98f), TextAnchor.UpperLeft, Vector2.zero, Vector2.zero);
+            ui.detailDescText = CreateText(descBox.transform, "DetailDesc", "Full monster abilities, leader passive auras, and spell/environment effects will appear here.", 12,
+                new Color(0.90f, 0.93f, 0.96f), TextAnchor.UpperLeft, Vector2.zero, Vector2.zero);
             ui.detailDescText.rectTransform.anchorMin = Vector2.zero;
             ui.detailDescText.rectTransform.anchorMax = Vector2.one;
             ui.detailDescText.rectTransform.offsetMin = new Vector2(12, 10);
@@ -431,19 +425,19 @@ namespace MonsterCardGame.UI
             ui.detailDescText.horizontalOverflow = HorizontalWrapMode.Wrap;
             ui.detailDescText.verticalOverflow = VerticalWrapMode.Truncate;
 
-            // 5. Bottom ATK / DEF Shields & Unit Status Badge
+            // 5. Bottom ATK / Status / DEF Plaques (matte dark slate)
             var atkBadge = CreateOrnatePanel(detailsPanel.transform, "FullAtkBadge",
-                new Color(0.68f, 0.12f, 0.16f, 0.98f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-104, -274), new Vector2(90, 42));
-            ui.detailAtkText = CreateText(atkBadge.transform, "AtkText", "⚔️ -", 16,
-                Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(84, 36));
+                new Color(0.28f, 0.11f, 0.13f, 0.96f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-104, -318), new Vector2(88, 44));
+            ui.detailAtkText = CreateText(atkBadge.transform, "AtkText", "⚔️ -", 15,
+                new Color(0.96f, 0.88f, 0.88f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(82, 38));
             AddTextShadow(ui.detailAtkText);
 
             var statusBadge = CreateOrnatePanel(detailsPanel.transform, "DetailStatusBadge",
-                new Color(0.07f, 0.11f, 0.18f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -274), new Vector2(114, 42));
-            ui.detailStatusText = CreateText(statusBadge.transform, "DetailStatus", "⚔️ Ready", 11,
-                new Color(0.38f, 1f, 0.58f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(106, 36));
+                new Color(0.08f, 0.11f, 0.16f, 0.96f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -318), new Vector2(114, 44));
+            ui.detailStatusText = CreateText(statusBadge.transform, "DetailStatus", "Ready", 11,
+                new Color(0.52f, 0.88f, 0.68f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(106, 38));
             ui.detailStatusText.horizontalOverflow = HorizontalWrapMode.Wrap;
             ui.detailStatusText.verticalOverflow = VerticalWrapMode.Truncate;
             ui.detailStatusText.resizeTextForBestFit = true;
@@ -452,21 +446,17 @@ namespace MonsterCardGame.UI
             ui.detailStatsText = ui.detailStatusText;
 
             var defBadge = CreateOrnatePanel(detailsPanel.transform, "FullDefBadge",
-                new Color(0.10f, 0.52f, 0.24f, 0.98f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(104, -274), new Vector2(90, 42));
-            ui.detailDefText = CreateText(defBadge.transform, "DefText", "🛡️ -", 16,
-                Color.white, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(84, 36));
+                new Color(0.11f, 0.25f, 0.16f, 0.96f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(104, -318), new Vector2(88, 44));
+            ui.detailDefText = CreateText(defBadge.transform, "DefText", "🛡️ -", 15,
+                new Color(0.88f, 0.96f, 0.90f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(82, 38));
             AddTextShadow(ui.detailDefText);
 
-            var bottomLeftDivider = CreateText(leftWing.transform, "BottomLeftWingDivider", "━━━◆ 👑 ◆━━━", 13,
-                new Color(0.95f, 0.80f, 0.38f, 0.88f), TextAnchor.MiddleCenter, new Vector2(0, -344), new Vector2(320, 22));
-            bottomLeftDivider.raycastTarget = false;
-
-            // Bottom-Left: Isolated Player Commander Citadel
+            // Bottom-Left: Compact Player Commander HUD (320 x 126, y = +18 from bottom)
             BuildCommanderCitadel(leftWing.transform, ui, true, null);
 
             // =========================================================================
-            // ZONE 5: Right Wing — War Operations & Elemental Altar (360 x 1080)
+            // ZONE 5: Right Wing — Leaders Side Slots, Chronicle, Shared Environment & Orders
             // =========================================================================
             var rightWing = CreatePanel(screenRoot.transform, "RightWingPanel", Color.white,
                 new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-180, 0), new Vector2(360, 1080));
@@ -474,133 +464,294 @@ namespace MonsterCardGame.UI
             {
                 var rwImg = rightWing.GetComponent<Image>();
                 rwImg.sprite = sidebarArtSprite;
-                rwImg.color = Color.white;
+                rwImg.color = new Color(0.46f, 0.49f, 0.56f, 1f);
             }
             else
             {
-                rightWing.GetComponent<Image>().color = new Color(0.06f, 0.07f, 0.11f, 0.98f);
+                rightWing.GetComponent<Image>().color = new Color(0.05f, 0.06f, 0.09f, 0.98f);
             }
-            CreateHollowOrnatePanel(rightWing.transform, "RightWingSculptedRim",
-                new Color(0.95f, 0.78f, 0.35f, 0.92f), Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            var rightEdgeDiv = CreatePanel(rightWing.transform, "RightWingEdgeDivider", new Color(0.18f, 0.21f, 0.27f, 0.92f),
+                new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(1, 0), new Vector2(2, 1080));
+            rightEdgeDiv.GetComponent<Image>().raycastTarget = false;
 
-            // Exit Button at Top of Right Wing
-            var quitBtn = CreateBeveledButton(rightWing.transform, "QuitGameBtn", "❌ Exit",
-                new Color(0.78f, 0.16f, 0.22f, 0.98f), Color.white,
-                new Vector2(0, 492), new Vector2(136, 34), 14,
+            // Top Utility Row (Turn Badge + Compact Exit Button at y = +506)
+            var turnBadgePanel = CreateOrnatePanel(rightWing.transform, "TopTurnBar",
+                new Color(0.07f, 0.09f, 0.14f, 0.95f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-52, 506), new Vector2(216, 32));
+            ui.turnInfoText = CreateText(turnBadgePanel.transform, "TurnInfoText", "TURN 1 • YOUR MOVE", 11,
+                new Color(0.84f, 0.90f, 0.98f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(204, 28));
+            AddTextShadow(ui.turnInfoText);
+
+            var quitBtn = CreateBeveledButton(rightWing.transform, "QuitGameBtn", "EXIT",
+                new Color(0.36f, 0.13f, 0.16f, 0.98f), new Color(0.95f, 0.90f, 0.90f),
+                new Vector2(114, 506), new Vector2(92, 32), 12,
                 () => { if (BattleUIManager.Instance != null) BattleUIManager.Instance.OnQuitClicked(); });
             quitBtn.gameObject.AddComponent<QuitButtonHandler>();
             ui.quitButton = quitBtn;
 
-            // Right Wing Top Header Banner
-            var opsHeader = CreateOrnatePanel(rightWing.transform, "OpsHeaderBanner",
-                new Color(0.14f, 0.09f, 0.20f, 0.96f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 368), new Vector2(312, 34));
-            var ohText = CreateText(opsHeader.transform, "OpsHeaderText", "🚩 WAR OPERATIONS & COMMAND CENTER 🚩", 12,
-                new Color(1f, 0.92f, 0.62f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(300, 28));
-            AddTextShadow(ohText);
+            // Zone A: Enemy Leader Side Slot (y = +388, 320 x 188)
+            BuildSideLeaderSlot(rightWing.transform, ui, false, 388f, 188f);
 
-            // 1. Battle & Spell Chronicle Log
+            // Zone B: Compact Battle Chronicle Log (y = +224, 320 x 124)
             var logPanel = CreateOrnatePanel(rightWing.transform, "CombatLogPanel",
-                new Color(0.05f, 0.06f, 0.11f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 234), new Vector2(312, 214));
+                new Color(0.05f, 0.06f, 0.09f, 0.95f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 224), new Vector2(320, 124));
 
-            var logHeaderBar = CreateOrnatePanel(logPanel.transform, "LogHeaderBar",
-                new Color(0.14f, 0.11f, 0.20f, 0.96f),
-                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0, -18), new Vector2(290, 28));
-            var lhTxt = CreateText(logHeaderBar.transform, "LogHeader", "📜 BATTLE & SPELL CHRONICLE", 12,
-                new Color(1f, 0.88f, 0.48f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(276, 24));
+            var logHeaderBar = CreatePanel(logPanel.transform, "LogHeaderBar",
+                new Color(0.08f, 0.10f, 0.15f, 0.96f),
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0, -14), new Vector2(304, 22));
+            var lhTxt = CreateText(logHeaderBar.transform, "LogHeader", "BATTLE CHRONICLE", 10,
+                new Color(0.72f, 0.78f, 0.86f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(290, 20));
             AddTextShadow(lhTxt);
 
-            ui.combatLogText = CreateText(logPanel.transform, "CombatLogText", "Match started with 500 HP and 452 balanced tactical cards...", 11,
-                new Color(0.90f, 0.94f, 0.98f), TextAnchor.UpperLeft, new Vector2(0, -14), new Vector2(282, 160));
+            ui.combatLogText = CreateText(logPanel.transform, "CombatLogText", "Match started cleanly — ready for tactical orders...", 10,
+                new Color(0.86f, 0.90f, 0.95f), TextAnchor.UpperLeft, new Vector2(0, -12), new Vector2(296, 86));
             ui.combatLogText.horizontalOverflow = HorizontalWrapMode.Wrap;
             ui.combatLogText.verticalOverflow = VerticalWrapMode.Truncate;
 
-            // 2. Field Command Arsenal (3 Action Buttons)
-            var arsenalPanel = CreateOrnatePanel(rightWing.transform, "CommandArsenalPanel",
-                new Color(0.06f, 0.08f, 0.14f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 26), new Vector2(312, 182));
+            // Zone C: Shared Environment Card Slot centered on Right Wing (y = +32, 320 x 242)
+            BuildSharedEnvironmentSlot(rightWing.transform, ui, 32f, 242f);
 
-            var arsTitle = CreateText(arsenalPanel.transform, "ArsenalHeader", "⚔️ FIELD COMMAND ORDERS ⚔️", 12,
-                new Color(1f, 0.88f, 0.52f), TextAnchor.UpperCenter, new Vector2(0, 70), new Vector2(280, 20));
+            // Zone D: Command Orders (y = -196, 320 x 188)
+            var arsenalPanel = CreateOrnatePanel(rightWing.transform, "CommandArsenalPanel",
+                new Color(0.06f, 0.07f, 0.10f, 0.95f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -196), new Vector2(320, 188));
+
+            var arsTitle = CreateText(arsenalPanel.transform, "ArsenalHeader", "COMMAND ORDERS", 11,
+                new Color(0.72f, 0.78f, 0.86f), TextAnchor.UpperCenter, new Vector2(0, 74), new Vector2(290, 20));
             AddTextShadow(arsTitle);
 
-            ui.attackButton = CreateBeveledButton(arsenalPanel.transform, "AttackBtn", "⚔️ All-Out Monster Assault",
-                new Color(0.82f, 0.18f, 0.22f, 0.98f), Color.white,
-                new Vector2(0, 26), new Vector2(286, 40), 14,
+            ui.attackButton = CreateBeveledButton(arsenalPanel.transform, "AttackBtn", "All-Out Monster Assault",
+                new Color(0.46f, 0.15f, 0.18f, 0.98f), Color.white,
+                new Vector2(0, 34), new Vector2(296, 40), 13,
                 () => ui.SendMessage("OnAttackClicked"));
 
-            ui.playCardButton = CreateBeveledButton(arsenalPanel.transform, "PlayCardBtn", "✨ Activate Card / Spell",
-                new Color(0.56f, 0.20f, 0.82f, 0.98f), Color.white,
-                new Vector2(0, -18), new Vector2(286, 40), 14,
+            ui.playCardButton = CreateBeveledButton(arsenalPanel.transform, "PlayCardBtn", "Activate Card / Spell",
+                new Color(0.28f, 0.18f, 0.42f, 0.98f), Color.white,
+                new Vector2(0, -14), new Vector2(296, 40), 13,
                 () => ui.SendMessage("OnPlayCardClicked"));
 
-            ui.endTurnButton = CreateBeveledButton(arsenalPanel.transform, "EndTurnBtn", "🔁 End Tactical Turn",
-                new Color(0.16f, 0.48f, 0.86f, 0.98f), new Color(1f, 0.96f, 0.72f),
-                new Vector2(0, -64), new Vector2(286, 44), 15,
+            ui.endTurnButton = CreateBeveledButton(arsenalPanel.transform, "EndTurnBtn", "End Tactical Turn",
+                new Color(0.16f, 0.28f, 0.44f, 0.98f), new Color(0.92f, 0.96f, 1f),
+                new Vector2(0, -64), new Vector2(296, 42), 14,
                 () => ui.SendMessage("OnEndTurnClicked"));
 
-            // 3. Elemental Weather Altar at Bottom of Right Wing
-            var envAltar = CreateOrnatePanel(rightWing.transform, "EnvironmentAltarPanel",
-                new Color(0.05f, 0.09f, 0.16f, 0.96f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -226), new Vector2(312, 296));
-            ui.envAltarPanel = envAltar;
-
-            var altarHeader = CreateOrnatePanel(envAltar.transform, "AltarHeaderBar",
-                new Color(0.08f, 0.18f, 0.30f, 0.96f),
-                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0, -18), new Vector2(290, 28));
-            var altTitle = CreateText(altarHeader.transform, "AltarTitle", "🏛️ ELEMENTAL WEATHER ALTAR (12)", 12,
-                new Color(0.85f, 0.95f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(276, 24));
-            AddTextShadow(altTitle);
-
-            var envOrb = CreateMedallion(envAltar.transform, "EnvOrbMedallion",
-                new Color(0.14f, 0.38f, 0.62f, 0.98f), new Vector2(0, 74), new Vector2(62, 62), "☀️", 28);
-            ui.envIconText = envOrb.transform.Find("MedallionText").GetComponent<Text>();
-
-            ui.envNameText = CreateText(envAltar.transform, "EnvName", "Weather: Stable", 14,
-                new Color(1f, 0.90f, 0.45f), TextAnchor.MiddleCenter, new Vector2(0, 28), new Vector2(288, 20));
-            AddTextShadow(ui.envNameText);
-
-            ui.envLevelText = CreateText(envAltar.transform, "EnvLevel", "Natural (Neutral)", 11,
-                new Color(0.68f, 0.88f, 1f), TextAnchor.MiddleCenter, new Vector2(0, 8), new Vector2(288, 18));
-
-            ui.envDurationText = CreateText(envAltar.transform, "EnvDuration", "⏳ Permanent", 11,
-                new Color(0.92f, 0.92f, 0.96f), TextAnchor.MiddleCenter, new Vector2(0, -10), new Vector2(288, 18));
-
-            var buffPlaque = CreateOrnatePanel(envAltar.transform, "EnvBuffPlaque",
-                new Color(0.05f, 0.18f, 0.11f, 0.92f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -38), new Vector2(288, 24));
-            ui.envBuffText = CreateText(buffPlaque.transform, "EnvBuff", "• No Active Buffs", 10,
-                new Color(0.32f, 0.98f, 0.52f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(276, 20));
-
-            var debuffPlaque = CreateOrnatePanel(envAltar.transform, "EnvDebuffPlaque",
-                new Color(0.20f, 0.06f, 0.09f, 0.92f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -66), new Vector2(288, 24));
-            ui.envDebuffText = CreateText(debuffPlaque.transform, "EnvDebuff", "• All Elements Balanced", 10,
-                new Color(1f, 0.48f, 0.48f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(276, 20));
-
-            ui.testCycleEnvButton = CreateBeveledButton(envAltar.transform, "TestCycleEnvBtn", "🔄 Weather (12)",
-                new Color(0.14f, 0.46f, 0.72f, 0.98f), Color.white,
-                new Vector2(-72, -112), new Vector2(138, 34), 12,
-                () => { if (BattleUIManager.Instance != null) BattleUIManager.Instance.OnTestCycleEnvironmentClicked(); });
-
-            ui.testCycleLevelButton = CreateBeveledButton(envAltar.transform, "TestCycleLevelBtn", "⭐ Upgrade (1-3)",
-                new Color(0.62f, 0.40f, 0.14f, 0.98f), new Color(1f, 0.95f, 0.65f),
-                new Vector2(72, -112), new Vector2(138, 34), 12,
-                () => { if (BattleUIManager.Instance != null) BattleUIManager.Instance.OnTestCycleEnvLevelClicked(); });
+            // Zone E: Player Leader Side Slot (y = -410, 320 x 214)
+            BuildSideLeaderSlot(rightWing.transform, ui, true, -410f, 214f);
 
             // 11. Epic Game Over Modal
             BuildGameOverModal(canvas, ui);
         }
 
-        private static void BuildCornerBastionMedallion(Transform parent, string name, Vector2 anchor, Vector2 pos, string symbol)
+        private static void BuildSideLeaderSlot(Transform parent, BattleUIManager ui, bool isPlayerSide, float centerY, float height)
         {
-            var med = CreateMedallion(parent, name, new Color(0.16f, 0.12f, 0.08f, 0.98f), pos, new Vector2(36, 36), symbol, 15);
-            var rt = med.GetComponent<RectTransform>();
-            rt.anchorMin = anchor;
-            rt.anchorMax = anchor;
-            rt.anchoredPosition = pos;
-            med.GetComponent<Image>().raycastTarget = false;
+            string panelName = isPlayerSide ? "PlayerLeaderSlotPanel" : "EnemyLeaderSlotPanel";
+            string cardBtnName = isPlayerSide ? "PlayerLeaderCardSlot" : "EnemyLeaderCardSlot";
+            Color bgCol = isPlayerSide ? new Color(0.07f, 0.10f, 0.14f, 0.96f) : new Color(0.11f, 0.06f, 0.08f, 0.96f);
+            Color outlineCol = isPlayerSide ? new Color(0.28f, 0.38f, 0.48f, 0.92f) : new Color(0.38f, 0.20f, 0.23f, 0.92f);
+
+            var panel = CreateOrnatePanel(parent, panelName, bgCol,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, centerY), new Vector2(320, height));
+            var panelOut = panel.AddComponent<Outline>();
+            panelOut.effectColor = outlineCol;
+            panelOut.effectDistance = new Vector2(1.2f, 1.2f);
+
+            string hdrStr = isPlayerSide ? "YOUR LEADER SLOT (SIDE)" : "ENEMY LEADER SLOT (SIDE)";
+            Color hdrCol = isPlayerSide ? new Color(0.78f, 0.88f, 0.98f) : new Color(0.88f, 0.68f, 0.70f);
+            float hdrY = (height * 0.5f) - 16f;
+            var hdr = CreateText(panel.transform, "LeaderSlotHeader", hdrStr, 10,
+                hdrCol, TextAnchor.MiddleCenter, new Vector2(0, hdrY), new Vector2(300, 20));
+            AddTextShadow(hdr);
+
+            float cardH = isPlayerSide ? 154f : 140f;
+            var cardObj = CreatePanel(panel.transform, cardBtnName, new Color(0.04f, 0.05f, 0.08f, 0.98f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-88, -11), new Vector2(114, cardH));
+            var cardOut = cardObj.AddComponent<Outline>();
+            cardOut.effectColor = outlineCol;
+            cardOut.effectDistance = new Vector2(1.5f, 1.5f);
+            var cardBtn = cardObj.AddComponent<Button>();
+            cardBtn.targetGraphic = cardObj.GetComponent<Image>();
+
+            // Empty placeholder inset
+            var emptyGrp = CreatePanel(cardObj.transform, "EmptyGroup", new Color(0.06f, 0.07f, 0.10f, 0.95f),
+                Vector2.zero, Vector2.one, Vector2.zero, new Vector2(-8, -8));
+            emptyGrp.GetComponent<Image>().raycastTarget = false;
+            var emptyTxt = CreateText(emptyGrp.transform, "EmptyLabel",
+                isPlayerSide ? "EMPTY\nLEADER\n(Drag / Play)" : "EMPTY\nLEADER", 10,
+                isPlayerSide ? new Color(0.56f, 0.64f, 0.74f) : new Color(0.58f, 0.44f, 0.48f),
+                TextAnchor.MiddleCenter, Vector2.zero, new Vector2(100, 80));
+            emptyTxt.raycastTarget = false;
+
+            // Summoned Leader Art Layer
+            var artObj = new GameObject("LeaderCardArt");
+            artObj.transform.SetParent(cardObj.transform, false);
+            var artRt = artObj.AddComponent<RectTransform>();
+            artRt.anchorMin = Vector2.zero;
+            artRt.anchorMax = Vector2.one;
+            artRt.sizeDelta = new Vector2(-6, -6);
+            var artImg = artObj.AddComponent<Image>();
+            artImg.preserveAspect = false;
+            artImg.raycastTarget = false;
+            artObj.SetActive(false);
+
+            // Top-right Cost Badge
+            var costOrb = CreateCirclePanel(cardObj.transform, "LeaderCostBadge", new Color(0.12f, 0.30f, 0.58f, 0.96f),
+                new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-16, -16), new Vector2(24, 24));
+            var costTxt = CreateText(costOrb.transform, "CostText", "0", 12,
+                new Color(0.92f, 0.96f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(24, 24));
+            costTxt.raycastTarget = false;
+            costTxt.gameObject.SetActive(false);
+            costOrb.SetActive(false);
+
+            // Right Info Column
+            var nameTxt = CreateText(panel.transform, "LeaderNameText", isPlayerSide ? "No Leader Summoned" : "No Enemy Leader", 12,
+                isPlayerSide ? new Color(0.84f, 0.92f, 1f) : new Color(0.88f, 0.68f, 0.70f),
+                TextAnchor.MiddleLeft, new Vector2(64, 42), new Vector2(170, 24));
+            nameTxt.fontStyle = FontStyle.Bold;
+            AddTextShadow(nameTxt);
+
+            Text tribeTxt = null;
+            if (isPlayerSide)
+            {
+                tribeTxt = CreateText(panel.transform, "LeaderTribeText", "Passive Side Aura Slot", 10,
+                    new Color(0.64f, 0.76f, 0.88f), TextAnchor.MiddleLeft, new Vector2(64, 20), new Vector2(170, 18));
+            }
+
+            var descTxt = CreateText(panel.transform, "LeaderDescText",
+                isPlayerSide ? "Drag or play a Leader card into this side slot." : "Side passive zone (Not targetable by lane attacks).", 10,
+                new Color(0.80f, 0.84f, 0.90f), TextAnchor.UpperLeft, new Vector2(64, isPlayerSide ? -32f : -16f), new Vector2(170, isPlayerSide ? 78f : 72f));
+            descTxt.horizontalOverflow = HorizontalWrapMode.Wrap;
+            descTxt.verticalOverflow = VerticalWrapMode.Truncate;
+
+            if (!isPlayerSide)
+            {
+                var passiveBadge = CreatePanel(panel.transform, "PassiveZoneBadge", new Color(0.16f, 0.08f, 0.10f, 0.95f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(64, -66), new Vector2(170, 22));
+                var pTxt = CreateText(passiveBadge.transform, "PassiveText", "PASSIVE • SIDE ZONE", 9,
+                    new Color(0.82f, 0.64f, 0.66f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(162, 18));
+                pTxt.raycastTarget = false;
+            }
+
+            if (isPlayerSide)
+            {
+                ui.playerLeaderSlotButton = cardBtn;
+                ui.playerLeaderCardArt = artImg;
+                ui.playerLeaderEmptyGroup = emptyGrp;
+                ui.playerLeaderCostText = costTxt;
+                ui.playerLeaderNameText = nameTxt;
+                ui.playerLeaderTribeText = tribeTxt;
+                ui.playerLeaderDescText = descTxt;
+            }
+            else
+            {
+                ui.enemyLeaderSlotButton = cardBtn;
+                ui.enemyLeaderCardArt = artImg;
+                ui.enemyLeaderEmptyGroup = emptyGrp;
+                ui.enemyLeaderCostText = costTxt;
+                ui.enemyLeaderNameText = nameTxt;
+                ui.enemyLeaderDescText = descTxt;
+            }
+        }
+
+        private static void BuildSharedEnvironmentSlot(Transform parent, BattleUIManager ui, float centerY, float height)
+        {
+            var envAltar = CreateOrnatePanel(parent, "SharedEnvSlotPanel",
+                new Color(0.06f, 0.08f, 0.12f, 0.96f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, centerY), new Vector2(320, height));
+            var envOut = envAltar.AddComponent<Outline>();
+            envOut.effectColor = new Color(0.28f, 0.36f, 0.46f, 0.95f);
+            envOut.effectDistance = new Vector2(1.2f, 1.2f);
+            ui.envAltarPanel = envAltar;
+
+            var altarHeader = CreatePanel(envAltar.transform, "AltarHeaderBar",
+                new Color(0.08f, 0.12f, 0.18f, 0.96f),
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0, -15), new Vector2(304, 24));
+            var altTitle = CreateText(altarHeader.transform, "AltarTitle", "SHARED ENVIRONMENT (BOTH)", 10,
+                new Color(0.80f, 0.88f, 0.96f), TextAnchor.MiddleLeft, new Vector2(-24, 0), new Vector2(236, 20));
+            AddTextShadow(altTitle);
+
+            ui.testCycleEnvButton = CreateBeveledButton(altarHeader.transform, "TestCycleEnvBtn", "⟳",
+                new Color(0.14f, 0.24f, 0.36f, 0.95f), new Color(0.88f, 0.94f, 1f),
+                new Vector2(114, 0), new Vector2(24, 20), 11,
+                () => { if (BattleUIManager.Instance != null) BattleUIManager.Instance.OnTestCycleEnvironmentClicked(); });
+
+            ui.testCycleLevelButton = CreateBeveledButton(altarHeader.transform, "TestCycleLevelBtn", "★",
+                new Color(0.18f, 0.22f, 0.30f, 0.95f), new Color(0.88f, 0.94f, 1f),
+                new Vector2(140, 0), new Vector2(24, 20), 11,
+                () => { if (BattleUIManager.Instance != null) BattleUIManager.Instance.OnTestCycleEnvLevelClicked(); });
+
+            // Left 3:4 Active Environment Card Frame (114 x 168)
+            var envCardObj = CreatePanel(envAltar.transform, "SharedEnvCardSlot",
+                new Color(0.05f, 0.07f, 0.10f, 0.98f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-88, -12), new Vector2(114, 168));
+            var envCardOut = envCardObj.AddComponent<Outline>();
+            envCardOut.effectColor = new Color(0.32f, 0.42f, 0.54f, 0.95f);
+            envCardOut.effectDistance = new Vector2(1.5f, 1.5f);
+            var envSlotBtn = envCardObj.AddComponent<Button>();
+            envSlotBtn.targetGraphic = envCardObj.GetComponent<Image>();
+            ui.envSlotButton = envSlotBtn;
+
+            var artObj = new GameObject("SharedEnvCardArt");
+            artObj.transform.SetParent(envCardObj.transform, false);
+            var artRt = artObj.AddComponent<RectTransform>();
+            artRt.anchorMin = Vector2.zero;
+            artRt.anchorMax = Vector2.one;
+            artRt.sizeDelta = new Vector2(-6, -6);
+            var artImg = artObj.AddComponent<Image>();
+            artImg.preserveAspect = false;
+            artImg.raycastTarget = false;
+            ui.envCardArtImage = artImg;
+
+            var tagPill = CreatePanel(envCardObj.transform, "EnvTagPill", new Color(0.09f, 0.18f, 0.28f, 0.92f),
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(24, -13), new Vector2(36, 16));
+            tagPill.GetComponent<Image>().raycastTarget = false;
+            var tagTxt = CreateText(tagPill.transform, "EnvTagTxt", "ENV", 9,
+                new Color(0.82f, 0.92f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(34, 14));
+            tagTxt.raycastTarget = false;
+
+            var costOrb = CreateCirclePanel(envCardObj.transform, "EnvCostBadge", new Color(0.12f, 0.28f, 0.54f, 0.95f),
+                new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-15, -15), new Vector2(22, 22));
+            costOrb.GetComponent<Image>().raycastTarget = false;
+            ui.envCardCostText = CreateText(costOrb.transform, "EnvCostTxt", "-", 11,
+                new Color(0.92f, 0.96f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(22, 22));
+            ui.envCardCostText.raycastTarget = false;
+
+            var titleBar = CreatePanel(envCardObj.transform, "EnvCardTitleBar", new Color(0.03f, 0.05f, 0.08f, 0.86f),
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0, 14), new Vector2(108, 22));
+            titleBar.GetComponent<Image>().raycastTarget = false;
+            ui.envCardTitleText = CreateText(titleBar.transform, "EnvCardTitleTxt", "NEUTRAL ARENA", 9,
+                new Color(0.90f, 0.95f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(102, 18));
+            ui.envCardTitleText.raycastTarget = false;
+
+            // Right Info Stack (x = +64, width 170)
+            ui.envIconText = CreateText(envAltar.transform, "EnvIcon", "☀️", 16,
+                new Color(0.84f, 0.90f, 0.98f), TextAnchor.MiddleLeft, new Vector2(-12, 68), new Vector2(24, 24));
+            ui.envNameText = CreateText(envAltar.transform, "EnvName", "Stable Arena", 12,
+                new Color(0.86f, 0.92f, 1f), TextAnchor.MiddleLeft, new Vector2(74, 68), new Vector2(148, 22));
+            AddTextShadow(ui.envNameText);
+
+            ui.envOwnerText = CreateText(envAltar.transform, "EnvOwner", "Controlled by: Arena", 10,
+                new Color(0.68f, 0.76f, 0.86f), TextAnchor.MiddleLeft, new Vector2(64, 46), new Vector2(170, 18));
+
+            ui.envLevelText = CreateText(envAltar.transform, "EnvLevel", "No Active Weather", 10,
+                new Color(0.76f, 0.84f, 0.94f), TextAnchor.MiddleLeft, new Vector2(64, 26), new Vector2(170, 18));
+
+            var buffPlaque = CreateOrnatePanel(envAltar.transform, "EnvBuffPlaque",
+                new Color(0.07f, 0.17f, 0.12f, 0.94f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(64, -6), new Vector2(170, 32));
+            ui.envBuffText = CreateText(buffPlaque.transform, "EnvBuff", "No Active Buffs", 10,
+                new Color(0.45f, 0.94f, 0.62f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(160, 28));
+            ui.envBuffText.horizontalOverflow = HorizontalWrapMode.Wrap;
+
+            var debuffPlaque = CreateOrnatePanel(envAltar.transform, "EnvDebuffPlaque",
+                new Color(0.18f, 0.08f, 0.10f, 0.94f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(64, -46), new Vector2(170, 36));
+            ui.envDebuffText = CreateText(debuffPlaque.transform, "EnvDebuff", "All Elements Balanced", 10,
+                new Color(0.96f, 0.56f, 0.56f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(160, 32));
+            ui.envDebuffText.horizontalOverflow = HorizontalWrapMode.Wrap;
+
+            ui.envDurationText = CreateText(envAltar.transform, "EnvDuration", "Either player can override", 10,
+                new Color(0.76f, 0.82f, 0.90f), TextAnchor.MiddleLeft, new Vector2(64, -84), new Vector2(170, 22));
         }
 
         private static void BuildGameOverModal(Transform canvas, BattleUIManager ui)
@@ -613,12 +764,12 @@ namespace MonsterCardGame.UI
 
             var modalOutline = modalBox.GetComponent<Outline>();
             if (modalOutline == null) modalOutline = modalBox.AddComponent<Outline>();
-            modalOutline.effectColor = new Color(1f, 0.85f, 0.25f, 0.95f);
-            modalOutline.effectDistance = new Vector2(3, 3);
+            modalOutline.effectColor = new Color(0.42f, 0.56f, 0.72f, 0.95f);
+            modalOutline.effectDistance = new Vector2(2.5f, 2.5f);
             ui.gameOverModalOutline = modalOutline;
 
             ui.gameOverTitleText = CreateText(modalBox.transform, "TitleText", "🏆 LEGENDARY VICTORY!", 28,
-                new Color(1f, 0.88f, 0.35f), TextAnchor.UpperCenter, new Vector2(0, 220), new Vector2(640, 42));
+                new Color(0.88f, 0.94f, 1f), TextAnchor.UpperCenter, new Vector2(0, 220), new Vector2(640, 42));
             AddTextShadow(ui.gameOverTitleText);
 
             ui.gameOverSubtitleText = CreateText(modalBox.transform, "SubtitleText", "You crushed the enemy warlord and claimed supreme dominion over the arena!", 15,
@@ -627,8 +778,8 @@ namespace MonsterCardGame.UI
             var statsBox = CreateOrnatePanel(modalBox.transform, "StatsBox", new Color(0.05f, 0.06f, 0.11f, 0.94f),
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 20), new Vector2(600, 240));
 
-            CreateText(statsBox.transform, "StatsHeader", "📊 BATTLE SUMMARY & STATISTICS", 15,
-                new Color(0.95f, 0.85f, 0.5f), TextAnchor.UpperCenter, new Vector2(0, 95), new Vector2(560, 24));
+            CreateText(statsBox.transform, "StatsHeader", "BATTLE SUMMARY & STATISTICS", 15,
+                new Color(0.78f, 0.86f, 0.95f), TextAnchor.UpperCenter, new Vector2(0, 95), new Vector2(560, 24));
 
             ui.gameOverStatsText = CreateText(statsBox.transform, "StatsContent", "Calculating battle statistics...", 15,
                 Color.white, TextAnchor.MiddleCenter, new Vector2(0, -12), new Vector2(560, 180));
@@ -652,11 +803,11 @@ namespace MonsterCardGame.UI
             string prefix = isPlayerSide ? "Player" : "Enemy";
             Vector2 anchor = isPlayerSide ? new Vector2(0.5f, 0f) : new Vector2(0.5f, 1f);
             Vector2 pivot = isPlayerSide ? new Vector2(0.5f, 0f) : new Vector2(0.5f, 1f);
-            Vector2 pos = isPlayerSide ? new Vector2(0f, 10f) : new Vector2(0f, -10f);
+            Vector2 pos = isPlayerSide ? new Vector2(0f, 18f) : new Vector2(0f, -18f);
 
             var citadel = CreateOrnatePanel(leftWingParent, $"{prefix}LeaderCrest",
-                isPlayerSide ? new Color(0.05f, 0.08f, 0.15f, 0.96f) : new Color(0.14f, 0.06f, 0.09f, 0.96f),
-                anchor, anchor, pos, new Vector2(336, 176));
+                isPlayerSide ? new Color(0.06f, 0.09f, 0.14f, 0.95f) : new Color(0.11f, 0.06f, 0.08f, 0.95f),
+                anchor, anchor, pos, new Vector2(320, 126));
             var cRect = citadel.GetComponent<RectTransform>();
             if (cRect != null)
             {
@@ -670,31 +821,31 @@ namespace MonsterCardGame.UI
                 cImg.sprite = dockArtSprite;
                 cImg.type = Image.Type.Simple;
                 cImg.color = isPlayerSide
-                    ? new Color(0.82f, 0.88f, 0.96f, 0.96f)
-                    : new Color(0.88f, 0.72f, 0.76f, 0.96f);
+                    ? new Color(0.62f, 0.68f, 0.76f, 0.95f)
+                    : new Color(0.70f, 0.58f, 0.62f, 0.95f);
             }
 
             Color rimColor = isPlayerSide
-                ? new Color(1f, 0.84f, 0.36f, 0.95f)
-                : new Color(0.95f, 0.40f, 0.38f, 0.95f);
-            CreateHollowOrnatePanel(citadel.transform, $"{prefix}CitadelOrnateRim",
-                rimColor, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+                ? new Color(0.28f, 0.38f, 0.48f, 0.92f)
+                : new Color(0.40f, 0.21f, 0.24f, 0.92f);
+            var cOut = citadel.AddComponent<Outline>();
+            cOut.effectColor = rimColor;
+            cOut.effectDistance = new Vector2(1.2f, 1.2f);
 
-            // 1. Portrait Frame (Left inside Citadel: 100 x 100)
-            var portraitFrame = CreateOrnatePanel(citadel.transform, $"{prefix}PortraitFrame",
-                new Color(0.03f, 0.04f, 0.06f, 1f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-104, 0), new Vector2(100, 100));
-
-            var portraitBorder = CreateHollowOrnatePanel(portraitFrame.transform, $"{prefix}PortraitBorder",
-                rimColor, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-            portraitBorder.GetComponent<Image>().raycastTarget = false;
+            // 1. Compact Portrait Frame (Left inside Citadel: 78 x 78)
+            var portraitFrame = CreatePanel(citadel.transform, $"{prefix}PortraitFrame",
+                new Color(0.04f, 0.05f, 0.08f, 1f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-108, 0), new Vector2(78, 78));
+            var pfOut = portraitFrame.AddComponent<Outline>();
+            pfOut.effectColor = rimColor;
+            pfOut.effectDistance = new Vector2(1.5f, 1.5f);
 
             var avatarObj = new GameObject($"{prefix}AvatarImage");
             avatarObj.transform.SetParent(portraitFrame.transform, false);
             var rectAv = avatarObj.AddComponent<RectTransform>();
             rectAv.anchorMin = Vector2.zero;
             rectAv.anchorMax = Vector2.one;
-            rectAv.sizeDelta = new Vector2(-8, -8);
+            rectAv.sizeDelta = new Vector2(-6, -6);
             rectAv.anchoredPosition = Vector2.zero;
             var avImg = avatarObj.AddComponent<Image>();
             avImg.preserveAspect = false;
@@ -707,35 +858,30 @@ namespace MonsterCardGame.UI
             }
             else
             {
-                avImg.color = isPlayerSide ? new Color(0.2f, 0.4f, 0.8f, 1f) : new Color(0.8f, 0.2f, 0.2f, 1f);
+                avImg.color = isPlayerSide ? new Color(0.20f, 0.35f, 0.58f, 1f) : new Color(0.55f, 0.20f, 0.24f, 1f);
             }
 
             if (isPlayerSide) ui.playerAvatarImage = avImg;
             else ui.enemyAvatarImage = avImg;
 
-            // Corner Crest Badge on Avatar
-            CreateMedallion(portraitFrame.transform, $"{prefix}CrestBadge",
-                isPlayerSide ? new Color(0.95f, 0.78f, 0.22f, 1f) : new Color(0.85f, 0.22f, 0.26f, 1f),
-                new Vector2(36, -36), new Vector2(28, 28), isPlayerSide ? "👑" : "💀", 14);
-
-            // 2. Identity, Health Bar & Resource Column (Right inside Citadel: width 196)
-            string titleStr = isPlayerSide ? "👑 SUPREME COMMANDER" : "💀 SHADOW WARLORD";
-            Color titleColor = isPlayerSide ? new Color(1f, 0.92f, 0.48f) : new Color(1f, 0.84f, 0.84f);
-            var titleTxt = CreateText(citadel.transform, $"{prefix}LeaderTitle", titleStr, 13,
-                titleColor, TextAnchor.MiddleCenter, new Vector2(56, 48), new Vector2(194, 26));
+            // 2. Identity, Health Bar & Resource Column (Right inside Citadel: width 200)
+            string titleStr = isPlayerSide ? "PLAYER COMMANDER" : "ENEMY WARLORD";
+            Color titleColor = isPlayerSide ? new Color(0.78f, 0.88f, 0.98f) : new Color(0.90f, 0.72f, 0.74f);
+            var titleTxt = CreateText(citadel.transform, $"{prefix}LeaderTitle", titleStr, 12,
+                titleColor, TextAnchor.MiddleLeft, new Vector2(44, 39), new Vector2(202, 22));
             titleTxt.horizontalOverflow = HorizontalWrapMode.Wrap;
             titleTxt.resizeTextForBestFit = true;
             titleTxt.resizeTextMinSize = 10;
-            titleTxt.resizeTextMaxSize = 13;
+            titleTxt.resizeTextMaxSize = 12;
             AddTextShadow(titleTxt);
 
-            Color hpFillColor = isPlayerSide ? new Color(0.18f, 0.88f, 0.36f) : new Color(0.92f, 0.18f, 0.24f);
+            Color hpFillColor = isPlayerSide ? new Color(0.16f, 0.72f, 0.34f) : new Color(0.78f, 0.18f, 0.24f);
             var hpSlider = CreateSlider(citadel.transform, $"{prefix}HpBar",
-                new Color(0.06f, 0.08f, 0.08f, 0.98f), hpFillColor,
-                new Vector2(56, 10), new Vector2(194, 24));
+                new Color(0.05f, 0.06f, 0.09f, 0.98f), hpFillColor,
+                new Vector2(44, 8), new Vector2(202, 22));
 
-            var hpTxt = CreateText(citadel.transform, $"{prefix}HpText", "❤️ 500 / 500 HP", 13,
-                Color.white, TextAnchor.MiddleCenter, new Vector2(56, 10), new Vector2(194, 24));
+            var hpTxt = CreateText(citadel.transform, $"{prefix}HpText", "500 / 500 HP", 12,
+                Color.white, TextAnchor.MiddleCenter, new Vector2(44, 8), new Vector2(202, 22));
             AddTextShadow(hpTxt);
 
             if (isPlayerSide)
@@ -750,27 +896,27 @@ namespace MonsterCardGame.UI
             }
 
             var statusBox = CreateOrnatePanel(citadel.transform, $"{prefix}StatusChamber",
-                isPlayerSide ? new Color(0.04f, 0.11f, 0.22f, 0.95f) : new Color(0.18f, 0.08f, 0.14f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(56, -36), new Vector2(194, 38));
+                isPlayerSide ? new Color(0.05f, 0.09f, 0.16f, 0.95f) : new Color(0.14f, 0.07f, 0.10f, 0.95f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(44, -30), new Vector2(202, 34));
 
             if (isPlayerSide)
             {
-                ui.playerPowerText = CreateText(statusBox.transform, "PlayerPowerText", "[ 💎 ]  Power: 1  |  Mana: 1 (∞)", 12,
-                    new Color(0.42f, 0.94f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(186, 34));
+                ui.playerPowerText = CreateText(statusBox.transform, "PlayerPowerText", "[ ◇ ] Mana: 0  |  Power: 0 (∞)", 11,
+                    new Color(0.74f, 0.88f, 0.98f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(194, 30));
                 ui.playerPowerText.horizontalOverflow = HorizontalWrapMode.Wrap;
                 ui.playerPowerText.resizeTextForBestFit = true;
-                ui.playerPowerText.resizeTextMinSize = 9;
-                ui.playerPowerText.resizeTextMaxSize = 12;
+                ui.playerPowerText.resizeTextMinSize = 8;
+                ui.playerPowerText.resizeTextMaxSize = 11;
                 AddTextShadow(ui.playerPowerText);
             }
             else
             {
-                ui.enemyHandCountText = CreateText(statusBox.transform, "EnemyHandLabel", "🎴 Enemy Hand: 6 Hidden Cards", 12,
-                    new Color(1f, 0.88f, 0.55f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(186, 34));
+                ui.enemyHandCountText = CreateText(statusBox.transform, "EnemyHandLabel", "Hand: 6  |  Deck: 44", 11,
+                    new Color(0.84f, 0.84f, 0.90f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(194, 30));
                 ui.enemyHandCountText.horizontalOverflow = HorizontalWrapMode.Wrap;
                 ui.enemyHandCountText.resizeTextForBestFit = true;
-                ui.enemyHandCountText.resizeTextMinSize = 9;
-                ui.enemyHandCountText.resizeTextMaxSize = 12;
+                ui.enemyHandCountText.resizeTextMinSize = 8;
+                ui.enemyHandCountText.resizeTextMaxSize = 11;
                 AddTextShadow(ui.enemyHandCountText);
             }
         }
@@ -797,37 +943,31 @@ namespace MonsterCardGame.UI
                 dockImg.sprite = dockArtSprite;
                 dockImg.type = Image.Type.Simple;
                 dockImg.preserveAspect = false;
-                dockImg.color = Color.white;
+                dockImg.color = new Color(0.76f, 0.78f, 0.84f, 1f);
             }
             else
             {
                 dockImg.color = isPlayerSide
-                    ? new Color(0.06f, 0.08f, 0.13f, 0.98f)
-                    : new Color(0.12f, 0.06f, 0.09f, 0.98f);
+                    ? new Color(0.05f, 0.06f, 0.09f, 0.98f)
+                    : new Color(0.08f, 0.05f, 0.07f, 0.98f);
 
-                Color borderRimColor = isPlayerSide
-                    ? new Color(1f, 0.84f, 0.36f, 0.95f)
-                    : new Color(0.95f, 0.40f, 0.38f, 0.92f);
+                Color borderRimColor = new Color(0.24f, 0.27f, 0.34f, 0.90f);
                 CreateHollowOrnatePanel(dock.transform, $"{prefix}DockOrnateBorder", borderRimColor,
                     Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             }
 
-            // 2. 6 Subtle Recessed Card Bays across the oil-painted leather center (aligned directly with card pitch 168px)
+            // 2. 6 Subtle Recessed Card Bays across the matte hand dock
             float[] dockX = { -420f, -252f, -84f, 84f, 252f, 420f };
             for (int k = 0; k < 6; k++)
             {
                 var bay = CreatePanel(dock.transform, $"{prefix}CardBay_{k}",
-                    new Color(0.02f, 0.02f, 0.03f, 0.24f),
+                    new Color(0.02f, 0.02f, 0.04f, 0.30f),
                     new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(dockX[k], 0), new Vector2(138, 168));
                 bay.GetComponent<Image>().raycastTarget = false;
 
                 var bayOutline = bay.AddComponent<Outline>();
-                bayOutline.effectColor = new Color(0.70f, 0.56f, 0.28f, 0.26f);
-                bayOutline.effectDistance = new Vector2(1.2f, 1.2f);
-
-                var glyph = CreateText(bay.transform, "BayGlyph", "❖", 24,
-                    new Color(0.78f, 0.66f, 0.38f, 0.14f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(80, 80));
-                glyph.raycastTarget = false;
+                bayOutline.effectColor = new Color(0.24f, 0.28f, 0.35f, 0.36f);
+                bayOutline.effectDistance = new Vector2(1.0f, 1.0f);
             }
 
             // 3. Dynamic Cards Container with HorizontalLayoutGroup (Identical card sizes 138x182)
@@ -939,39 +1079,39 @@ namespace MonsterCardGame.UI
 
                     if (dEdge == 0)
                     {
-                        px = new Color(0.05f, 0.04f, 0.03f, 0.98f);
+                        px = new Color(0.03f, 0.04f, 0.06f, 0.98f);
                     }
                     else if (isCornerMedallion)
                     {
                         float cDist = Mathf.Max(Mathf.Abs(dx - 10), Mathf.Abs(dy - 10));
                         if (cDist <= 3.5f)
                         {
-                            px = new Color(0.55f, 0.92f, 1f, 1f);
+                            px = new Color(0.56f, 0.62f, 0.72f, 1f);
                         }
                         else if (cDist <= 7.5f)
                         {
-                            float bevel = (y > size / 2 || x < size / 2) ? 1.15f : 0.85f;
-                            px = new Color(Mathf.Clamp01(0.95f * bevel), Mathf.Clamp01(0.78f * bevel), Mathf.Clamp01(0.32f * bevel), 1f);
+                            float bevel = (y > size / 2 || x < size / 2) ? 1.12f : 0.82f;
+                            px = new Color(Mathf.Clamp01(0.34f * bevel), Mathf.Clamp01(0.38f * bevel), Mathf.Clamp01(0.46f * bevel), 1f);
                         }
                         else
                         {
-                            px = new Color(0.38f, 0.28f, 0.12f, 1f);
+                            px = new Color(0.16f, 0.18f, 0.23f, 1f);
                         }
                     }
                     else if (dEdge >= 1 && dEdge <= 4)
                     {
                         bool topOrLeft = (y > size - 6) || (x < 6);
                         px = topOrLeft
-                            ? new Color(1f, 0.88f, 0.45f, 1f)
-                            : new Color(0.68f, 0.50f, 0.18f, 1f);
+                            ? new Color(0.34f, 0.38f, 0.46f, 1f)
+                            : new Color(0.16f, 0.19f, 0.24f, 1f);
                     }
                     else if (dEdge >= 5 && dEdge <= 8)
                     {
-                        px = new Color(0.14f, 0.13f, 0.18f, 0.98f);
+                        px = new Color(0.09f, 0.11f, 0.15f, 0.98f);
                     }
                     else if (dEdge >= 9 && dEdge <= 10)
                     {
-                        px = new Color(0.88f, 0.72f, 0.30f, 0.95f);
+                        px = new Color(0.25f, 0.29f, 0.36f, 0.95f);
                     }
                     else
                     {
@@ -1008,30 +1148,30 @@ namespace MonsterCardGame.UI
                     Color px = Color.clear;
                     if (dEdge == 0)
                     {
-                        px = new Color(0.08f, 0.06f, 0.04f, 0.95f);
+                        px = new Color(0.04f, 0.05f, 0.07f, 0.95f);
                     }
                     else if (isCorner)
                     {
                         float cDist = Mathf.Max(Mathf.Abs(dx - 9), Mathf.Abs(dy - 9));
                         if (cDist <= 3f)
-                            px = new Color(1f, 0.94f, 0.65f, 1f);
+                            px = new Color(0.56f, 0.62f, 0.72f, 1f);
                         else if (cDist <= 7f)
-                            px = new Color(0.95f, 0.78f, 0.34f, 1f);
+                            px = new Color(0.36f, 0.41f, 0.50f, 1f);
                         else
-                            px = new Color(0.35f, 0.25f, 0.10f, 0.95f);
+                            px = new Color(0.16f, 0.19f, 0.24f, 0.95f);
                     }
                     else if (dEdge >= 1 && dEdge <= 4)
                     {
                         bool hi = (y > size - 6) || (x < 6);
-                        px = hi ? new Color(1f, 0.90f, 0.50f, 1f) : new Color(0.72f, 0.54f, 0.22f, 1f);
+                        px = hi ? new Color(0.42f, 0.47f, 0.56f, 1f) : new Color(0.22f, 0.25f, 0.31f, 1f);
                     }
                     else if (dEdge >= 5 && dEdge <= 7)
                     {
-                        px = new Color(0.12f, 0.10f, 0.14f, 0.92f);
+                        px = new Color(0.09f, 0.11f, 0.14f, 0.92f);
                     }
                     else if (dEdge == 8 || dEdge == 9)
                     {
-                        px = new Color(0.92f, 0.76f, 0.35f, 0.90f);
+                        px = new Color(0.32f, 0.37f, 0.45f, 0.90f);
                     }
                     else if (dEdge >= 10 && dEdge <= 16)
                     {
@@ -1067,21 +1207,21 @@ namespace MonsterCardGame.UI
                     Color px;
                     if (dEdge == 0)
                     {
-                        px = new Color(0.06f, 0.05f, 0.04f, 0.98f);
+                        px = new Color(0.03f, 0.04f, 0.06f, 0.98f);
                     }
                     else if (isCorner)
                     {
-                        px = new Color(1f, 0.86f, 0.42f, 1f);
+                        px = new Color(0.32f, 0.36f, 0.44f, 1f);
                     }
                     else if (dEdge >= 1 && dEdge <= 3)
                     {
                         px = (ny > 0.5f)
-                            ? new Color(1f, 0.90f, 0.48f, 1f)
-                            : new Color(0.75f, 0.56f, 0.22f, 1f);
+                            ? new Color(0.42f, 0.46f, 0.54f, 1f)
+                            : new Color(0.18f, 0.21f, 0.26f, 1f);
                     }
                     else if (dEdge == 4 || dEdge == 5)
                     {
-                        px = new Color(0.18f, 0.16f, 0.22f, 0.98f);
+                        px = new Color(0.12f, 0.14f, 0.19f, 0.98f);
                     }
                     else
                     {
@@ -1123,15 +1263,15 @@ namespace MonsterCardGame.UI
                     Color px;
                     if (nr > 0.82f)
                     {
-                        px = new Color(1f, 0.86f, 0.42f, alpha);
+                        px = new Color(0.54f, 0.60f, 0.70f, alpha);
                     }
                     else if (nr > 0.72f)
                     {
-                        px = new Color(0.16f, 0.14f, 0.22f, alpha);
+                        px = new Color(0.13f, 0.16f, 0.21f, alpha);
                     }
                     else if (nr > 0.65f)
                     {
-                        px = new Color(0.92f, 0.76f, 0.34f, alpha);
+                        px = new Color(0.38f, 0.44f, 0.52f, alpha);
                     }
                     else
                     {
@@ -1155,9 +1295,9 @@ namespace MonsterCardGame.UI
             Texture2D tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
             tex.filterMode = FilterMode.Bilinear;
 
-            Color primaryRim = isEnemy ? new Color(0.95f, 0.32f, 0.30f, 0.92f) : new Color(0.32f, 0.85f, 1f, 0.92f);
-            Color goldAccent = isEnemy ? new Color(0.88f, 0.52f, 0.28f, 0.95f) : new Color(1f, 0.84f, 0.36f, 0.95f);
-            Color plateFill = isEnemy ? new Color(0.12f, 0.05f, 0.08f, 0.18f) : new Color(0.05f, 0.10f, 0.18f, 0.18f);
+            Color primaryRim = isEnemy ? new Color(0.68f, 0.34f, 0.34f, 0.85f) : new Color(0.45f, 0.62f, 0.76f, 0.85f);
+            Color goldAccent = isEnemy ? new Color(0.56f, 0.32f, 0.34f, 0.80f) : new Color(0.42f, 0.50f, 0.60f, 0.80f);
+            Color plateFill = isEnemy ? new Color(0.10f, 0.06f, 0.08f, 0.18f) : new Color(0.06f, 0.09f, 0.14f, 0.18f);
 
             Vector2 circleCenter = new Vector2(w * 0.5f, h * 0.5f);
 

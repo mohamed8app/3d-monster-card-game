@@ -77,25 +77,25 @@ namespace MonsterCardGame.Core
                 if (card == null) continue;
                 if (card.cardType == CardType.Monster)
                 {
-                    if (card.cost <= aiPlayer.currentPower) affordableMonsters++;
+                    if (card.cost <= aiPlayer.currentMana) affordableMonsters++;
                     else hasHighCostMonster = true;
                 }
-                else if (card.cost > aiPlayer.currentPower + 1)
+                else if (card.cost > aiPlayer.currentMana + 1)
                 {
                     extraNonMonster = card;
                 }
 
-                if (card.cost > aiPlayer.currentPower + 2 && card.cost > highestUnplayableCost)
+                if (card.cost > aiPlayer.currentMana + 2 && card.cost > highestUnplayableCost)
                 {
                     highestUnplayableCost = card.cost;
                     unplayableHighCost = card;
                 }
             }
 
-            // Always sacrifice at 0 mana; otherwise sacrifice when AI needs mana to play its hand or has plenty of cards
-            bool needsMana = (aiPlayer.manaCapacity == 0)
+            // Always sacrifice at 0 Power; otherwise sacrifice when AI needs Mana/Power to play its hand or has plenty of cards
+            bool needsMana = (aiPlayer.power == 0)
                 || (hasHighCostMonster && affordableMonsters == 0)
-                || (aiPlayer.manaCapacity < 8 && aiPlayer.hand.Count >= 5);
+                || (aiPlayer.power < 8 && aiPlayer.hand.Count >= 5);
             if (!needsMana && aiPlayer.hand.Count < 7) return;
 
             CardData bestSacrifice = unplayableHighCost ?? extraNonMonster;
@@ -116,7 +116,7 @@ namespace MonsterCardGame.Core
 
             foreach (var card in new List<CardData>(aiPlayer.hand))
             {
-                if (card.cardType == CardType.Environment && card.cost <= aiPlayer.currentPower)
+                if (card.cardType == CardType.Environment && card.cost <= aiPlayer.currentMana)
                 {
                     GameManager.Instance.PlayEnvironmentCard(aiPlayer, card);
                     break;
@@ -131,7 +131,7 @@ namespace MonsterCardGame.Core
             var spellCards = new List<CardData>();
             foreach (var c in aiPlayer.hand)
             {
-                if (c.cardType == CardType.Spell && c.cost <= aiPlayer.currentPower)
+                if (c.cardType == CardType.Spell && c.cost <= aiPlayer.currentMana)
                 {
                     spellCards.Add(c);
                 }
@@ -139,7 +139,7 @@ namespace MonsterCardGame.Core
 
             foreach (var spell in spellCards)
             {
-                if (spell.cost <= aiPlayer.currentPower)
+                if (spell.cost <= aiPlayer.currentMana)
                 {
                     if (spell.spellType == SpellType.LeaderHeal && aiPlayer.currentHp > (aiPlayer.maxHp * 0.8f))
                     {
@@ -163,7 +163,7 @@ namespace MonsterCardGame.Core
 
             foreach (var card in monsterCards)
             {
-                if (card.cost <= aiPlayer.currentPower)
+                if (card.cost <= aiPlayer.currentMana)
                 {
                     int bestSlot = FindBestSlotForCard(card);
                     if (bestSlot != -1 && aiPlayer.SummonMonster(card, bestSlot, currentTurn))

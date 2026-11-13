@@ -205,7 +205,7 @@ def infer_spell_type(active_skill: str, raw_type: int) -> int:
         return ST_DRAW_TWO_STRIKE
     if "revive the strongest" in sk:
         return ST_REVIVE_GRAVEYARD
-    if "steal" in sk and "mana cap" in sk:
+    if "steal" in sk and ("mana cap" in sk or "power" in sk):
         return ST_MANA_STEAL_AOE
     return raw_type if raw_type >= 10 else ST_ARCANE_PIERCING_SHOT
 
@@ -229,6 +229,7 @@ class CardProto:
     spell_type: int
     spell_power: int
     summary_text: str
+    active_power_cost: int = 0
 
 
 def extract_passive_tags(passives: List[str]) -> frozenset:
@@ -271,14 +272,30 @@ def load_database(json_path: str) -> Tuple[Dict[int, CardProto], List[CardProto]
             alist = tuple(c.get("active_skills") or ([] if not c.get("active_skill") else [c["active_skill"]]))
             ptags = extract_passive_tags(list(plist))
             act0 = alist[0] if alist else ""
-            act_cost = 3 if "(Cost 3 Power)" in act0 else (2 if "(Cost 2 Power)" in act0 else (1 if act0 else 0))
+            pwr_cost = int(c.get("powerCost", 0) or 0)
+            if pwr_cost == 0 and act0:
+                if any(k in act0 for k in ("(Requires 3 Power)", "(Cost 3 Permanent Power)", "(Spend 3 Power)", "(Drain 3 Power)", "يتطلب 3 باور", "يستهلك 3 باور")):
+                    pwr_cost = 3
+                elif any(k in act0 for k in ("(Requires 2 Power)", "(Cost 2 Permanent Power)", "(Spend 2 Power)", "(Drain 2 Power)", "يتطلب 2 باور", "يستهلك 2 باور")):
+                    pwr_cost = 2
+                elif any(k in act0 for k in ("(Requires 1 Power)", "(Cost 1 Permanent Power)", "(Spend 1 Power)", "(Drain 1 Power)", "يتطلب 1 باور", "يستهلك 1 باور")):
+                    pwr_cost = 1
+            has_pwr_only = (pwr_cost > 0 and "mana" not in act0.lower())
+            if has_pwr_only:
+                act_cost = 0
+            elif "(Cost 3 Mana)" in act0 or "(Cost 3 Power)" in act0:
+                act_cost = 3
+            elif "(Cost 2 Mana)" in act0 or "(Cost 2 Power)" in act0:
+                act_cost = 2
+            else:
+                act_cost = 1 if act0 else 0
             req_enemy = bool(act0) and not any(k in act0 for k in ACTIVE_REQUIRES_ENEMY_EXEMPT)
             p_short = plist[0].split(":")[0].strip() if plist else "-"
             a_short = act0.split(":")[0].strip() if act0 else "-"
             summary = f"{p_short} | {a_short}"
             proto = CardProto(
                 cid, "monster", elem, tribe, role, tier_num, cost, atk, def_stat,
-                plist, ptags, alist, act_cost, req_enemy, 0, 0, summary
+                plist, ptags, alist, act_cost, req_enemy, 0, 0, summary, pwr_cost
             )
             by_id[cid] = proto
             monsters.append(proto)
@@ -416,7 +433,7 @@ class SimMonster:
 
 class SimPlayer:
     __slots__ = (
-        "name", "hp", "max_hp", "shield", "mana_cap", "power", "sacrificed_turn",
+        "name", "hp", "max_hp", "shield", "power", "mana", "sacrificed_turn",
         "deny_turns", "team_immune_turns", "free_skill_bonus",
         "deck", "hand", "graveyard", "slots",
         "drawn_ids", "fallen_deaths", "fallen_turn", "revived_counts",
@@ -430,8 +447,8 @@ class SimPlayer:
         self.hp = 500
         self.max_hp = 500
         self.shield = 0
-        self.mana_cap = 0
         self.power = 0
+        self.mana = 0
         self.sacrificed_turn = False
         self.deny_turns = 0
         self.team_immune_turns = 0
@@ -685,8 +702,8 @@ class BattleEngine:
                         w_pat *= 1.8
                     if player.last_elem and c.element == player.last_elem:
                         w_pat *= 0.55
-                    if c.card_type == "monster" and c.tier_num >= 4 and player.mana_cap >= 5:
-                        w_pat *= 1.0 + min(0.75, (player.mana_cap - 4) * 0.12)
+                    if c.card_type == "monster" and c.tier_num >= 4 and player.power >= 5:
+                        w_pat *= 1.0 + min(0.75, (player.power - 4) * 0.12)
 
                 if c.cid not in player.drawn_ids:
                     w_state = 2.8 + min(3.0, turn_num * 0.06)
@@ -807,8 +824,8 @@ class BattleEngine:
             if has_t("Inner Quake"):
                 killer_owner.take_leader_damage(10)
             if has_t("Scrap Recycling"):
-                owner.power += 2
-                owner.mana_cap += 1
+                owner.mana += 2
+                owner.power += 1
             if has_t("Curse of Doom") and killer_m is not None and killer_m.is_alive:
                 if not killer_m.has_p_raw("Immunity to Dark") and not killer_m.has_p_raw("Total Immunity to Ghosts and Dark"):
                     killer_m.cur_def = 0
@@ -865,9 +882,9 @@ class BattleEngine:
             self.handle_death(opponent, player, slot, target_m, src_m, turn_num)
 
     def summon_monster(self, player: SimPlayer, opp: SimPlayer, card: CardProto, slot: int, turn_num: int) -> bool:
-        if player.slots[slot] is not None or card.cost > player.power:
+        if player.slots[slot] is not None or card.cost > player.mana:
             return False
-        player.power -= card.cost
+        player.mana -= card.cost
         player.hand.remove(card)
         if card.cid <= 452:
             player.played_ids.add(card.cid)
@@ -925,11 +942,11 @@ class BattleEngine:
             dwarves = sum(1 for s in player.slots if s is not None and (s.proto.tribe == "Dwarves" or s.proto.element == "Mecha"))
             m.add_bonus_def(max(1, dwarves) * 8)
         if "Nourishing Roots" in pt:
-            player.mana_cap += 1
             player.power += 1
+            player.mana += 1
         if "Psychic Drain" in pt:
-            drained = min(2, max(0, opp.mana_cap - 1))
-            opp.mana_cap -= drained
+            drained = min(2, max(0, opp.power - 1))
+            opp.power -= drained
         if "Black Nightmare" in pt:
             if opp.hand:
                 sac = opp.hand.pop()
@@ -1000,7 +1017,7 @@ class BattleEngine:
                         if s is not None:
                             s.burn_dmg = s.poison_dmg = s.frozen_turns = s.weakened_turns = 0
                 if m.has_p("Supercharge"):
-                    player.power += 1
+                    player.mana += 1
                 if m.has_p("Booster Engine"):
                     m.bonus_atk += 2
                 if m.has_p("Tailwind Gust"):
@@ -1388,7 +1405,7 @@ class BattleEngine:
                 elif s.proto.element in debuffed:
                     score -= 2.0
         for hc in active.hand:
-            if hc.card_type == "monster" and hc.cost <= active.power:
+            if hc.card_type == "monster" and hc.cost <= active.mana:
                 if hc.element == buffed:
                     score += 1.4
                 elif hc.element in debuffed:
@@ -1405,8 +1422,8 @@ class BattleEngine:
         st = sp.spell_type
         if st == ST_SUPPORT_BATTERY_HEAL:
             wounded = any(s is not None and s.cur_def < s.max_def - 4 for s in caster.slots)
-            needs_battery = caster.power >= sp.cost and any(
-                c is not sp and c.cost > caster.power - sp.cost and c.cost <= caster.power - sp.cost + 2
+            needs_battery = caster.mana >= sp.cost and any(
+                c is not sp and c.cost > caster.mana - sp.cost and c.cost <= caster.mana - sp.cost + 2
                 for c in caster.hand
             )
             if caster.hp > caster.max_hp * 0.82 and not wounded and not needs_battery:
@@ -1446,7 +1463,7 @@ class BattleEngine:
         return 40
 
     def execute_active_skills(self, player: SimPlayer, opp: SimPlayer, turn_num: int, rng: random.Random, acted: Optional[List[int]] = None) -> None:
-        if player.power <= 0:
+        if player.mana <= 0 and player.power <= 0:
             return
         candidates = []
         for slot in range(6):
@@ -1464,7 +1481,8 @@ class BattleEngine:
             extra_cost = 1 if (opp_m is not None and opp_m.has_p("Frost Aura")) else 0
             discount = 1 if player.free_skill_bonus > 0 else 0
             cost = max(0, m.proto.active_cost + extra_cost - discount)
-            if player.power < cost:
+            pwr_cost = getattr(m.proto, "active_power_cost", 0)
+            if player.mana < cost or player.power < pwr_cost:
                 continue
             has_enemies = any(s is not None and s.is_alive for s in opp.slots)
             if m.proto.active_req_enemy and not has_enemies:
@@ -1473,13 +1491,15 @@ class BattleEngine:
                 continue
 
             m.used_active_turn = True
-            player.power -= cost
+            player.mana -= cost
+            if pwr_cost > 0:
+                player.power -= pwr_cost
             bonus = player.free_skill_bonus
             player.free_skill_bonus = 0
             if m.proto.cid <= 452 and acted is not None:
                 acted.append(m.proto.cid)
             if m.has_p("Mana Recovery"):
-                player.power += 1
+                player.mana += 1
             for s in player.slots:
                 if s is not None and s.has_p("Arcane Echo"):
                     s.bonus_atk += 3
@@ -1489,11 +1509,11 @@ class BattleEngine:
                 player.turn_clutch = True
             for _ in range(reps):
                 self.resolve_active_skill(act0, slot, m, player, opp, bonus, turn_num, rng)
-            if player.power <= 0:
+            if player.mana <= 0 and player.power <= 0:
                 break
 
     def cast_spell(self, caster: SimPlayer, opp: SimPlayer, sp: CardProto, turn_num: int, rng: random.Random) -> None:
-        caster.power -= sp.cost
+        caster.mana -= sp.cost
         caster.hand.remove(sp)
         caster.graveyard.append(sp)
         caster.played_ids.add(sp.cid)
@@ -1511,7 +1531,7 @@ class BattleEngine:
                     caster.multipliers += 1
                     caster.turn_clutch = True
                 if s.has_p("Mana Recovery"):
-                    caster.power += 1
+                    caster.mana += 1
 
         for _ in range(reps):
             allies = [s for s in caster.slots if s is not None and s.is_alive]
@@ -1527,7 +1547,7 @@ class BattleEngine:
                     opp.take_leader_damage(val)
                     caster.card_dmg[sp.cid] = caster.card_dmg.get(sp.cid, 0) + val
             elif st == ST_SUPPORT_BATTERY_HEAL:
-                caster.power += 2
+                caster.mana += 2
                 caster.heal_leader(val, opp)
                 for al in allies:
                     al.heal_def(12)
@@ -1542,10 +1562,10 @@ class BattleEngine:
                 opp.take_leader_damage(max(6, val // 2))
                 caster.card_dmg[sp.cid] = caster.card_dmg.get(sp.cid, 0) + max(6, val // 2)
             elif st == ST_MANA_STEAL_AOE:
-                if opp.mana_cap > 1:
-                    opp.mana_cap = max(1, opp.mana_cap - 1)
-                caster.mana_cap += 1
+                if opp.power > 1:
+                    opp.power = max(1, opp.power - 1)
                 caster.power += 1
+                caster.mana += 1
                 aoe = max(6, val // 3)
                 for es in list(enemies):
                     self.deal_spell_skill_dmg(es.slot, es, aoe, None, opp, caster, turn_num, spell_cid=sp.cid)
@@ -1657,7 +1677,7 @@ class BattleEngine:
                     opp.take_leader_damage(val)
                     caster.card_dmg[sp.cid] = caster.card_dmg.get(sp.cid, 0) + val
             elif st == ST_ZERO_SKILL_BOOST:
-                caster.power += 1
+                caster.mana += 1
                 caster.free_skill_bonus += val // 2
                 if allies:
                     al = max(allies, key=lambda a: 1 if a.proto.actives else 0)
@@ -1794,8 +1814,8 @@ class BattleEngine:
                     if att.proto.cid <= 452:
                         attacker.card_dmg[att.proto.cid] = attacker.card_dmg.get(att.proto.cid, 0) + atk_power
                     if att.has_p("Mana Steal"):
-                        att.bonus_atk += 0  # +1 current power
-                        attacker.power += 1
+                        att.bonus_atk += 0  # +1 bonus mana
+                        attacker.mana += 1
 
     def play_match(self, rng: random.Random, max_turns: int = 80, verbose: bool = False) -> Tuple[int, int, SimPlayer, SimPlayer, List[str], dict]:
         log: Optional[List[str]] = [] if verbose else None
@@ -1807,6 +1827,7 @@ class BattleEngine:
 
         for _ in range(5):
             self.draw_card(p1, 1, rng, log)
+        for _ in range(6):
             self.draw_card(p2, 1, rng, log)
 
         active_env: Optional[str] = None
@@ -1841,20 +1862,20 @@ class BattleEngine:
             if other.team_immune_turns > 0:
                 other.team_immune_turns -= 1
 
-            active.power = active.mana_cap
+            active.mana = active.power  # اللاعب يكسب مانا مساوية للباور في بداية كل دور
             if turn_num == 2 and not is_p1:
-                active.power += 1  # تعويض +1 لمرة واحدة فقط في أول جولة للاعب الثاني دون زيادة دائمة للمانا
+                active.mana += 1  # تعويض +1 مانا مؤقتة لمرة واحدة فقط في أول جولة للاعب الثاني دون زيادة دائمة للباور
                 if log is not None:
-                    log.append(f"  [دور {turn_num}] {active.name} حصل على تعويض الجولة الأولى (+1 طاقة مؤقتة)")
+                    log.append(f"  [دور {turn_num}] {active.name} حصل على تعويض الجولة الأولى (+1 مانا مؤقتة)")
             active.sacrificed_turn = False
             if active.deny_turns > 0:
                 active.deny_turns -= 1
                 active.sacrificed_turn = True
             else:
-                if not (turn_num == 1 and is_p1):
+                if not ((turn_num == 1 and is_p1) or (turn_num == 2 and not is_p1)):
                     self.draw_card(active, turn_num, rng, log)
                 elif log is not None:
-                    log.append(f"  [دور {turn_num}] {active.name} يتخطى سحب الدور الأول (قاعدة التوازن)")
+                    log.append(f"  [دور {turn_num}] {active.name} يتخطى سحب الجولة الأولى (قاعدة اليد الافتتاحية 5 مقابل 6)")
 
             for s in active.slots:
                 if s is not None:
@@ -1864,32 +1885,32 @@ class BattleEngine:
             if p1.hp <= 0 or p2.hp <= 0:
                 break
 
-            # 1. Smart Sacrifice (guarantees ramp from 0 mana & smart mana growth)
-            if len(active.hand) >= 2 and not active.sacrificed_turn and active.mana_cap < 10:
-                aff_m = sum(1 for c in active.hand if c.card_type == "monster" and c.cost <= active.power)
-                has_hi = any(c.card_type == "monster" and c.cost > active.power for c in active.hand)
-                needs_mana = (active.mana_cap == 0) or (has_hi and aff_m == 0) or (active.mana_cap < 7 and len(active.hand) >= 5)
+            # 1. Smart Sacrifice (guarantees ramp +1 Power & +1 Mana)
+            if len(active.hand) >= 2 and not active.sacrificed_turn and active.power < 10:
+                aff_m = sum(1 for c in active.hand if c.card_type == "monster" and c.cost <= active.mana)
+                has_hi = any(c.card_type == "monster" and c.cost > active.mana for c in active.hand)
+                needs_mana = (active.power == 0) or (has_hi and aff_m == 0) or (active.power < 7 and len(active.hand) >= 5)
                 if needs_mana or len(active.hand) >= 8:
-                    hi_card = max((c for c in active.hand if c.cost > active.power + 2), key=lambda x: x.cost, default=None)
+                    hi_card = max((c for c in active.hand if c.cost > active.mana + 2), key=lambda x: x.cost, default=None)
                     if hi_card is None:
                         hi_card = next((c for c in active.hand if c.card_type == "env" and not self._should_play_env(active, other, c, active_env, env_turns)), None)
                     if hi_card is None:
-                        hi_card = next((c for c in active.hand if c.card_type != "monster" and c.cost > active.power + 1), None)
+                        hi_card = next((c for c in active.hand if c.card_type != "monster" and c.cost > active.mana + 1), None)
                     if hi_card is None and (needs_mana or len(active.hand) >= 6):
                         hi_card = max(active.hand, key=lambda x: x.cost)
                     if hi_card is not None:
                         active.hand.remove(hi_card)
                         active.graveyard.append(hi_card)
-                        active.mana_cap += 1
                         active.power += 1
+                        active.mana += 1
                         active.sacrificed_turn = True
                         if log is not None:
-                            log.append(f"  [دور {turn_num}] {active.name} ضحّى بـ #{hi_card.cid} -> المانا: {active.mana_cap} | نقاط الاستدعاء: {active.power}")
+                            log.append(f"  [دور {turn_num}] {active.name} ضحّى بـ #{hi_card.cid} -> الباور: {active.power} | المانا: {active.mana}")
 
             # 2. Smart Environment Activation (Cantrip: draws +1 card & shifts weather when net beneficial)
             for c in list(active.hand):
-                if c.card_type == "env" and c.cost <= active.power and self._should_play_env(active, other, c, active_env, env_turns):
-                    active.power -= c.cost
+                if c.card_type == "env" and c.cost <= active.mana and self._should_play_env(active, other, c, active_env, env_turns):
+                    active.mana -= c.cost
                     active.hand.remove(c)
                     active.played_ids.add(c.cid)
                     acted_cids.append(c.cid)
@@ -1902,15 +1923,15 @@ class BattleEngine:
                     break
 
             # 3A. Combo Ordering: Summon Spell-Synergy / Mana-Gen Enablers BEFORE casting spells!
-            has_playable_spells = any(c.card_type == "spell" and c.cost <= active.power for c in active.hand)
+            has_playable_spells = any(c.card_type == "spell" and c.cost <= active.mana for c in active.hand)
             if has_playable_spells:
                 synergy_hand = [
                     c for c in active.hand
-                    if c.card_type == "monster" and c.cost <= active.power and (c.passive_tags & self._SYNERGY_PASSIVES)
+                    if c.card_type == "monster" and c.cost <= active.mana and (c.passive_tags & self._SYNERGY_PASSIVES)
                 ]
                 synergy_hand.sort(key=lambda c: c.cost)
                 for sm in synergy_hand:
-                    if sm.cost <= active.power:
+                    if sm.cost <= active.mana:
                         slot = self._choose_best_slot(active, other, sm)
                         if slot != -1:
                             self.summon_monster(active, other, sm, slot, turn_num)
@@ -1922,10 +1943,10 @@ class BattleEngine:
             # 3B. Pre-Summon / Offensive / Draw / Lane-Clearing Spells
             pre_spells = [
                 c for c in active.hand
-                if c.card_type == "spell" and c.cost <= active.power and c.spell_type not in self._POST_BUFF_SPELLS
+                if c.card_type == "spell" and c.cost <= active.mana and c.spell_type not in self._POST_BUFF_SPELLS
             ]
             for sp in pre_spells:
-                if sp.cost <= active.power and sp in active.hand and self._should_cast_spell(active, other, sp):
+                if sp.cost <= active.mana and sp in active.hand and self._should_cast_spell(active, other, sp):
                     self.cast_spell(active, other, sp, turn_num, rng)
                     actions_taken += 1
                     acted_cids.append(sp.cid)
@@ -1943,7 +1964,7 @@ class BattleEngine:
                 reverse=True,
             )
             for mcard in playable_monsters:
-                if mcard.cost <= active.power:
+                if mcard.cost <= active.mana:
                     slot = self._choose_best_slot(active, other, mcard)
                     if slot != -1:
                         self.summon_monster(active, other, mcard, slot, turn_num)
@@ -1957,9 +1978,9 @@ class BattleEngine:
                             )
 
             # 4B. Post-Summon Ally-Buff Spells (now all summoned allies get buffed!)
-            post_spells = [c for c in active.hand if c.card_type == "spell" and c.cost <= active.power]
+            post_spells = [c for c in active.hand if c.card_type == "spell" and c.cost <= active.mana]
             for sp in post_spells:
-                if sp.cost <= active.power and sp in active.hand and self._should_cast_spell(active, other, sp):
+                if sp.cost <= active.mana and sp in active.hand and self._should_cast_spell(active, other, sp):
                     self.cast_spell(active, other, sp, turn_num, rng)
                     actions_taken += 1
                     acted_cids.append(sp.cid)
@@ -1971,9 +1992,10 @@ class BattleEngine:
                 break
 
             # 5. Prioritized Active Skills
+            mana_before_sk = active.mana
             pwr_before_sk = active.power
             self.execute_active_skills(active, other, turn_num, rng, acted_cids)
-            if active.power < pwr_before_sk or any(s is not None and s.used_active_turn for s in active.slots):
+            if active.mana < mana_before_sk or active.power < pwr_before_sk or any(s is not None and s.used_active_turn for s in active.slots):
                 actions_taken += 1
             if p1.hp <= 0 or p2.hp <= 0:
                 break
@@ -2000,10 +2022,10 @@ class BattleEngine:
             elif is_dead:
                 dead_turns += 1
                 for hc in active.hand:
-                    if hc.cid <= 452 and hc.cost > active.power:
+                    if hc.cid <= 452 and hc.cost > active.mana:
                         active.card_stall[hc.cid] = active.card_stall.get(hc.cid, 0) + 1
                 if log is not None:
-                    log.append(f"    💤 [دور ميت] لا لعب متاح (مانا {active.power})")
+                    log.append(f"    💤 [دور ميت] لا لعب متاح (مانا {active.mana})")
             elif is_stall:
                 stall_turns += 1
                 for s in active.slots:

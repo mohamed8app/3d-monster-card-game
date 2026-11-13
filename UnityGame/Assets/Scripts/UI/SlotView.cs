@@ -145,7 +145,7 @@ namespace MonsterCardGame.UI
                         if (auraRuneRingImage != null)
                         {
                             auraRuneRingImage.transform.localRotation = Quaternion.Euler(0f, 0f, auraRotation);
-                            Color rc = Color.Lerp(activeAuraColor, new Color(1f, 0.92f, 0.45f), 0.35f);
+                            Color rc = Color.Lerp(activeAuraColor, new Color(0.84f, 0.92f, 1f), 0.35f);
                             rc.a = (isHovered || isSigilHovered) ? 0.85f : Mathf.Lerp(0.38f, 0.68f, pulse);
                             auraRuneRingImage.color = rc;
                         }
@@ -170,7 +170,7 @@ namespace MonsterCardGame.UI
                         }
                         if (sigilSwordsImage != null)
                         {
-                            Color sc = Color.Lerp(new Color(1f, 0.90f, 0.48f), Color.white, isSigilHovered ? 0.95f : (0.35f + 0.55f * flashPulse));
+                            Color sc = Color.Lerp(new Color(0.82f, 0.90f, 0.98f), Color.white, isSigilHovered ? 0.95f : (0.35f + 0.55f * flashPulse));
                             sc.a = 1.0f;
                             sigilSwordsImage.color = sc;
                         }
@@ -469,7 +469,7 @@ namespace MonsterCardGame.UI
                 sigilPipBgImage = pipObj.GetComponent<Image>();
                 sigilPipBgImage.raycastTarget = false;
                 var pipOutline = pipObj.AddComponent<Outline>();
-                pipOutline.effectColor = new Color(1f, 0.85f, 0.35f, 0.88f);
+                pipOutline.effectColor = new Color(0.55f, 0.65f, 0.76f, 0.85f);
                 pipOutline.effectDistance = new Vector2(1f, 1f);
 
                 sigilText = GameBootstrapper.CreateText(pipObj.transform, "SigilCostText", "1", 10,
@@ -534,11 +534,11 @@ namespace MonsterCardGame.UI
                 if (sigilText != null)
                 {
                     sigilText.text = cost.ToString();
-                    sigilText.color = new Color(1f, 0.96f, 0.72f);
+                    sigilText.color = new Color(0.90f, 0.95f, 1f);
                 }
                 if (sigilPipBgImage != null)
                 {
-                    sigilPipBgImage.color = new Color(0.08f, 0.32f, 0.65f, 0.98f);
+                    sigilPipBgImage.color = new Color(0.10f, 0.28f, 0.52f, 0.98f);
                 }
                 if (sigilFlashImage != null)
                 {
@@ -546,11 +546,11 @@ namespace MonsterCardGame.UI
                 }
                 if (sigilSwordsImage != null)
                 {
-                    sigilSwordsImage.color = new Color(1f, 0.96f, 0.78f, 1f);
+                    sigilSwordsImage.color = new Color(0.86f, 0.94f, 1f, 1f);
                 }
                 if (sigilRingImage != null)
                 {
-                    sigilRingImage.color = new Color(1f, 0.92f, 0.48f, 0.92f);
+                    sigilRingImage.color = new Color(0.52f, 0.80f, 0.96f, 0.88f);
                 }
             }
             else
@@ -564,6 +564,10 @@ namespace MonsterCardGame.UI
                     case CombatSystem.AbilityReadyState.AlreadyUsed:
                         dimCol = new Color(0.28f, 0.55f, 0.40f, 0.40f);
                         glyph = "✓";
+                        break;
+                    case CombatSystem.AbilityReadyState.NotEnoughMana:
+                        dimCol = new Color(0.28f, 0.56f, 0.88f, 0.48f);
+                        glyph = cost.ToString();
                         break;
                     case CombatSystem.AbilityReadyState.NotEnoughPower:
                         dimCol = new Color(0.75f, 0.55f, 0.25f, 0.48f);
@@ -608,7 +612,7 @@ namespace MonsterCardGame.UI
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(148, 184));
 
             tokenOutline = fieldCardToken.AddComponent<Outline>();
-            tokenOutline.effectColor = new Color(0.95f, 0.85f, 0.3f, 0.95f);
+            tokenOutline.effectColor = new Color(0.48f, 0.68f, 0.82f, 0.90f);
             tokenOutline.effectDistance = new Vector2(2f, 2f);
             tokenOutline.enabled = false;
 
@@ -654,7 +658,7 @@ namespace MonsterCardGame.UI
 
             // 3. Top-Center Summon Cost Number (Inscribed inside the top medallion socket)
             tokenCostText = GameBootstrapper.CreateText(fieldCardToken.transform, "CostText", "", 14,
-                new Color(1f, 0.96f, 0.72f), TextAnchor.MiddleCenter, new Vector2(0, -11f), new Vector2(28, 22));
+                new Color(0.92f, 0.95f, 1f), TextAnchor.MiddleCenter, new Vector2(0, -11f), new Vector2(28, 22));
             tokenCostText.rectTransform.anchorMin = new Vector2(0.5f, 1f);
             tokenCostText.rectTransform.anchorMax = new Vector2(0.5f, 1f);
             tokenCostText.rectTransform.anchoredPosition = new Vector2(0, -11f);

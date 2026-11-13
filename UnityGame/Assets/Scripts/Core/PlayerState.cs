@@ -13,9 +13,9 @@ namespace MonsterCardGame.Core
         public int maxHp = 500;
         public int shield = 0;
 
-        [Header("Resources (Unlimited Mana & Power ∞)")]
-        public int manaCapacity = 0;
-        public int currentPower = 0;
+        [Header("Resources (Permanent Power ∞ -> Generates Turn Mana)")]
+        public int power = 0;
+        public int currentMana = 0;
         public bool hasSacrificedThisTurn = false;
         public int fatigueCount = 0;
         public int monstersSummonedTotal = 0;
@@ -30,6 +30,9 @@ namespace MonsterCardGame.Core
         public List<CardData> deck = new List<CardData>();
         public List<CardData> hand = new List<CardData>();
         public List<CardData> graveyard = new List<CardData>();
+
+        [Header("Side Leader Slot")]
+        public CardData activeLeader = null;
 
         [Header("6 Board Slots")]
         public BoardSlot[] slots = new BoardSlot[6];
@@ -99,10 +102,11 @@ namespace MonsterCardGame.Core
             ShuffleDeck();
             hand.Clear();
             graveyard.Clear();
+            activeLeader = null;
             currentHp = maxHp;
             shield = 0;
-            manaCapacity = 0;
-            currentPower = 0;
+            power = 0;
+            currentMana = 0;
             fatigueCount = 0;
             monstersSummonedTotal = 0;
             hasSacrificedThisTurn = false;
@@ -148,8 +152,8 @@ namespace MonsterCardGame.Core
 
         public void StartTurn(int turnNumber, bool skipDraw = false)
         {
-            // 1. Recharge Power equal to current Mana Capacity (Unlimited ∞)
-            currentPower = manaCapacity;
+            // 1. Gain turn Mana equal to permanent Power (Unlimited ∞)
+            currentMana = power;
             hasSacrificedThisTurn = false;
 
             // 2. Check Total Eclipse effect (denies draw & sacrifice for 1 turn) or explicit Turn-1 skip
@@ -307,9 +311,9 @@ namespace MonsterCardGame.Core
                     if (!string.IsNullOrEmpty(lastDrawnElement) && c.element == lastDrawnElement)
                         patternBoost *= 0.55f;
 
-                    // Dynamic excitement curve: as Mana scales, high-tier bosses gain dramatic presence while mixed tiers stay in play
-                    if (c.cardType == CardType.Monster && c.tier_num >= 4 && manaCapacity >= 5)
-                        patternBoost *= 1.0f + Mathf.Min(0.75f, (manaCapacity - 4) * 0.12f);
+                    // Dynamic excitement curve: as Power scales, high-tier bosses gain dramatic presence while mixed tiers stay in play
+                    if (c.cardType == CardType.Monster && c.tier_num >= 4 && power >= 5)
+                        patternBoost *= 1.0f + Mathf.Min(0.75f, (power - 4) * 0.12f);
                 }
 
                 // Match novelty vs Fallen Veteran comeback mix:
@@ -363,11 +367,11 @@ namespace MonsterCardGame.Core
             hand.Remove(cardToSacrifice);
             graveyard.Add(cardToSacrifice);
 
-            manaCapacity++;
-            currentPower++;
+            power++;
+            currentMana++;
             hasSacrificedThisTurn = true;
 
-            Debug.Log($"[{playerName}] sacrificed [{cardToSacrifice.name}]. Mana Cap: {manaCapacity}, Current Power: {currentPower}");
+            Debug.Log($"[{playerName}] sacrificed [{cardToSacrifice.name}]. +1 Power (Total Power: {power}), +1 Mana (Current Mana: {currentMana})");
             return true;
         }
 
@@ -382,13 +386,13 @@ namespace MonsterCardGame.Core
                 return false;
             }
 
-            if (card.cost > currentPower)
+            if (card.cost > currentMana)
             {
-                Debug.LogWarning($"Not enough Power! Required: {card.cost}, Available: {currentPower}");
+                Debug.LogWarning($"Not enough Mana! Required: {card.cost}, Available: {currentMana}");
                 return false;
             }
 
-            currentPower -= card.cost;
+            currentMana -= card.cost;
             hand.Remove(card);
             monstersSummonedTotal++;
 

@@ -49,7 +49,7 @@ namespace MonsterCardGame.Data
             else if (sk.Contains("arcane piercing projectile")) spell.spellType = SpellType.ArcanePiercingShot;
             else if (sk.Contains("draw") && sk.Contains("extra cards")) spell.spellType = SpellType.DrawTwoAndStrike;
             else if (sk.Contains("revive the strongest")) spell.spellType = SpellType.ReviveFromGraveyard;
-            else if (sk.Contains("steal") && sk.Contains("mana cap")) spell.spellType = SpellType.ManaStealAndAOE;
+            else if (sk.Contains("steal") && (sk.Contains("mana cap") || sk.Contains("power"))) spell.spellType = SpellType.ManaStealAndAOE;
         }
 
         public static List<CardData> GetAllSpells()
