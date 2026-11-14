@@ -468,9 +468,11 @@ namespace MonsterCardGame.Core
                 ((act.Contains("(Cost 2 Mana)") || act.Contains("(Cost 2 Power)")) ? 2 : 1));
             var oppSlot = (opponent != null && slotIndex >= 0 && slotIndex < 6) ? opponent.slots[slotIndex] : null;
             var oppM = (oppSlot != null && oppSlot.IsOccupied) ? oppSlot.currentMonster : null;
+            var mySlot = (player != null && slotIndex >= 0 && slotIndex < 6) ? player.slots[slotIndex] : null;
+            var myM = (mySlot != null && mySlot.IsOccupied) ? mySlot.currentMonster : null;
             int extraCost = (oppM != null && oppM.HasPassiveSubstr("Frost Aura") != null) ? 1 : 0;
             int discount = ((player != null && player.freeSkillBonus > 0) ? 1 : 0)
-                + CommanderSpiritEffects.GetSkillManaDiscount(player);
+                + CommanderSpiritEffects.GetSkillManaDiscount(player, myM);
             return Mathf.Max(0, baseSkillCost + extraCost - discount);
         }
 

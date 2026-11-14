@@ -192,10 +192,20 @@ namespace MonsterCardGame.Core
 
             BattleUIManager.Instance?.ClearFlightAnimations();
 
-            // Player 1 begins with 5 cards (skips Turn 1 draw -> 5); Player 2 begins with 6 cards (skips Turn 2 draw -> 6)
+            // Player 1 begins with 5 cards (guaranteed 1 playable circular Commander Spirit at 1 Mana for immediate Turn-1 play);
+            // Player 2 begins with 6 cards (skips Turn 2 draw -> 6)
             int p1Draws = Mathf.Max(0, firstPlayerOpeningHand);
             int p2Draws = Mathf.Max(0, secondPlayerOpeningHand);
-            for (int i = 0; i < p1Draws; i++)
+
+            CardData openingSpirit = null;
+            if (p1Draws > 0)
+            {
+                openingSpirit = humanPlayer.DrawSpecificFromDeck(
+                    c => c.cardType == CardType.Leader && MonsterArtLoader.HasCustomCardArt(c),
+                    c => c.cost = 0);
+            }
+            int p1Remaining = openingSpirit != null ? Mathf.Max(0, p1Draws - 1) : p1Draws;
+            for (int i = 0; i < p1Remaining; i++)
             {
                 humanPlayer.DrawCard();
             }
@@ -221,6 +231,13 @@ namespace MonsterCardGame.Core
 
             if (BattleUIManager.Instance != null)
             {
+                if (openingSpirit != null)
+                {
+                    string spTitle = MonsterArtLoader.FormatSpiritTitle(openingSpirit);
+                    BattleUIManager.Instance.LogCombatMessage(
+                        $"🪙 Opening Commander Spirit in Hand: [{spTitle}] ({openingSpirit.tribe}, Turn-1 Awakening Cost: 0💧) — Drag it directly onto your Spirit Altar right now!",
+                        openingSpirit);
+                }
                 if (humanPlayer.hand != null && humanPlayer.hand.Count > 0)
                 {
                     BattleUIManager.Instance.ShowCardDetails(humanPlayer.hand[0]);

@@ -83,16 +83,16 @@ namespace MonsterCardGame.UI
         private int currentTestEnvIndex = -1;
 
         private static readonly (string tribe, string element, string auraDesc)[] SpiritTribePresets = {
-            ("Ghosts", "Dark", "Spectral Veil: Ghosts shroud flanks with ghostly evasion & eerie chill."),
-            ("Demons", "Fire", "Abyssal Pact: Demons surge with blazing fury when sacrificing cards."),
-            ("Celestials", "Light", "Solar Sanctuary: Celestials bless commander shields & radiant strikes."),
-            ("Mages", "Arcane", "Astral Resonance: Mages amplify spell power across arcane currents."),
-            ("Warriors", "Fire", "Vanguard Valor: Warriors forge relentless frontline attack momentum."),
-            ("Beasts", "Nature", "Primal Hunt: Beasts empower pack ferocity and relentless pursuit."),
-            ("Elves", "Air", "Sylvan Wind: Elves weave swift agility and sharpened arcane arrows."),
-            ("Dwarves", "Earth", "Runeforge Bastion: Dwarves fortify armor plating & iron resilience."),
-            ("Giants", "Earth", "Colossus Might: Giants crush enemy defenses with seismic impacts."),
-            ("Insects", "Nature", "Swarm Chitin: Insects overwhelm lanes with venomous toxic spores.")
+            ("Ghosts", "Dark", "Spectral Veil: Allied Ghosts ONLY gain evasion & non-Ghost enemies suffer dread."),
+            ("Demons", "Fire", "Abyssal Pact: Allied Demons ONLY surge with blazing fury & life leech."),
+            ("Celestials", "Light", "Solar Sanctuary: Allied Celestials ONLY gain armor, healing & shield blessing."),
+            ("Mages", "Arcane", "Astral Resonance: Allied Mages ONLY amplify attack, evasion & skill cost discount."),
+            ("Warriors", "Fire", "Vanguard Valor: Allied Warriors ONLY gain attack, armor & counter-bash."),
+            ("Beasts", "Nature", "Primal Hunt: Allied Beasts ONLY gain savage crits, ferocity & kill feast."),
+            ("Elves", "Air", "Sylvan Wind: Allied Elves ONLY gain agility, healing & root enemy clans."),
+            ("Dwarves", "Earth", "Runeforge Bastion: Allied Dwarves ONLY fortify armor & molten rune thorns."),
+            ("Giants", "Earth", "Colossus Might: Allied Giants ONLY crush enemies & chill rival clans."),
+            ("Insects", "Nature", "Swarm Chitin: Allied Insects ONLY overwhelm rival clans with deadly poison.")
         };
         private int currentTestSpiritIndex = -1;
 

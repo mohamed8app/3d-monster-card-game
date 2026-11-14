@@ -13284,7 +13284,7 @@
       "active_skills": [
         "Spectral Drain & Soul Harvest"
       ],
-      "description": "Summon: Drain 12 HP from Enemy Leader. Aura: Allied Ghosts & Dark +4 ATK; any monster death deals 6 damage to Enemy Leader & heals weakest ally +4 DEF.",
+      "description": "Summon: Drain 12 HP from Enemy Leader & weaken 1 non-Ghost enemy (-30% ATK, 2T). Aura: Allied Ghosts ONLY +5 ATK; any monster death hits Enemy Leader 6 & heals weakest allied Ghost +5 DEF.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,
@@ -13315,7 +13315,7 @@
       "active_skills": [
         "Mourning Chill & Spectral Evasion"
       ],
-      "description": "Summon: Weaken 2 enemy monsters (-30% ATK, 2T). Aura: Ghosts, Ice & Flanks gain 20% evasion; enemies lose -2 ATK; +6 Leader HP each turn.",
+      "description": "Summon: Weaken 2 enemy non-Ghosts (-30% ATK, 2T). Aura: Allied Ghosts ONLY +22% evasion; enemy non-Ghosts suffer -3 ATK; +6 Leader HP & dread 1 non-Ghost/turn.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,
@@ -13346,7 +13346,7 @@
       "active_skills": [
         "Infernal Brand & Ash Surge"
       ],
-      "description": "Summon: Deal 8 fire damage to enemy frontline & burn 2 foes (4/T). Aura: Allied Demons & Fire +5 ATK; attacks inflict Burn (4/T).",
+      "description": "Summon: 10 fire dmg to enemy non-Demons (6 to Demons) & burn 2 non-Demons (5/T). Aura: Allied Demons ONLY +5 ATK & inflict Burn (4/T) on combat hits.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,
@@ -13377,7 +13377,7 @@
       "active_skills": [
         "Crimson Sacrifice & Life Leech"
       ],
-      "description": "Summon: +8 Leader Shield & strongest ally +4 ATK / +6 DEF. Aura: On Sacrifice, all allies +3 ATK & 8 Enemy Leader drain; Demons & Dark gain 15% Leech.",
+      "description": "Summon: +10 Leader Shield & strongest allied Demon +5 ATK / +6 DEF. Aura: On Sacrifice, allied Demons ONLY +4 ATK & drain 8 Enemy HP; Demons gain 20% Leech.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,
@@ -13408,7 +13408,7 @@
       "active_skills": [
         "Sanctified Plate & Radiance"
       ],
-      "description": "Summon: +18 Leader Shield & Vanguard allies +8 DEF. Aura: Celestials & Light gain +3 ATK & -3 combat damage taken; +8 Leader HP each turn.",
+      "description": "Summon: +18 Leader Shield & allied Celestials ONLY +8 DEF. Aura: Allied Celestials ONLY +4 ATK & take -4 combat dmg; +8 Leader HP each turn.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,
@@ -13439,7 +13439,7 @@
       "active_skills": [
         "Purifying Blessing & Light"
       ],
-      "description": "Summon: Restore +22 Leader HP & cleanse all debuffs on allies. Aura: Summoned allies gain +6 DEF; Celestials, Light & Water heal +3 DEF/turn.",
+      "description": "Summon: Restore +22 Leader HP & cleanse debuffs on allied Celestials ONLY. Aura: Summoned Celestials +8 DEF & heal +4 DEF/turn; enemy non-Celestials suffer -2 ATK.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,
@@ -13470,7 +13470,7 @@
       "active_skills": [
         "Spell Surge & Arcane Tempest"
       ],
-      "description": "Summon: +1 Mana now & +4 Spell Power surge. Aura: Mages & Arcane +4 ATK; casting any Spell buffs all allies +2 ATK & hits Enemy Leader for 6.",
+      "description": "Summon: +1 Mana now & +4 Spell Power surge. Aura: Allied Mages ONLY +5 ATK; casting any Spell buffs allied Mages ONLY +3 ATK & hits Enemy Leader for 6.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,
@@ -13501,7 +13501,7 @@
       "active_skills": [
         "Void Silence & Mana Flow"
       ],
-      "description": "Summon: Silence strongest enemy 2T. Aura: Mages & Arcane/Ice +4 ATK, 18% Mystic Evasion, & -1 Mana cost on monster Active Abilities.",
+      "description": "Summon: Silence strongest enemy 2T (& weaken if non-Mage). Aura: Allied Mages ONLY +4 ATK, 20% Mystic Evasion, & -1 Mana cost on Mages' Active Skills.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,
@@ -13532,7 +13532,7 @@
       "active_skills": [
         "Relentless Iron Charge"
       ],
-      "description": "Summon: Rally all allies +4 ATK / +4 DEF. Aura: Warriors & Vanguard allies gain +4 ATK; all allies deal +3 bonus combat damage vs monsters.",
+      "description": "Summon: +6 Leader Shield & rally allied Warriors ONLY +5 ATK / +5 DEF. Aura: Allied Warriors ONLY +4 ATK & deal +4 bonus combat dmg vs monsters.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,
@@ -13563,7 +13563,7 @@
       "active_skills": [
         "Unbroken Wall & Bulwark"
       ],
-      "description": "Summon: +15 Leader Shield & Bubble Shield on weakest ally. Aura: Warriors & PureShield allies take -3 damage; Vanguard summons gain +8 DEF.",
+      "description": "Summon: +15 Leader Shield & Bubble Shield on weakest allied Warrior. Aura: Allied Warriors ONLY take -4 dmg, summon +8 DEF, & bash non-Warrior attackers for 3.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,
@@ -13594,7 +13594,7 @@
       "active_skills": [
         "Pack Frenzy & Kill Feast"
       ],
-      "description": "Summon: Flank allies gain +5 ATK. Aura: Beasts & Flank allies +4 ATK; when any ally slays a monster, it gains +3 ATK & +5 DEF.",
+      "description": "Summon: Allied Beasts ONLY gain +6 ATK. Aura: Allied Beasts ONLY +4 ATK; when an allied Beast slays an enemy, it gains +4 ATK & +6 DEF.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,
@@ -13625,7 +13625,7 @@
       "active_skills": [
         "Predator Critical Strike"
       ],
-      "description": "Summon: All living allies gain +4 ATK. Aura: Summoned Beasts & Nature gain +4 ATK / +4 DEF; allied Beasts have 18% chance for 1.35x Savage Crit.",
+      "description": "Summon: Allied Beasts ONLY +4/+4 & weaken 1 non-Beast enemy 2T. Aura: Summoned Beasts +4/+4; allied Beasts ONLY have 20% chance for 1.40x Savage Crit.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,
@@ -13656,7 +13656,7 @@
       "active_skills": [
         "Elderwood Renewal & Vitality"
       ],
-      "description": "Summon: +1 Mana now & all allies gain +6 DEF. Aura: Elves & Nature allies heal +4 DEF & Leader restores +5 HP at Start of Turn.",
+      "description": "Summon: +1 Mana now & allied Elves ONLY gain +7 DEF. Aura: Allied Elves ONLY heal +4 DEF/turn & Leader +5 HP; enemy non-Elves suffer -2 ATK.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,
@@ -13687,7 +13687,7 @@
       "active_skills": [
         "Twin Starshot & Canopy Agility"
       ],
-      "description": "Summon: Deal 8 lunar damage to 2 random enemy monsters. Aura: Elves, Air & Flanks gain +4 ATK & 15% agile combat evasion.",
+      "description": "Summon: Deal 9 lunar dmg to 2 enemy non-Elves (6 to Elves). Aura: Allied Elves ONLY +4 ATK & 20% Agile combat evasion.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,
@@ -13718,7 +13718,7 @@
       "active_skills": [
         "Tempered Steel & Anvil Ward"
       ],
-      "description": "Summon: +10 Leader Shield & all allies +6 DEF. Aura: Dwarves, Earth & Fire allies +3 ATK & -3 incoming combat dmg; summons grant +2 Shield.",
+      "description": "Summon: +12 Leader Shield & allied Dwarves ONLY +7 DEF. Aura: Allied Dwarves ONLY +4 ATK & take -4 combat dmg; summoning a Dwarf grants +4 Leader Shield.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,
@@ -13749,7 +13749,7 @@
       "active_skills": [
         "Runic Armor & Anvil Thorns"
       ],
-      "description": "Summon: Allies gain +6 DEF & cleanse Freeze/Weaken. Aura: Dwarves & Earth gain +3 ATK & reflect 3 molten thorns damage when struck.",
+      "description": "Summon: Allied Dwarves ONLY +7 DEF & cleanse Freeze/Weaken. Aura: Allied Dwarves ONLY +4 ATK & reflect 4 molten rune dmg when struck.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,
@@ -13780,7 +13780,7 @@
       "active_skills": [
         "Seismic Shatter & Titanfall"
       ],
-      "description": "Summon: Deal 10 earthquake damage to ALL enemy monsters. Aura: Giants & Earth +5 ATK; when an allied Giant dies, Enemy Leader takes 10 quake dmg.",
+      "description": "Summon: Deal 12 quake dmg to enemy non-Giants (8 to Giants). Aura: Allied Giants ONLY +6 ATK; when an allied Giant dies, Enemy Leader takes 12 quake dmg.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,
@@ -13811,7 +13811,7 @@
       "active_skills": [
         "Permafrost Mantle & Chill"
       ],
-      "description": "Summon: Freeze strongest enemy 1T & fortify allies +6 DEF. Aura: Giants, Earth & Ice +4 ATK, reflect 3 frost thorns & chill opposing attackers (-2 ATK).",
+      "description": "Summon: Freeze strongest enemy (2T vs non-Giants) & allied Giants ONLY +7 DEF. Aura: Allied Giants ONLY +5 ATK & 4 frost thorns; enemy non-Giants suffer -3 ATK.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,
@@ -13842,7 +13842,7 @@
       "active_skills": [
         "Toxic Plague & Swarm Shell"
       ],
-      "description": "Summon: Poison 2 enemies (4/T) & harden allies +5 DEF. Aura: Insects & Dark gain +3 ATK & inflict Poison (4/T) on combat hits.",
+      "description": "Summon: Poison 2 enemy non-Insects (5/T) & allied Insects ONLY +6 DEF. Aura: Allied Insects ONLY +4 ATK & inflict Poison (4/T) on combat hits.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,
@@ -13873,7 +13873,7 @@
       "active_skills": [
         "Acid Mandibles & Fatal Sting"
       ],
-      "description": "Summon: Insects & Flank allies gain +5 ATK. Aura: Insects & Nature +4 ATK; combat hits add +2 Poison & deal +3 bonus dmg vs poisoned foes.",
+      "description": "Summon: Allied Insects ONLY +6 ATK & poison 1 non-Insect foe (4/T). Aura: Allied Insects ONLY +4 ATK, +2 stacking Poison, & +4 dmg vs poisoned foes.",
       "spellType": 0,
       "spellPower": 0,
       "p_score": 0.0,

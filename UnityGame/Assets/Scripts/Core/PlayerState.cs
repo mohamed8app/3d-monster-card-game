@@ -281,6 +281,24 @@ namespace MonsterCardGame.Core
             }
         }
 
+        public CardData DrawSpecificFromDeck(Func<CardData, bool> predicate, Action<CardData> adjustBeforeAdd = null)
+        {
+            if (deck == null || predicate == null) return null;
+            int idx = deck.FindIndex(c => c != null && predicate(c));
+            if (idx < 0) return null;
+
+            var card = deck[idx];
+            deck.RemoveAt(idx);
+            cardTurnsWaiting.Remove(card.id);
+            drawnCardIdsThisMatch.Add(card.id);
+            adjustBeforeAdd?.Invoke(card);
+
+            onCardDrawnCallback?.Invoke(card.id);
+            AddCardToHandWithBurnLimit(card);
+            onCardDrawnToHand?.Invoke(this, card);
+            return card;
+        }
+
         private int SelectWeightedNextCardIndex()
         {
             if (deck.Count <= 1) return 0;
