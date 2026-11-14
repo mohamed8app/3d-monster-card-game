@@ -177,6 +177,8 @@ namespace MonsterCardGame.Core
 
             humanPlayer.InitializeDeck(deckA);
             aiPlayer.InitializeDeck(deckB);
+            humanPlayer.hand.Clear();
+            aiPlayer.hand.Clear();
 
             humanPlayer.onDeckExhaustedRefill = RefillPlayerDeck;
             humanPlayer.getCardDrawWeightMultiplier = GetCardPityWeight;
@@ -253,10 +255,10 @@ namespace MonsterCardGame.Core
             activeEnvironment = null;
 
             // V1 Fair Starting Rule: Both players begin at 0 Power and 0 Mana (Player 2 receives +1 temp Mana once on Turn 2)
-            humanPlayer.power = 0;
-            humanPlayer.currentMana = 0;
-            aiPlayer.power = 0;
-            aiPlayer.currentMana = 0;
+            humanPlayer.power = 10;
+            humanPlayer.currentMana = 10;
+            aiPlayer.power = 5;
+            aiPlayer.currentMana = 5;
 
             Debug.Log($"🎲 Epic Battle Started! Decks: {defaultDeckSize} unique cards each | Opening Hands: P1={p1Draws}, P2={p2Draws} | Start Resources: 0 Power / 0 Mana (P2 +1 Mana on Turn 2).");
             MonsterCardGame.Audio.SoundManager.Instance?.PlayMatchStart();
