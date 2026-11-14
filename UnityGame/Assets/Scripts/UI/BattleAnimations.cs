@@ -133,7 +133,8 @@ namespace MonsterCardGame.UI
             tr.localScale = Vector3.one * 0.56f;
             tr.localRotation = Quaternion.Euler(0f, 0f, startTiltDeg);
 
-            var cg = flyingCardVisual.GetComponent<CanvasGroup>() ?? flyingCardVisual.AddComponent<CanvasGroup>();
+            var cg = flyingCardVisual.GetComponent<CanvasGroup>();
+            if (cg == null) cg = flyingCardVisual.AddComponent<CanvasGroup>();
             cg.blocksRaycasts = false;
             cg.interactable = false;
             cg.alpha = 0.2f;
@@ -198,7 +199,8 @@ namespace MonsterCardGame.UI
             tr.position = startWorldPos;
             tr.localScale = Vector3.one * startScale;
 
-            var cg = flyingCardVisual.GetComponent<CanvasGroup>() ?? flyingCardVisual.AddComponent<CanvasGroup>();
+            var cg = flyingCardVisual.GetComponent<CanvasGroup>();
+            if (cg == null) cg = flyingCardVisual.AddComponent<CanvasGroup>();
             cg.blocksRaycasts = false;
             cg.interactable = false;
             cg.alpha = 1f;
@@ -812,7 +814,8 @@ namespace MonsterCardGame.UI
             if (deathCardVisual != null)
             {
                 deathCardVisual.transform.position = worldPos;
-                var cgGhost = deathCardVisual.GetComponent<CanvasGroup>() ?? deathCardVisual.AddComponent<CanvasGroup>();
+                var cgGhost = deathCardVisual.GetComponent<CanvasGroup>();
+                if (cgGhost == null) cgGhost = deathCardVisual.AddComponent<CanvasGroup>();
                 cgGhost.blocksRaycasts = false;
                 cgGhost.interactable = false;
                 cgGhost.alpha = 1f;

@@ -969,7 +969,7 @@ namespace MonsterCardGame.UI
                     rect.pivot = new Vector2(0.5f, 0.5f);
                     rect.sizeDelta = new Vector2(138f, 182f);
                 }
-                var cg = burnVisual.GetComponent<CanvasGroup>() ?? burnVisual.AddComponent<CanvasGroup>();
+                var cg = EnsureCanvasGroup(burnVisual);
                 cg.blocksRaycasts = false;
                 cg.interactable = false;
                 foreach (var g in burnVisual.GetComponentsInChildren<Graphic>(true))
@@ -1080,6 +1080,14 @@ namespace MonsterCardGame.UI
             return GetDeckOriginWorldPos(false);
         }
 
+        private static CanvasGroup EnsureCanvasGroup(GameObject go)
+        {
+            if (go == null) return null;
+            var cg = go.GetComponent<CanvasGroup>();
+            if (cg == null) cg = go.AddComponent<CanvasGroup>();
+            return cg;
+        }
+
         private GameObject CreateFlyingCardVisual(CardData card, bool includeCardBackCover, out GameObject backCoverObj)
         {
             backCoverObj = null;
@@ -1093,7 +1101,7 @@ namespace MonsterCardGame.UI
                 rect.pivot = new Vector2(0.5f, 0.5f);
                 rect.sizeDelta = new Vector2(138f, 182f);
             }
-            var cg = cardGo.GetComponent<CanvasGroup>() ?? cardGo.AddComponent<CanvasGroup>();
+            var cg = EnsureCanvasGroup(cardGo);
             cg.blocksRaycasts = false;
             cg.interactable = false;
             foreach (var g in cardGo.GetComponentsInChildren<Graphic>(true))
@@ -1173,7 +1181,7 @@ namespace MonsterCardGame.UI
             foreach (var card in gm.humanPlayer.hand)
             {
                 var cardObj = CreateDynamicCardUI(playerHandContainer, card);
-                var cg = cardObj.GetComponent<CanvasGroup>() ?? cardObj.AddComponent<CanvasGroup>();
+                var cg = EnsureCanvasGroup(cardObj);
                 if (inFlightPlayerDrawCards.Contains(card))
                 {
                     cg.alpha = 0f;
@@ -1286,7 +1294,7 @@ namespace MonsterCardGame.UI
             int firstHiddenIdx = handCount - inFlightEnemyDrawCount;
             for (int i = firstHiddenIdx; i < handCount; i++)
             {
-                var cg = createdBacks[i].GetComponent<CanvasGroup>() ?? createdBacks[i].AddComponent<CanvasGroup>();
+                var cg = EnsureCanvasGroup(createdBacks[i]);
                 cg.alpha = 0f;
             }
 

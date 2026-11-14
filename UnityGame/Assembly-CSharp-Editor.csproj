@@ -52,7 +52,6 @@
     <Analyzer Include="C:\Program Files\Unity\Hub\Editor\6000.6.7f1\Editor\Data\BCLExtensions\TargetingPacks\netstandard2.1\analyzers\dotnet\roslyn4.0\cs\System.Text.Json.SourceGeneration.dll" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Assets\Editor\TempStrictClanVerify.cs" />
     <Compile Include="Assets\Editor\BattleSceneBuilder.cs" />
   </ItemGroup>
   <ItemGroup>

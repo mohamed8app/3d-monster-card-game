@@ -72,7 +72,8 @@ namespace MonsterCardGame.UI
             isFlightHidden = hidden;
             if (fieldCardToken != null && tokenCanvasGroup == null)
             {
-                tokenCanvasGroup = fieldCardToken.GetComponent<CanvasGroup>() ?? fieldCardToken.AddComponent<CanvasGroup>();
+                tokenCanvasGroup = fieldCardToken.GetComponent<CanvasGroup>();
+                if (tokenCanvasGroup == null) tokenCanvasGroup = fieldCardToken.AddComponent<CanvasGroup>();
             }
 
             if (hidden)
@@ -318,8 +319,9 @@ namespace MonsterCardGame.UI
                     tokenArtImage.preserveAspect = false;
                     if (standbyAnimator == null)
                     {
-                        standbyAnimator = tokenArtImage.gameObject.GetComponent<MonsterStandbyAnimator>()
-                            ?? tokenArtImage.gameObject.AddComponent<MonsterStandbyAnimator>();
+                        standbyAnimator = tokenArtImage.gameObject.GetComponent<MonsterStandbyAnimator>();
+                        if (standbyAnimator == null)
+                            standbyAnimator = tokenArtImage.gameObject.AddComponent<MonsterStandbyAnimator>();
                     }
                     standbyAnimator.Configure(data, false);
                 }
