@@ -55,6 +55,7 @@ namespace MonsterCardGame.UI
         private Vector2 baseBoardPos = new Vector2(0f, 58f);
         private float shakeIntensity = 0f;
         private float iceShiverTimer = 0f;
+        private float waterVortexTimer = 0f;
 
         public static BattlefieldAtmosphereEngine EnsureInstance(Transform canvasTransform, Image groundImg = null, Image overlayImg = null)
         {
@@ -329,6 +330,10 @@ namespace MonsterCardGame.UI
                 if (string.Equals(elem, "Ice", StringComparison.OrdinalIgnoreCase) && lvl == 3)
                 {
                     iceShiverTimer = 0f;
+                }
+                else if (string.Equals(elem, "Water", StringComparison.OrdinalIgnoreCase) && lvl == 3)
+                {
+                    waterVortexTimer = 0f;
                 }
                 StartGroundCrossfade(elem);
             }
@@ -671,7 +676,7 @@ namespace MonsterCardGame.UI
             UpdateChannelFade(channelA, dt);
             UpdateChannelFade(channelB, dt);
 
-            // 2. Level 3 Cataclysm Continuous Screen Tremor / Ice Shiver
+            // 2. Level 3 Cataclysm Continuous Screen Tremor / Ice Shiver / Water Vortex
             if (currentLevel == 3)
             {
                 shakeIntensity = Mathf.MoveTowards(shakeIntensity, 1f, dt * 2.2f);
@@ -679,11 +684,16 @@ namespace MonsterCardGame.UI
                 {
                     iceShiverTimer += dt;
                 }
+                else if (string.Equals(currentElement, "Water", StringComparison.OrdinalIgnoreCase))
+                {
+                    waterVortexTimer += dt;
+                }
             }
             else
             {
                 shakeIntensity = Mathf.MoveTowards(shakeIntensity, 0f, dt * 3.5f);
                 iceShiverTimer = 0f;
+                waterVortexTimer = 0f;
             }
 
             if (shakeIntensity > 0.001f)
@@ -734,6 +744,38 @@ namespace MonsterCardGame.UI
                         shakeOffsetY = 0f;
                         shakeRot = 0f;
                     }
+                }
+                else if (string.Equals(currentElement, "Water", StringComparison.OrdinalIgnoreCase))
+                {
+                    // === WATER CATACLYSM: Continuous Orbital Vortex Sway + Periodic Deep Tidal Surge (Option 1) ===
+                    // 1. Continuous smooth orbital rotation drift matching whirlpool direction (~3.5s per cycle)
+                    float orbitSpeed = 1.8f;
+                    float orbitX = Mathf.Cos(waterVortexTimer * orbitSpeed) * 1.6f;
+                    float orbitY = Mathf.Sin(waterVortexTimer * orbitSpeed) * 1.2f;
+                    float orbitRot = Mathf.Sin(waterVortexTimer * orbitSpeed) * 0.08f;
+
+                    // 2. Periodic Tidal Surge Pulse: every 5.0 seconds, a 1.2s deep oceanic surge rumble hits
+                    const float SurgeCadence = 5.0f;
+                    const float SurgeDuration = 1.2f;
+                    float surgeCycle = waterVortexTimer % SurgeCadence;
+
+                    float surgePower = 0f;
+                    if (surgeCycle < SurgeDuration)
+                    {
+                        // Smooth sine bell envelope for the surge (peaks gently at midpoint)
+                        float surgeNorm = surgeCycle / SurgeDuration;
+                        surgePower = Mathf.Sin(surgeNorm * Mathf.PI);
+                    }
+
+                    // Deep low-frequency heavy water rumble (8Hz - 14Hz)
+                    float tidalRumbleX = (Mathf.Sin(t * 14f) * 0.7f + Mathf.Sin(t * 8f) * 0.3f) * 1.8f;
+                    float tidalRumbleY = (Mathf.Cos(t * 12f) * 0.7f + Mathf.Cos(t * 7f) * 0.3f) * 1.6f;
+                    float tidalRot = Mathf.Sin(t * 10f) * 0.05f;
+
+                    float totalPower = shakeIntensity;
+                    shakeOffsetX = (orbitX + tidalRumbleX * surgePower) * totalPower;
+                    shakeOffsetY = (orbitY + tidalRumbleY * surgePower) * totalPower;
+                    shakeRot = (orbitRot + tidalRot * surgePower) * totalPower;
                 }
                 else
                 {

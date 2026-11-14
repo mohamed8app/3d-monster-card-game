@@ -207,37 +207,37 @@ namespace MonsterCardGame.Core
                     c => c.cost = 0);
             }
 
-            // Guaranteed 3 Ice Environment Cards for testing the new ice environment levels (Lvl 1, 2, 3)
-            var iceTest1 = new EnvironmentCardData("Ice", 1)
+            // Guaranteed 3 Water Environment Cards for testing the new water environment levels (Lvl 1, 2, 3)
+            var waterTest1 = new EnvironmentCardData("Water", 1)
             {
-                id = 4431,
-                name = "Ice Environment (Level 1)",
-                description = "Light frost & dusting snow. Empowers Ice monsters (+30%), freezes Water, withers Nature (-20%).",
+                id = 4441,
+                name = "Water Environment (Level 1)",
+                description = "Serene Coastal Shallows & High Tide. Empowers Water monsters (+30%), extinguishes Fire (-20%).",
                 cost = 0
             };
-            var iceTest2 = new EnvironmentCardData("Ice", 2)
+            var waterTest2 = new EnvironmentCardData("Water", 2)
             {
-                id = 4432,
-                name = "Ice Environment (Level 2)",
-                description = "Deep blizzard & snowdrifts. Empowers Ice monsters (+40%), freezes Water, withers Nature (-30%).",
+                id = 4442,
+                name = "Water Environment (Level 2)",
+                description = "Surging Tides & Churning Rapids. Empowers Water monsters (+40%), extinguishes Fire (-30%).",
                 cost = 0
             };
-            var iceTest3 = new EnvironmentCardData("Ice", 3)
+            var waterTest3 = new EnvironmentCardData("Water", 3)
             {
-                id = 4433,
-                name = "Ice Environment (Level 3)",
-                description = "Glacial Cataclysm & Permafrost. Empowers Ice monsters (+70%), freezes Water, withers Nature (-50%).",
+                id = 4443,
+                name = "Water Environment (Level 3)",
+                description = "Abyssal Deluge & The Primordial Maelstrom. Empowers Water monsters (+70%), extinguishes Fire (-50%).",
                 cost = 0
             };
 
-            humanPlayer.AddCardToHandWithBurnLimit(iceTest1);
-            humanPlayer.onCardDrawnToHand?.Invoke(humanPlayer, iceTest1);
+            humanPlayer.AddCardToHandWithBurnLimit(waterTest1);
+            humanPlayer.onCardDrawnToHand?.Invoke(humanPlayer, waterTest1);
 
-            humanPlayer.AddCardToHandWithBurnLimit(iceTest2);
-            humanPlayer.onCardDrawnToHand?.Invoke(humanPlayer, iceTest2);
+            humanPlayer.AddCardToHandWithBurnLimit(waterTest2);
+            humanPlayer.onCardDrawnToHand?.Invoke(humanPlayer, waterTest2);
 
-            humanPlayer.AddCardToHandWithBurnLimit(iceTest3);
-            humanPlayer.onCardDrawnToHand?.Invoke(humanPlayer, iceTest3);
+            humanPlayer.AddCardToHandWithBurnLimit(waterTest3);
+            humanPlayer.onCardDrawnToHand?.Invoke(humanPlayer, waterTest3);
 
             // Draw 2 regular cards from deck so hand has 1 Spirit + 3 Ice Cards + 2 Deck Cards = 6 cards (under max 7)
             int p1Remaining = 2;
