@@ -204,7 +204,41 @@ namespace MonsterCardGame.Core
                     c => c.cardType == CardType.Leader && MonsterArtLoader.HasCustomCardArt(c),
                     c => c.cost = 0);
             }
-            int p1Remaining = openingSpirit != null ? Mathf.Max(0, p1Draws - 1) : p1Draws;
+
+            // Guaranteed 3 Ice Environment Cards for testing the new ice environment levels (Lvl 1, 2, 3)
+            var iceTest1 = new EnvironmentCardData("Ice", 1)
+            {
+                id = 4431,
+                name = "Ice Environment (Level 1)",
+                description = "Light frost & dusting snow. Empowers Ice monsters (+30%), freezes Water, withers Nature (-20%).",
+                cost = 0
+            };
+            var iceTest2 = new EnvironmentCardData("Ice", 2)
+            {
+                id = 4432,
+                name = "Ice Environment (Level 2)",
+                description = "Deep blizzard & snowdrifts. Empowers Ice monsters (+40%), freezes Water, withers Nature (-30%).",
+                cost = 0
+            };
+            var iceTest3 = new EnvironmentCardData("Ice", 3)
+            {
+                id = 4433,
+                name = "Ice Environment (Level 3)",
+                description = "Glacial Cataclysm & Permafrost. Empowers Ice monsters (+70%), freezes Water, withers Nature (-50%).",
+                cost = 0
+            };
+
+            humanPlayer.AddCardToHandWithBurnLimit(iceTest1);
+            humanPlayer.onCardDrawnToHand?.Invoke(humanPlayer, iceTest1);
+
+            humanPlayer.AddCardToHandWithBurnLimit(iceTest2);
+            humanPlayer.onCardDrawnToHand?.Invoke(humanPlayer, iceTest2);
+
+            humanPlayer.AddCardToHandWithBurnLimit(iceTest3);
+            humanPlayer.onCardDrawnToHand?.Invoke(humanPlayer, iceTest3);
+
+            // Draw 2 regular cards from deck so hand has 1 Spirit + 3 Ice Cards + 2 Deck Cards = 6 cards (under max 7)
+            int p1Remaining = 2;
             for (int i = 0; i < p1Remaining; i++)
             {
                 humanPlayer.DrawCard();
@@ -1206,7 +1240,10 @@ namespace MonsterCardGame.Core
 
             if (activeEnvironment != null && activeEnvironment.buffedElement == envCard.element)
             {
-                activeEnvironment.UpgradeLevel();
+                int targetLvl = (envCard is EnvironmentCardData ecd2 && ecd2.level > activeEnvironment.level)
+                    ? ecd2.level
+                    : Mathf.Min(3, activeEnvironment.level + 1);
+                activeEnvironment.SetLevelStats(targetLvl);
                 activeEnvironmentCard = envCard;
                 activeEnvironmentOwner = (player == humanPlayer) ? "You" : "Enemy";
                 if (BattleUIManager.Instance != null)
@@ -1217,13 +1254,14 @@ namespace MonsterCardGame.Core
             }
             else
             {
-                activeEnvironment = new EnvironmentCardData(envCard.element, 1);
+                int startLvl = (envCard is EnvironmentCardData ecd && ecd.level > 1) ? ecd.level : (envCard.envLevel > 1 ? envCard.envLevel : 1);
+                activeEnvironment = new EnvironmentCardData(envCard.element, startLvl);
                 activeEnvironmentCard = envCard;
                 activeEnvironmentOwner = (player == humanPlayer) ? "You" : "Enemy";
                 if (BattleUIManager.Instance != null)
                 {
                     BattleUIManager.Instance.ShowEnvironmentBanner(activeEnvironment, player.playerName);
-                    BattleUIManager.Instance.LogCombatMessage($"🌍 [{player.playerName}] shifted shared battlefield environment to [{activeEnvironment.name}] (Level 1)! Buffs {activeEnvironment.buffedElement} by +30%.", envCard);
+                    BattleUIManager.Instance.LogCombatMessage($"🌍 [{player.playerName}] shifted shared battlefield environment to [{activeEnvironment.name}] (Level {startLvl})! Buffs {activeEnvironment.buffedElement} by +30%.", envCard);
                 }
             }
 

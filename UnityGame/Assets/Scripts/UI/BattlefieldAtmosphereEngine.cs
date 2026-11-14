@@ -55,6 +55,7 @@ namespace MonsterCardGame.UI
         private Vector2 baseGroundPos = Vector2.zero;
         private Vector2 baseBoardPos = new Vector2(0f, 58f);
         private float shakeIntensity = 0f;
+        private float iceShiverTimer = 0f;
 
         public static BattlefieldAtmosphereEngine EnsureInstance(Transform canvasTransform, Image groundImg = null, Image overlayImg = null)
         {
@@ -341,6 +342,10 @@ namespace MonsterCardGame.UI
 
             if (changed)
             {
+                if (string.Equals(elem, "Ice", StringComparison.OrdinalIgnoreCase) && lvl == 3)
+                {
+                    iceShiverTimer = 0f;
+                }
                 StartGroundCrossfade(elem);
             }
         }
@@ -684,28 +689,79 @@ namespace MonsterCardGame.UI
             UpdateChannelFade(channelA, dt);
             UpdateChannelFade(channelB, dt);
 
-            // 2. Level 3 Cataclysm Continuous Screen Tremor (Whole Screen Shake, Reduced Intensity)
+            // 2. Level 3 Cataclysm Continuous Screen Tremor / Ice Shiver
             if (currentLevel == 3)
             {
                 shakeIntensity = Mathf.MoveTowards(shakeIntensity, 1f, dt * 2.2f);
+                if (string.Equals(currentElement, "Ice", StringComparison.OrdinalIgnoreCase))
+                {
+                    iceShiverTimer += dt;
+                }
             }
             else
             {
                 shakeIntensity = Mathf.MoveTowards(shakeIntensity, 0f, dt * 3.5f);
+                iceShiverTimer = 0f;
             }
 
             if (shakeIntensity > 0.001f)
             {
                 float t = Time.time;
-                // High-frequency volcanic rumble + deep seismic oscillation (calibrated to be pleasant)
-                float rumbleX = (Mathf.Sin(t * 26f) * 0.55f + Mathf.Sin(t * 13.5f) * 0.45f);
-                float rumbleY = (Mathf.Cos(t * 22f) * 0.55f + Mathf.Cos(t * 11.2f) * 0.45f);
-                float perlinX = (Mathf.PerlinNoise(t * 18f, 0f) - 0.5f) * 2f;
-                float perlinY = (Mathf.PerlinNoise(0f, t * 18f) - 0.5f) * 2f;
+                float shakeOffsetX = 0f;
+                float shakeOffsetY = 0f;
+                float shakeRot = 0f;
 
-                float shakeOffsetX = (rumbleX * 1.9f + perlinX * 1.4f) * shakeIntensity;
-                float shakeOffsetY = (rumbleY * 1.6f + perlinY * 1.2f) * shakeIntensity;
-                float shakeRot = (Mathf.Sin(t * 15f) * 0.10f + (Mathf.PerlinNoise(t * 13f, t * 13f) - 0.5f) * 0.12f) * shakeIntensity;
+                if (string.Equals(currentElement, "Ice", StringComparison.OrdinalIgnoreCase))
+                {
+                    // === ICE CATACLYSM: 3s Shiver (رجفة الصقيع) / 3s Calm Rest Cadence ===
+                    const float CycleDuration = 6.0f; // 3.0s shiver + 3.0s calm
+                    float cyclePos = iceShiverTimer % CycleDuration;
+
+                    if (cyclePos < 3.0f)
+                    {
+                        // Smooth envelope: 0.25s ramp-up, steady peak shivering, 0.25s ramp-down
+                        float envelope;
+                        if (cyclePos < 0.25f)
+                            envelope = cyclePos / 0.25f;
+                        else if (cyclePos > 2.75f)
+                            envelope = (3.0f - cyclePos) / 0.25f;
+                        else
+                            envelope = 1.0f;
+
+                        // Rhythmic teeth-chattering spasm modulation
+                        float spasmPulse = 0.75f + 0.25f * Mathf.Abs(Mathf.Sin(iceShiverTimer * 10.5f));
+
+                        // Ultra-high frequency crisp shudder (55Hz - 70Hz rapid trembling)
+                        float shiverJitterX = Mathf.Sin(t * 58f) * 0.70f + Mathf.Sin(t * 41f) * 0.30f;
+                        float shiverJitterY = Mathf.Cos(t * 64f) * 0.70f + Mathf.Cos(t * 47f) * 0.30f;
+                        float microNoiseX = (Mathf.PerlinNoise(t * 50f, 0f) - 0.5f) * 2f;
+                        float microNoiseY = (Mathf.PerlinNoise(0f, t * 50f) - 0.5f) * 2f;
+
+                        float totalPower = envelope * spasmPulse * shakeIntensity;
+                        shakeOffsetX = (shiverJitterX * 1.5f + microNoiseX * 1.1f) * totalPower;
+                        shakeOffsetY = (shiverJitterY * 1.3f + microNoiseY * 0.9f) * totalPower;
+                        shakeRot = Mathf.Sin(t * 52f) * 0.05f * totalPower;
+                    }
+                    else
+                    {
+                        // 3.0s to 6.0s: Completely steady and resting phase (ثبات وراحة تامة)
+                        shakeOffsetX = 0f;
+                        shakeOffsetY = 0f;
+                        shakeRot = 0f;
+                    }
+                }
+                else
+                {
+                    // === FIRE & OTHER CATACLYSMS: Continuous Heavy Volcanic Rumble ===
+                    float rumbleX = (Mathf.Sin(t * 26f) * 0.55f + Mathf.Sin(t * 13.5f) * 0.45f);
+                    float rumbleY = (Mathf.Cos(t * 22f) * 0.55f + Mathf.Cos(t * 11.2f) * 0.45f);
+                    float perlinX = (Mathf.PerlinNoise(t * 18f, 0f) - 0.5f) * 2f;
+                    float perlinY = (Mathf.PerlinNoise(0f, t * 18f) - 0.5f) * 2f;
+
+                    shakeOffsetX = (rumbleX * 1.9f + perlinX * 1.4f) * shakeIntensity;
+                    shakeOffsetY = (rumbleY * 1.6f + perlinY * 1.2f) * shakeIntensity;
+                    shakeRot = (Mathf.Sin(t * 15f) * 0.10f + (Mathf.PerlinNoise(t * 13f, t * 13f) - 0.5f) * 0.12f) * shakeIntensity;
+                }
 
                 if (wholeScreenRect != null)
                 {

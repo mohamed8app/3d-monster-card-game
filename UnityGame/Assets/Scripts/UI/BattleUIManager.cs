@@ -1754,7 +1754,7 @@ namespace MonsterCardGame.UI
             }
             else if (card.cardType == CardType.Environment)
             {
-                Sprite envArt = customArt ?? BattlefieldAtmosphereEngine.GetOrLoadGroundSprite(card.element, 1);
+                Sprite envArt = customArt ?? BattlefieldAtmosphereEngine.GetOrLoadGroundSprite(card.element, Mathf.Max(1, card.envLevel));
                 if (envArt != null)
                 {
                     var artObj = new GameObject("CardArt");
