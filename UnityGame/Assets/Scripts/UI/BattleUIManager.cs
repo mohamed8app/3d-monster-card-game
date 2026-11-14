@@ -419,16 +419,12 @@ namespace MonsterCardGame.UI
         public void OnQuitClicked()
         {
             Debug.Log("🚪 Quit button pressed - closing game...");
-            #if UNITY_EDITOR
-            UnityEditor.EditorApplication.isPlaying = false;
-            #else
             Application.Quit();
             try
             {
                 System.Diagnostics.Process.GetCurrentProcess().Kill();
             }
             catch { }
-            #endif
         }
 
         public void UpdateUI()

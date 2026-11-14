@@ -47,10 +47,6 @@ namespace MonsterCardGame.UI
         private VideoChannel inactiveChannel;
 
         private const float CrossfadeDuration = 1.25f; // Seamless transition time
-        private const float MaxVideoVolume = 0.95f;   // Video audio playback volume
-        private const float LoopCrossfadeDuration = 0.75f; // Duration of seamless loop dissolve
-        private const float LoopPrewarmLeadTime = 0.50f;   // Lead time to prepare incoming loop player
-        private bool isLoopCrossfading = false;
 
         // State & Tremor
         private string currentElement = null;
@@ -291,14 +287,12 @@ namespace MonsterCardGame.UI
             var player = vidObj.AddComponent<VideoPlayer>();
             player.playOnAwake = false;
             player.isLooping = true;
-            player.waitForFirstFrame = true;
-            player.skipOnDrop = true;
+            player.waitForFirstFrame = false;
+            player.skipOnDrop = false;
             player.renderMode = VideoRenderMode.RenderTexture;
             player.targetTexture = rt;
-            player.audioOutputMode = VideoAudioOutputMode.AudioSource;
-            player.controlledAudioTrackCount = 1;
-            player.EnableAudioTrack(0, true);
-            player.SetTargetAudioSource(0, audioSrc);
+            player.audioOutputMode = VideoAudioOutputMode.None;
+            player.controlledAudioTrackCount = 0;
 
             vidObj.SetActive(false);
 
@@ -313,19 +307,6 @@ namespace MonsterCardGame.UI
                 targetAlpha = 0f,
                 activePath = "",
                 isPreparing = false
-            };
-
-            player.prepareCompleted += (source) =>
-            {
-                try
-                {
-                    if (source.audioTrackCount > 0)
-                    {
-                        source.EnableAudioTrack(0, true);
-                        source.SetTargetAudioSource(0, ch.audio);
-                    }
-                }
-                catch { }
             };
 
             return ch;
@@ -579,7 +560,6 @@ namespace MonsterCardGame.UI
         private void TransitionToVideo(string videoPath)
         {
             if (channelA == null || channelB == null) return;
-            isLoopCrossfading = false;
 
             // 1. If transitioning to empty video (e.g. neutral weather 00.jpg)
             if (string.IsNullOrEmpty(videoPath))
@@ -629,86 +609,11 @@ namespace MonsterCardGame.UI
             }
         }
 
-        private void CheckSeamlessLoopCrossfade(float dt)
-        {
-            if (activeChannel == null || activeChannel.player == null || !activeChannel.player.isPlaying)
-                return;
-
-            if (string.IsNullOrEmpty(activeChannel.activePath) || activeChannel.player.length < 1.5)
-                return;
-
-            double totalLen = activeChannel.player.length;
-            double curTime = activeChannel.player.time;
-            double timeRemaining = totalLen - curTime;
-
-            // 1. Prewarm inactive channel ahead of time so it is 100% prepared with zero hitch
-            if (timeRemaining <= (LoopCrossfadeDuration + LoopPrewarmLeadTime) && !isLoopCrossfading)
-            {
-                if (inactiveChannel != null && (inactiveChannel.activePath != activeChannel.activePath || !inactiveChannel.player.isPrepared))
-                {
-                    PrewarmInactiveForLoop(activeChannel.activePath);
-                }
-            }
-
-            // 2. Start the seamless cross-dissolve at exactly LoopCrossfadeDuration before the clip ends
-            if (timeRemaining <= LoopCrossfadeDuration && !isLoopCrossfading)
-            {
-                if (inactiveChannel != null && inactiveChannel.player.isPrepared)
-                {
-                    StartSeamlessLoopDissolve();
-                }
-            }
-        }
-
-        private void PrewarmInactiveForLoop(string videoPath)
-        {
-            var incoming = inactiveChannel;
-            if (incoming == null) return;
-
-            incoming.activePath = videoPath;
-            incoming.currentAlpha = 0f;
-            incoming.targetAlpha = 0f;
-            incoming.rawImage.color = new Color(1f, 1f, 1f, 0f);
-            incoming.audio.volume = 0f;
-            incoming.obj.SetActive(true);
-
-            incoming.player.Stop();
-            incoming.player.source = VideoSource.Url;
-            incoming.player.url = videoPath;
-            incoming.player.isLooping = true;
-            incoming.player.time = 0;
-            incoming.player.targetTexture = incoming.renderTexture;
-            incoming.rawImage.texture = incoming.renderTexture;
-            incoming.isPreparing = false;
-            incoming.player.Prepare();
-        }
-
-        private void StartSeamlessLoopDissolve()
-        {
-            var incoming = inactiveChannel;
-            if (incoming == null || !incoming.player.isPrepared) return;
-
-            isLoopCrossfading = true;
-
-            // Ensure incoming channel sits on top so it dissolves over the outgoing channel with 0% ground leak
-            incoming.obj.transform.SetAsLastSibling();
-
-            incoming.player.time = 0;
-            incoming.player.Play();
-            incoming.currentAlpha = 0f;
-            incoming.targetAlpha = 1f;
-
-            if (activeChannel != null)
-            {
-                activeChannel.targetAlpha = 1f; // Outgoing stays solid underneath until incoming is 100%
-            }
-        }
-
         private void UpdateChannelFade(VideoChannel ch, float dt)
         {
             if (ch == null || !ch.obj.activeSelf) return;
 
-            // Check if freshly prepared video is ready to start cross-fading in (standard transition)
+            // Check if freshly prepared video is ready to start cross-fading in
             if (ch.isPreparing)
             {
                 if (ch.player.isPrepared && ch.player.frame > 0)
@@ -730,46 +635,16 @@ namespace MonsterCardGame.UI
             // Smooth linear crossfade
             if (Mathf.Abs(ch.currentAlpha - ch.targetAlpha) > 0.001f)
             {
-                float speed = isLoopCrossfading ? (1f / LoopCrossfadeDuration) : (1f / CrossfadeDuration);
-                ch.currentAlpha = Mathf.MoveTowards(ch.currentAlpha, ch.targetAlpha, dt * speed);
+                ch.currentAlpha = Mathf.MoveTowards(ch.currentAlpha, ch.targetAlpha, dt * (1f / CrossfadeDuration));
                 ch.rawImage.color = new Color(1f, 1f, 1f, ch.currentAlpha);
-                ch.audio.volume = ch.currentAlpha * MaxVideoVolume;
 
-                // When faded out completely, stop and hide (for standard transitions)
-                if (ch.currentAlpha <= 0f && ch.targetAlpha <= 0f && !ch.isPreparing && !isLoopCrossfading)
+                // When faded out completely, stop and hide
+                if (ch.currentAlpha <= 0f && ch.targetAlpha <= 0f && !ch.isPreparing)
                 {
                     if (ch.player.isPlaying) ch.player.Stop();
-                    ch.audio.Stop();
                     ch.obj.SetActive(false);
                     ch.activePath = "";
                 }
-            }
-
-            // Check if loop crossfade finished (incoming reached 100% opacity)
-            if (isLoopCrossfading && ch == inactiveChannel && ch.currentAlpha >= 0.999f)
-            {
-                ch.currentAlpha = 1f;
-                ch.rawImage.color = Color.white;
-                ch.audio.volume = MaxVideoVolume;
-
-                // Stop and reset the old active channel underneath
-                if (activeChannel != null)
-                {
-                    activeChannel.currentAlpha = 0f;
-                    activeChannel.targetAlpha = 0f;
-                    activeChannel.rawImage.color = new Color(1f, 1f, 1f, 0f);
-                    activeChannel.player.Stop();
-                    activeChannel.audio.Stop();
-                    activeChannel.obj.SetActive(false);
-                    activeChannel.activePath = "";
-                }
-
-                // Swap channels so the new playing channel is now active
-                var temp = activeChannel;
-                activeChannel = inactiveChannel;
-                inactiveChannel = temp;
-
-                isLoopCrossfading = false;
             }
         }
 
@@ -792,8 +667,7 @@ namespace MonsterCardGame.UI
                 ambientTintOverlay.color = Color.clear;
             }
 
-            // 1. Butter-Smooth Dual-Channel Video & Audio Crossfade + Seamless Loop Dissolve
-            CheckSeamlessLoopCrossfade(dt);
+            // 1. Butter-Smooth Dual-Channel Video Crossfade on Environment Change
             UpdateChannelFade(channelA, dt);
             UpdateChannelFade(channelB, dt);
 
