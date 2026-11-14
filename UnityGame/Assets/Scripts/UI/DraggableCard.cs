@@ -42,7 +42,8 @@ namespace MonsterCardGame.UI
             if (visTr != null)
             {
                 visualRoot = visTr.GetComponent<RectTransform>();
-                cardOutline = visTr.GetComponent<Outline>();
+                Transform haloTr = visTr.Find("LeaderMedallionHalo");
+                cardOutline = haloTr != null ? haloTr.GetComponent<Outline>() : visTr.GetComponent<Outline>();
             }
             else
             {

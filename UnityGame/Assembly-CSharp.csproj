@@ -62,6 +62,7 @@
     <Compile Include="Assets\Scripts\UI\AstralHourglassControl.cs" />
     <Compile Include="Assets\Scripts\UI\CommanderSpiritSlotController.cs" />
     <Compile Include="Assets\Scripts\UI\CardPulseEffect.cs" />
+    <Compile Include="Assets\Scripts\Core\CommanderSpiritEffects.cs" />
     <Compile Include="Assets\Scripts\UI\CardView.cs" />
     <Compile Include="Assets\Scripts\UI\BattlefieldAtmosphereEngine.cs" />
     <Compile Include="Assets\Scripts\Core\AIOpponent.cs" />

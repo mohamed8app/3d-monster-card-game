@@ -349,19 +349,33 @@ namespace MonsterCardGame.UI
         }
 
         /// <summary>
-        /// Cycles Commander Spirit categories (Tribe + Category Glow) on the circular Spirit Altar so each faction's aura & fire can be previewed cleanly.
+        /// Cycles Commander Spirits on the circular Spirit Altar so each faction's medallion portrait & aura can be previewed cleanly.
         /// </summary>
         public void OnTestCycleSpiritClicked()
         {
             var gm = GameManager.Instance;
             if (gm == null || gm.humanPlayer == null) return;
 
+            var loadedLeaders = (gm.allLeaders != null)
+                ? gm.allLeaders.FindAll(l => l != null && MonsterArtLoader.HasCustomCardArt(l))
+                : new List<CardData>();
+
+            int totalCount = loadedLeaders.Count > 0 ? loadedLeaders.Count : SpiritTribePresets.Length;
             currentTestSpiritIndex++;
-            if (currentTestSpiritIndex >= SpiritTribePresets.Length)
+            if (currentTestSpiritIndex >= totalCount)
             {
                 currentTestSpiritIndex = -1;
                 gm.humanPlayer.activeLeader = null;
                 LogCombatMessage("✧ [Commander Spirit]: Cleared circular Spirit Altar back to seal.");
+            }
+            else if (loadedLeaders.Count > 0)
+            {
+                var spirit = loadedLeaders[currentTestSpiritIndex];
+                gm.humanPlayer.activeLeader = spirit;
+                playerSpiritController?.TriggerSummonFlare();
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayLeaderDeploy(spirit);
+                ShowCardDetails(spirit);
+                LogCombatMessage($"🔥 [Commander Spirit]: Previewing [{MonsterArtLoader.FormatSpiritTitle(spirit)}] ({spirit.tribe} / {spirit.element})!", spirit);
             }
             else
             {
@@ -1023,6 +1037,12 @@ namespace MonsterCardGame.UI
             return GetCenterArenaWorldPos() + new Vector3(680f, -340f, 0f);
         }
 
+        public Vector3 GetEnemyLeaderTargetWorldPos()
+        {
+            if (enemyLeaderSlotButton != null) return enemyLeaderSlotButton.transform.position;
+            return GetCenterArenaWorldPos() + new Vector3(680f, 340f, 0f);
+        }
+
         public Vector3 GetPlayerHandCardWorldPos(CardData card)
         {
             if (playerHandContainer != null && card != null)
@@ -1488,7 +1508,7 @@ namespace MonsterCardGame.UI
             {
                 CardType.Spell => new Color(0.12f, 0.08f, 0.20f, 0.98f),
                 CardType.Environment => new Color(0.06f, 0.12f, 0.16f, 0.98f),
-                CardType.Leader => new Color(0.10f, 0.12f, 0.18f, 0.98f),
+                CardType.Leader => new Color(0f, 0f, 0f, 0f),
                 _ => new Color(0.09f, 0.10f, 0.15f, 0.98f)
             };
 
@@ -1510,7 +1530,7 @@ namespace MonsterCardGame.UI
                 ? new Color(0.45f, 0.36f, 0.62f, 0.90f)
                 : (card.cardType == CardType.Leader ? new Color(0.48f, 0.62f, 0.78f, 0.92f) : elemColor);
             outline.effectDistance = new Vector2(2, 2);
-            if (card.cardType == CardType.Monster)
+            if (card.cardType == CardType.Monster || card.cardType == CardType.Leader)
             {
                 outline.enabled = false;
             }
@@ -1784,74 +1804,105 @@ namespace MonsterCardGame.UI
             else if (card.cardType == CardType.Leader)
             {
                 Color spiritCatCol = MonsterArtLoader.GetSpiritCategoryColor(card, true);
+
+                // Circular Medallion Halo (no rectangular card frame — genuine circular Spirit coin)
+                var haloObj = GameBootstrapper.CreateCirclePanel(cardObj.transform, "LeaderMedallionHalo", new Color(0.05f, 0.06f, 0.10f, 0.96f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 18f), new Vector2(126f, 126f));
+                haloObj.GetComponent<Image>().raycastTarget = false;
+                var haloOutline = haloObj.AddComponent<Outline>();
+                haloOutline.effectColor = Color.Lerp(spiritCatCol, Color.white, 0.35f);
+                haloOutline.effectDistance = new Vector2(2f, 2f);
+
+                // Masked Circular Disc for clean edge-to-edge oil-painting medallion art
+                var discObj = GameBootstrapper.CreateCirclePanel(haloObj.transform, "LeaderMedallionDisc", new Color(0.03f, 0.04f, 0.08f, 1f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(118f, 118f));
+                discObj.GetComponent<Image>().raycastTarget = false;
+                var discMask = discObj.AddComponent<Mask>();
+                discMask.showMaskGraphic = true;
+
                 if (customArt != null)
                 {
                     var artObj = new GameObject("CardArt");
-                    artObj.transform.SetParent(cardObj.transform, false);
+                    artObj.transform.SetParent(discObj.transform, false);
                     var rectArt = artObj.AddComponent<RectTransform>();
                     rectArt.anchorMin = Vector2.zero;
                     rectArt.anchorMax = Vector2.one;
-                    rectArt.sizeDelta = Vector2.zero;
+                    rectArt.sizeDelta = new Vector2(12f, 12f);
                     rectArt.anchoredPosition = Vector2.zero;
                     var artImg = artObj.AddComponent<Image>();
                     artImg.sprite = customArt;
+                    artImg.preserveAspect = true;
                     artImg.color = Color.white;
                     artImg.raycastTarget = false;
                 }
                 else
                 {
                     var crestObj = new GameObject("SpiritCardCrest");
-                    crestObj.transform.SetParent(cardObj.transform, false);
+                    crestObj.transform.SetParent(discObj.transform, false);
                     var crestRt = crestObj.AddComponent<RectTransform>();
                     crestRt.anchorMin = new Vector2(0.5f, 0.5f);
                     crestRt.anchorMax = new Vector2(0.5f, 0.5f);
-                    crestRt.sizeDelta = new Vector2(88f, 88f);
-                    crestRt.anchoredPosition = new Vector2(0f, 18f);
+                    crestRt.sizeDelta = new Vector2(84f, 84f);
+                    crestRt.anchoredPosition = Vector2.zero;
                     var crestImg = crestObj.AddComponent<Image>();
                     crestImg.sprite = GameBootstrapper.GetSpiritCrestSprite();
                     crestImg.color = Color.Lerp(spiritCatCol, Color.white, 0.25f);
                     crestImg.raycastTarget = false;
                 }
 
+                // Sculpted circular metallic bezel rim over the masked disc
+                var rimObj = new GameObject("SpiritCircularRim");
+                rimObj.transform.SetParent(haloObj.transform, false);
+                var rimRt = rimObj.AddComponent<RectTransform>();
+                rimRt.anchorMin = new Vector2(0.5f, 0.5f);
+                rimRt.anchorMax = new Vector2(0.5f, 0.5f);
+                rimRt.sizeDelta = new Vector2(128f, 128f);
+                var rimImg = rimObj.AddComponent<Image>();
+                rimImg.sprite = GameBootstrapper.GetCircularSpiritRimSprite();
+                rimImg.color = Color.Lerp(spiritCatCol, Color.white, 0.35f);
+                rimImg.raycastTarget = false;
+
                 var tagBadge = GameBootstrapper.CreatePanel(cardObj.transform, "LeaderBadge", Color.Lerp(new Color(0.08f, 0.12f, 0.20f), spiritCatCol, 0.35f),
-                    new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(36, -16), new Vector2(58, 18));
-                var txtTag = GameBootstrapper.CreateText(tagBadge.transform, "TagText", "SPIRIT", 9,
-                    Color.Lerp(spiritCatCol, Color.white, 0.55f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(54, 16));
+                    new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(28f, -12f), new Vector2(46f, 16f));
+                tagBadge.GetComponent<Image>().raycastTarget = false;
+                var txtTag = GameBootstrapper.CreateText(tagBadge.transform, "TagText", "SPIRIT", 8,
+                    Color.Lerp(spiritCatCol, Color.white, 0.55f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(44f, 14f));
                 txtTag.fontStyle = FontStyle.Bold;
                 txtTag.raycastTarget = false;
 
                 var costCircle = GameBootstrapper.CreateCirclePanel(cardObj.transform, "CostCircle", new Color(0.12f, 0.28f, 0.58f, 0.96f),
-                    new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-18, -18), new Vector2(30, 30));
+                    new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-12f, -12f), new Vector2(28f, 28f));
+                costCircle.GetComponent<Image>().raycastTarget = false;
                 var costOutline = costCircle.AddComponent<Outline>();
                 costOutline.effectColor = Color.Lerp(spiritCatCol, Color.white, 0.35f);
                 costOutline.effectDistance = new Vector2(1.5f, 1.5f);
-                var txtCost = GameBootstrapper.CreateText(costCircle.transform, "CostText", card.cost.ToString(), 15,
-                    new Color(0.92f, 0.96f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(30, 30));
+                var txtCost = GameBootstrapper.CreateText(costCircle.transform, "CostText", card.cost.ToString(), 14,
+                    new Color(0.92f, 0.96f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(28f, 28f));
                 txtCost.fontStyle = FontStyle.Bold;
                 txtCost.raycastTarget = false;
 
                 var namePanel = GameBootstrapper.CreatePanel(cardObj.transform, "NamePlate", new Color(0.06f, 0.08f, 0.14f, 0.95f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -18), new Vector2(130, 22));
-                var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", MonsterArtLoader.FormatSpiritTitle(card), 11,
-                    Color.Lerp(spiritCatCol, Color.white, 0.5f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(126, 20));
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -54f), new Vector2(134f, 22f));
+                namePanel.GetComponent<Image>().raycastTarget = false;
+                var nameOutline = namePanel.AddComponent<Outline>();
+                nameOutline.effectColor = Color.Lerp(spiritCatCol, Color.black, 0.30f);
+                nameOutline.effectDistance = new Vector2(1f, 1f);
+                var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", MonsterArtLoader.FormatSpiritTitle(card), 10,
+                    Color.Lerp(spiritCatCol, Color.white, 0.5f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(128f, 20f));
                 txtName.fontStyle = FontStyle.Bold;
                 txtName.resizeTextForBestFit = true;
-                txtName.resizeTextMinSize = 8;
-                txtName.resizeTextMaxSize = 11;
+                txtName.resizeTextMinSize = 7;
+                txtName.resizeTextMaxSize = 10;
                 txtName.raycastTarget = false;
 
-                var descPanel = GameBootstrapper.CreatePanel(cardObj.transform, "DescPanel", new Color(0.05f, 0.07f, 0.11f, 0.88f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -48), new Vector2(130, 38));
-                var txtDesc = GameBootstrapper.CreateText(descPanel.transform, "DescText", card.description, 10,
-                    new Color(0.88f, 0.92f, 0.96f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(126, 36));
-                txtDesc.fontStyle = FontStyle.Bold;
-                txtDesc.raycastTarget = false;
-
-                var actionBadge = GameBootstrapper.CreatePanel(cardObj.transform, "ActionBadge", Color.Lerp(new Color(0.10f, 0.14f, 0.22f), spiritCatCol, 0.30f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -74), new Vector2(124, 18));
-                var txtAction = GameBootstrapper.CreateText(actionBadge.transform, "ActionText",
-                    string.IsNullOrEmpty(card.tribe) ? "Commander Spirit" : $"{card.tribe} Spirit", 10,
-                    new Color(0.92f, 0.97f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(120, 16));
+                string tribeText = string.IsNullOrEmpty(card.tribe)
+                    ? "Commander Spirit"
+                    : $"{MonsterArtLoader.GetTribeEmoji(card.tribe)} {card.tribe}";
+                var actionBadge = GameBootstrapper.CreatePanel(cardObj.transform, "ActionBadge", Color.Lerp(new Color(0.08f, 0.12f, 0.20f), spiritCatCol, 0.32f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -77f), new Vector2(128f, 20f));
+                actionBadge.GetComponent<Image>().raycastTarget = false;
+                var txtAction = GameBootstrapper.CreateText(actionBadge.transform, "ActionText", tribeText, 10,
+                    new Color(0.92f, 0.97f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(124f, 18f));
                 txtAction.fontStyle = FontStyle.Bold;
                 txtAction.raycastTarget = false;
             }
@@ -1926,7 +1977,7 @@ namespace MonsterCardGame.UI
             else
             {
                 if (spellSymTr != null) spellSymTr.gameObject.SetActive(false);
-                detailCardArt.preserveAspect = false;
+                detailCardArt.preserveAspect = (data.cardType == CardType.Leader);
             }
 
             if (customArt != null && data.cardType != CardType.Spell)

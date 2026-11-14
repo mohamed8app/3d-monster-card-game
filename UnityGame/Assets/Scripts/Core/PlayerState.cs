@@ -394,6 +394,12 @@ namespace MonsterCardGame.Core
             currentMana++;
             hasSacrificedThisTurn = true;
 
+            if (GameManager.Instance != null)
+            {
+                var opponent = (this == GameManager.Instance.humanPlayer) ? GameManager.Instance.aiPlayer : GameManager.Instance.humanPlayer;
+                CommanderSpiritEffects.OnCardSacrificed(this, opponent);
+            }
+
             Debug.Log($"[{playerName}] sacrificed [{cardToSacrifice.name}]. +1 Power (Total Power: {power}), +1 Mana (Current Mana: {currentMana})");
             return true;
         }
@@ -422,10 +428,14 @@ namespace MonsterCardGame.Core
             var instance = new MonsterInstance(card, currentTurn);
             slots[targetSlotIndex].PlaceMonster(instance);
 
-            if (CombatSystem.Instance != null && GameManager.Instance != null)
+            if (GameManager.Instance != null)
             {
                 var opponent = (this == GameManager.Instance.humanPlayer) ? GameManager.Instance.aiPlayer : GameManager.Instance.humanPlayer;
-                CombatSystem.Instance.ApplyOnSummonPassives(this, opponent, targetSlotIndex, instance);
+                if (CombatSystem.Instance != null)
+                {
+                    CombatSystem.Instance.ApplyOnSummonPassives(this, opponent, targetSlotIndex, instance);
+                }
+                CommanderSpiritEffects.OnMonsterSummoned(this, opponent, targetSlotIndex, instance);
             }
 
             Debug.Log($"[{playerName}] summoned Monster [{card.name}] in Slot {targetSlotIndex}");

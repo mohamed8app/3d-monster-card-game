@@ -913,9 +913,9 @@ namespace MonsterCardGame.UI
             var artRt = artObj.AddComponent<RectTransform>();
             artRt.anchorMin = Vector2.zero;
             artRt.anchorMax = Vector2.one;
-            artRt.sizeDelta = new Vector2(-4f, -4f);
+            artRt.sizeDelta = new Vector2(12f, 12f);
             var artImg = artObj.AddComponent<Image>();
-            artImg.preserveAspect = false;
+            artImg.preserveAspect = true;
             artImg.raycastTarget = false;
             artObj.SetActive(false);
 

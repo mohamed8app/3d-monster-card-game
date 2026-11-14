@@ -98,6 +98,7 @@ namespace MonsterCardGame.Core
             {
                 totalAtk += Mathf.Max(2, Mathf.RoundToInt(totalAtk * 0.15f));
             }
+            totalAtk += CommanderSpiritEffects.GetContinuousAtkBonusForInstance(this);
             return Mathf.Max(0, totalAtk);
         }
 

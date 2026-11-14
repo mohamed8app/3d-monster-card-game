@@ -143,7 +143,7 @@ namespace MonsterCardGame.Core
                     }
 
                     SpellDatabase.SetSpellsFromDatabase(allSpells);
-                    Debug.Log($"✅ Loaded 450-Card Balanced Database: {allMonsters.Count} Monsters + {allSpells.Count} Tactical Spells!");
+                    Debug.Log($"✅ Loaded Unified Balanced Database: {allMonsters.Count} Monsters + {allSpells.Count} Tactical Spells + {allLeaders.Count} Commander Spirits!");
                     return;
                 }
             }
@@ -313,9 +313,16 @@ namespace MonsterCardGame.Core
 
             var usedIds = excludeIds != null ? new HashSet<int>(excludeIds) : new HashSet<int>();
 
-            int monsterTarget = Mathf.RoundToInt(count * 0.60f); // 30 Monsters out of 50
+            var playableLeaders = (allLeaders != null)
+                ? allLeaders.FindAll(l => l != null && MonsterArtLoader.HasCustomCardArt(l))
+                : new List<CardData>();
+
+            int leaderTarget = (playableLeaders.Count > 0 && count >= 10)
+                ? Mathf.Min(playableLeaders.Count, count >= 40 ? 3 : (count >= 25 ? 2 : 1))
+                : 0;
+            int monsterTarget = Mathf.Max(0, Mathf.RoundToInt(count * 0.60f) - leaderTarget); // 27 Monsters + 3 Spirits out of 50
             int spellTarget = Mathf.RoundToInt(count * 0.34f);   // 17 Spells out of 50
-            int envTarget = Mathf.Max(0, count - monsterTarget - spellTarget); // 3 Environments out of 50
+            int envTarget = Mathf.Max(0, count - monsterTarget - spellTarget - leaderTarget); // 3 Environments out of 50
 
             // 1. Stratified Monster selection without replacement (balanced early/mid/late costs + escalating unseen pity)
             int earlyCount = Mathf.RoundToInt(monsterTarget * 0.35f);
@@ -348,6 +355,12 @@ namespace MonsterCardGame.Core
             if (envPool != null && envPool.Count > 0)
             {
                 PickWeightedWithoutReplacement(envPool, envTarget, usedIds, e => e.id, e => new EnvironmentCardData(e.element, 1), deck);
+            }
+
+            // 4. Commander Spirit Medallions without replacement (only Spirits with artwork ready)
+            if (leaderTarget > 0 && playableLeaders.Count > 0)
+            {
+                PickWeightedWithoutReplacement(playableLeaders, leaderTarget, usedIds, l => l.id, CloneLeaderCard, deck);
             }
 
             // Top up to requested count from any remaining unseen monsters/spells if a pool ran dry during marathon refills
@@ -491,6 +504,37 @@ namespace MonsterCardGame.Core
             };
         }
 
+        private static CardData CloneLeaderCard(CardData src)
+        {
+            return new CardData
+            {
+                id = src.id,
+                name = string.IsNullOrEmpty(src.name) ? src.id.ToString() : src.name,
+                cardType = CardType.Leader,
+                card_type = "leader",
+                element = src.element,
+                tribe = src.tribe,
+                group = src.group,
+                group_en = src.group_en,
+                role = src.role,
+                tier = src.tier_title,
+                tier_title = src.tier_title,
+                tier_num = src.tier_num,
+                cost = src.cost,
+                powerCost = src.powerCost,
+                atk = src.atk,
+                def = src.def,
+                passives_text = src.passives_text,
+                active_skill = src.active_skill,
+                passives = src.passives != null ? new List<string>(src.passives) : new List<string>(),
+                active_skills = src.active_skills != null ? new List<string>(src.active_skills) : new List<string>(),
+                description = src.description,
+                p_score = src.p_score,
+                a_score = src.a_score,
+                win_rate = src.win_rate
+            };
+        }
+
         private void BuildCatalogIdIndex()
         {
             allCatalogIds.Clear();
@@ -514,6 +558,13 @@ namespace MonsterCardGame.Core
             foreach (var e in envs)
             {
                 if (e != null && seen.Add(e.id)) allCatalogIds.Add(e.id);
+            }
+            if (allLeaders != null)
+            {
+                foreach (var l in allLeaders)
+                {
+                    if (l != null && MonsterArtLoader.HasCustomCardArt(l) && seen.Add(l.id)) allCatalogIds.Add(l.id);
+                }
             }
         }
 
@@ -705,6 +756,7 @@ namespace MonsterCardGame.Core
                 ExecuteSingleSpellEffect(caster, target, spellCard.spellType, val);
             }
 
+            CommanderSpiritEffects.OnSpellCast(caster, target);
             CheckGameOver();
             if (BattleUIManager.Instance != null)
             {
@@ -1213,6 +1265,14 @@ namespace MonsterCardGame.Core
                     BattleUIManager.Instance.playerSpiritController.TriggerSummonFlare();
                 else if (player != humanPlayer && BattleUIManager.Instance.enemySpiritController != null)
                     BattleUIManager.Instance.enemySpiritController.TriggerSummonFlare();
+            }
+
+            var opponent = (player == humanPlayer) ? aiPlayer : humanPlayer;
+            CommanderSpiritEffects.ApplyOnSummoned(player, opponent, leaderCard);
+            CheckGameOver();
+
+            if (BattleUIManager.Instance != null)
+            {
                 BattleUIManager.Instance.UpdateUI();
             }
 

@@ -217,8 +217,10 @@ namespace MonsterCardGame.Utils
                 $"CardsArt/{key}",
                 $"CardsArt/Monsters/{key}",
                 $"CardsArt/Spells/{key}",
+                $"CardsArt/Leaders/{key}",
                 $"Monsters/{key}",
                 $"Spells/{key}",
+                $"Leaders/{key}",
                 key
             };
 
@@ -238,6 +240,17 @@ namespace MonsterCardGame.Utils
 
             missingTextureKeys.Add(key);
             return null;
+        }
+
+        /// <summary>
+        /// Returns true when a custom artwork texture (disk or Resources) resolves for this card.
+        /// Used to gate playable Commander Spirits until their portrait medallion asset exists.
+        /// </summary>
+        public static bool HasCustomCardArt(CardData data)
+        {
+            string key = ResolveCardIdKey(data);
+            if (string.IsNullOrEmpty(key)) return false;
+            return LoadCardTexture(key) != null;
         }
 
         /// <summary>
@@ -621,9 +634,7 @@ namespace MonsterCardGame.Utils
             bool hasCustomName = !string.IsNullOrEmpty(spirit.name) && !int.TryParse(spirit.name.Trim(), out _);
             if (hasCustomName)
             {
-                return spirit.name.IndexOf("Spirit", System.StringComparison.OrdinalIgnoreCase) >= 0
-                    ? spirit.name
-                    : $"Spirit: {spirit.name}";
+                return spirit.name.Trim();
             }
             if (!string.IsNullOrEmpty(spirit.tribe))
             {

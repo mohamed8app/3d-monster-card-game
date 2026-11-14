@@ -19,7 +19,7 @@ namespace MonsterCardGame.Audio
                 {
                     GameObject go = new GameObject("SoundManager");
                     _instance = go.AddComponent<SoundManager>();
-                    DontDestroyOnLoad(go);
+                    if (Application.isPlaying) DontDestroyOnLoad(go);
                 }
                 return _instance;
             }
@@ -48,7 +48,7 @@ namespace MonsterCardGame.Audio
                 return;
             }
             _instance = this;
-            DontDestroyOnLoad(gameObject);
+            if (Application.isPlaying) DontDestroyOnLoad(gameObject);
 
             InitializeAudioSources();
             LoadAllAudioClips();

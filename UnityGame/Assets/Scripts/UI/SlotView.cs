@@ -360,11 +360,11 @@ namespace MonsterCardGame.UI
             if (tokenAtkText != null)
             {
                 tokenAtkText.text = effectiveAtk.ToString();
-                if (envMod > 1.01f)
+                if (effectiveAtk > instance.data.atk || envMod > 1.01f)
                 {
                     tokenAtkText.color = new Color(0.40f, 1f, 0.55f);
                 }
-                else if (envMod < 0.99f)
+                else if (effectiveAtk < instance.data.atk || envMod < 0.99f)
                 {
                     tokenAtkText.color = new Color(1f, 0.45f, 0.45f);
                 }
@@ -380,6 +380,10 @@ namespace MonsterCardGame.UI
                 if (instance.baseDef > 0 && instance.currentDef < instance.baseDef)
                 {
                     tokenDefText.color = new Color(1f, 0.45f, 0.45f);
+                }
+                else if (instance.baseDef > 0 && instance.currentDef > instance.baseDef)
+                {
+                    tokenDefText.color = new Color(0.45f, 0.98f, 1f);
                 }
                 else
                 {

@@ -28,6 +28,10 @@ namespace MonsterCardGame.Core
             // 2. Activate Environment Weather with visible flip & flight to Shared Environment Slot
             yield return DecideEnvironmentCoroutine();
 
+            // 2.5 Summon Commander Spirit Medallion onto the Enemy Spirit Altar (empowers turn & army)
+            yield return DecideCommanderSpiritCoroutine();
+            if (!aiPlayer.IsAlive || !humanPlayer.IsAlive) yield break;
+
             // 3. Cast Tactical Spells step-by-step with flip & flight into the arena
             yield return DecideSpellsCoroutine();
             if (!aiPlayer.IsAlive || !humanPlayer.IsAlive) yield break;
@@ -141,6 +145,38 @@ namespace MonsterCardGame.Core
                 GameManager.Instance.PlayEnvironmentCard(aiPlayer, chosenEnv);
                 if (ui != null) ui.UpdateUI();
                 yield return new WaitForSeconds(0.35f);
+            }
+        }
+
+        private IEnumerator DecideCommanderSpiritCoroutine()
+        {
+            if (GameManager.Instance == null || aiPlayer == null || aiPlayer.hand == null) yield break;
+
+            CardData chosenSpirit = null;
+            int currentTier = aiPlayer.activeLeader != null ? aiPlayer.activeLeader.cost : -1;
+            foreach (var card in new List<CardData>(aiPlayer.hand))
+            {
+                if (card != null && card.cardType == CardType.Leader && card.cost <= aiPlayer.currentMana)
+                {
+                    if (aiPlayer.activeLeader == null || (card.id != aiPlayer.activeLeader.id && card.cost >= currentTier))
+                    {
+                        if (chosenSpirit == null || card.cost > chosenSpirit.cost)
+                            chosenSpirit = card;
+                    }
+                }
+            }
+
+            if (chosenSpirit != null)
+            {
+                var ui = MonsterCardGame.UI.BattleUIManager.Instance;
+                if (ui != null)
+                {
+                    yield return ui.AnimateEnemyCardPlayRoutine(chosenSpirit, ui.GetEnemyLeaderTargetWorldPos(), 0.55f, 0.08f, 0.90f);
+                }
+
+                GameManager.Instance.PlayLeaderCard(aiPlayer, chosenSpirit);
+                if (ui != null) ui.UpdateUI();
+                yield return new WaitForSeconds(0.40f);
             }
         }
 

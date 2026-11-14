@@ -273,6 +273,8 @@ namespace MonsterCardGame.Core
                     HandleMonsterDeath(opponent, player, slot, oppM, m);
                 }
             }
+
+            CommanderSpiritEffects.OnStartOfTurn(player, opponent);
         }
 
         public bool TrySalvationSave(PlayerState owner, int slot, MonsterInstance m)
@@ -383,6 +385,7 @@ namespace MonsterCardGame.Core
                 }
             }
 
+            CommanderSpiritEffects.OnMonsterDied(owner, killerOwner, deadM, killerM);
             return true;
         }
 
@@ -466,7 +469,8 @@ namespace MonsterCardGame.Core
             var oppSlot = (opponent != null && slotIndex >= 0 && slotIndex < 6) ? opponent.slots[slotIndex] : null;
             var oppM = (oppSlot != null && oppSlot.IsOccupied) ? oppSlot.currentMonster : null;
             int extraCost = (oppM != null && oppM.HasPassiveSubstr("Frost Aura") != null) ? 1 : 0;
-            int discount = (player != null && player.freeSkillBonus > 0) ? 1 : 0;
+            int discount = ((player != null && player.freeSkillBonus > 0) ? 1 : 0)
+                + CommanderSpiritEffects.GetSkillManaDiscount(player);
             return Mathf.Max(0, baseSkillCost + extraCost - discount);
         }
 
@@ -1488,6 +1492,7 @@ namespace MonsterCardGame.Core
                     atk += 5;
             }
 
+            atk = Mathf.Max(0, atk - CommanderSpiritEffects.GetEnemyDreadAtkPenalty(opponent, m));
             return Mathf.Max(0, atk);
         }
 
@@ -1560,6 +1565,9 @@ namespace MonsterCardGame.Core
         {
             if (defender.teamImmuneTurns > 0) return;
 
+            MonsterInstance defenderTargetM = (!isDirectToLeader && defenderSlot != null && defenderSlot.IsOccupied) ? defenderSlot.currentMonster : null;
+            atkPower = CommanderSpiritEffects.ModifyOutgoingCombatAttack(attacker, attackerMonster, defenderTargetM, atkPower);
+
             if (!isDirectToLeader && defenderSlot != null && defenderSlot.IsOccupied)
             {
                 var enemyMonster = defenderSlot.currentMonster;
@@ -1598,6 +1606,13 @@ namespace MonsterCardGame.Core
                         MonsterCardGame.Audio.SoundManager.Instance?.PlayCardShieldBlock();
                         return;
                     }
+                    float spiritEvade = CommanderSpiritEffects.GetCombatEvasionChance(defender, slotIdx, enemyMonster);
+                    if (spiritEvade > 0f && UnityEngine.Random.value < spiritEvade)
+                    {
+                        MonsterCardGame.Audio.SoundManager.Instance?.PlayCardShieldBlock();
+                        SpawnSlotStatusVfx(GameManager.Instance != null && defender == GameManager.Instance.humanPlayer, slotIdx, "💨 DODGE", new Color(0.75f, 0.92f, 1f));
+                        return;
+                    }
                 }
 
                 // Armor & Damage Reduction
@@ -1608,6 +1623,8 @@ namespace MonsterCardGame.Core
                     if (enemyMonster.HasPassiveSubstr("Protective Flame") != null) atkPower = Mathf.Max(1, atkPower - 4);
                     if (enemyMonster.HasPassiveSubstr("Rock Hardness") != null) atkPower = Mathf.Max(1, atkPower - 4);
                     if (enemyMonster.HasPassiveSubstr("Steel Armor") != null) atkPower = Mathf.Max(1, atkPower - 5);
+                    int spiritReduce = CommanderSpiritEffects.GetCombatIncomingReduction(defender, enemyMonster);
+                    if (spiritReduce > 0) atkPower = Mathf.Max(1, atkPower - spiritReduce);
                 }
 
                 enemyMonster.TakeDamage(atkPower);
@@ -1619,6 +1636,7 @@ namespace MonsterCardGame.Core
                 if (attackerMonster.HasPassiveSubstr("Static Discharge") != null) enemyMonster.silencedTurns = Mathf.Max(enemyMonster.silencedTurns, 1);
                 if (attackerMonster.HasPassiveSubstr("Life Leech") != null) attackerMonster.HealDefense(Mathf.Max(2, Mathf.RoundToInt(atkPower * 0.20f)));
                 if (attackerMonster.HasPassiveSubstr("Slow Poison") != null) enemyMonster.poisonDmg = Mathf.Max(enemyMonster.poisonDmg, 6);
+                CommanderSpiritEffects.OnCombatHitDealt(attacker, attackerMonster, defender, enemyMonster, atkPower);
 
                 // Chain Lightning
                 if (attackerMonster.HasPassiveSubstr("Chain Lightning") != null)
