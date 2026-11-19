@@ -491,6 +491,9 @@ namespace MonsterCardGame.UI
             {
                 rwImg.color = Color.clear;
             }
+            var rightEdgeDiv = CreatePanel(rightWing.transform, "RightWingEdgeDivider", new Color(0.24f, 0.28f, 0.36f, 0.95f),
+                new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(1, 0), new Vector2(2, 1080));
+            rightEdgeDiv.GetComponent<Image>().raycastTarget = false;
 
             // Top Utility Row (Pristine clean for AI Altar)
             var turnBadgePanel = CreatePanel(rightWing.transform, "TopTurnBar", Color.clear,
