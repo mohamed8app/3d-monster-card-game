@@ -502,14 +502,14 @@ namespace MonsterCardGame.UI
             ui.endTurnButton = null;
             ui.quitButton = null;
 
-            // Zone A: Enemy Circular Commander Spirit Altar (x = -4, y = +338, 320 x 270)
-            BuildSideLeaderSlot(rightWing.transform, ui, false, -4f, 338f, 270f);
+            // Zone A: Enemy Circular Commander Spirit Altar (x = 0, y = +347, 320 x 270)
+            BuildSideLeaderSlot(rightWing.transform, ui, false, 0f, 347f, 270f);
 
-            // Zone B: Shared Environment Card Slot cleanly centered on Right Wing (x = 0, y = +11, 166 x 240)
-            BuildSharedEnvironmentSlot(rightWing.transform, ui, 0f, 11f, 166f, 240f);
+            // Zone B: Shared Environment Card Slot cleanly centered on Right Wing (x = 2.6, y = +9, 130 x 210)
+            BuildSharedEnvironmentSlot(rightWing.transform, ui, 2.6f, 9.2f, 130f, 210f);
 
-            // Zone C: Player Circular Commander Spirit Altar (x = -4, y = -323, 320 x 270)
-            BuildSideLeaderSlot(rightWing.transform, ui, true, -4f, -323f, 270f);
+            // Zone C: Player Circular Commander Spirit Altar (x = 2.4, y = -370, 320 x 270)
+            BuildSideLeaderSlot(rightWing.transform, ui, true, 2.4f, -369.5f, 270f);
 
             // 10.2 Center Seam Astral Hourglass Medallion (integrated on BottomArenaSeamDivider at x = 0, y = -288)
             BuildAstralHourglassMedallion(screenRoot.transform, ui);
