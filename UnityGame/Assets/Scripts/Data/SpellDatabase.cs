@@ -21,12 +21,59 @@ namespace MonsterCardGame.Data
             }
         }
 
+        private static readonly HashSet<int> EnemyTargetSpellIds = new HashSet<int>
+        {
+            253, 254, 255, 256, 257, 258, 259, 262, 265, 266, 281, 286, 288, 290, 291, 294, 296,
+            // --- 140 New Spells (IDs 301 - 440) Enemy Targets ---
+            356, 357, 358, 360, 361, 362, 363, 364, 365, 366, 368, 369,
+            386, 387, 389, 390, 391, 393, 395, 397, 400, 402, 403,
+            406, 407, 408, 410, 411, 413, 417, 418, 419
+        };
+
+        private static readonly HashSet<int> AllyTargetSpellIds = new HashSet<int>
+        {
+            245, 268, 269, 270, 271, 272, 273, 274, 279, 280, 283, 284, 285, 287, 289, 292, 293, 295, 298,
+            // --- 140 New Spells (IDs 301 - 440) Ally Targets ---
+            343, 346, 349, 350, 352, 354, 359, 378, 379, 381,
+            421, 422, 424, 425, 426, 428, 430, 434, 438
+        };
+
+        private static readonly HashSet<int> EmptySlotSpellIds = new HashSet<int>
+        {
+            300, 347, 371, 372, 373, 377, 380, 383
+        };
+
+        private static readonly HashSet<int> AllyToEmptySlotSpellIds = new HashSet<int>
+        {
+            267, 344
+        };
+
+        public static SpellTargetMode GetTargetMode(int spellId)
+        {
+            if (spellId == 282) return SpellTargetMode.Any;
+            if (AllyToEmptySlotSpellIds.Contains(spellId)) return SpellTargetMode.AllyToEmptySlot;
+            if (EmptySlotSpellIds.Contains(spellId)) return SpellTargetMode.EmptySlot;
+            if (EnemyTargetSpellIds.Contains(spellId)) return SpellTargetMode.Enemy;
+            if (AllyTargetSpellIds.Contains(spellId)) return SpellTargetMode.Ally;
+            return SpellTargetMode.Global;
+        }
+
         /// <summary>
-        /// Infers the exact SpellType enum from active_skill text so every spell executes its true distinct mechanic.
+        /// Assigns exact SpellType (#241-#440) and deterministic SpellTargetMode for all redesigned spells.
+        /// Falls back to legacy active_skill phrase inference only for IDs outside 241..440.
         /// </summary>
         public static void NormalizeSpellMetadata(CardData spell)
         {
             if (spell == null || spell.cardType != CardType.Spell) return;
+
+            if (spell.id >= 241 && spell.id <= 440)
+            {
+                spell.spellType = (SpellType)spell.id;
+                spell.spellTargetMode = GetTargetMode(spell.id);
+                return;
+            }
+
+            spell.spellTargetMode = SpellTargetMode.Global;
             string sk = (spell.active_skill ?? "").ToLowerInvariant();
             if (string.IsNullOrEmpty(sk)) return;
 
@@ -68,7 +115,7 @@ namespace MonsterCardGame.Data
                             if (c != null && (c.cardType == CardType.Spell || c.card_type == "spell"))
                             {
                                 c.cardType = CardType.Spell;
-                                c.name = c.id.ToString();
+                                if (string.IsNullOrEmpty(c.name)) c.name = c.id.ToString();
                                 NormalizeSpellMetadata(c);
                                 cachedSpells.Add(c);
                             }
@@ -84,39 +131,40 @@ namespace MonsterCardGame.Data
                     new CardData
                     {
                         id = 241, name = "241", cardType = CardType.Spell, element = "Spell Cards",
-                        role = "Link & Synergy Spell", tier_title = "Tier 1 - Basic", tier_num = 1, cost = 1,
-                        spellType = SpellType.LinkWingsStrike, spellPower = 12,
-                        description = "📜 [Link & Synergy Spell]: Combine left and right flank monster ATK into a joint +12 strike on the enemy vanguard!"
+                        role = "Utility", tier_title = "Tier 1 - Basic", tier_num = 1, cost = 1,
+                        spellType = SpellType.Spell241_SummoningSpark, spellTargetMode = SpellTargetMode.Global, spellPower = 2,
+                        description = "Summoning Spark: Gain +2 Mana this turn and +1 temporary ATK to all allies."
                     },
                     new CardData
                     {
-                        id = 281, name = "281", cardType = CardType.Spell, element = "Spell Cards",
-                        role = "Position & Swap Spell", tier_title = "Tier 1 - Basic", tier_num = 1, cost = 1,
-                        spellType = SpellType.SwapWingWithCenter, spellPower = 12,
-                        description = "📜 [Position & Swap Spell]: Swap a wounded flank monster with a center defender and grant +12 repair armor!"
+                        id = 253, name = "253", cardType = CardType.Spell, element = "Spell Cards",
+                        role = "Damage", tier_title = "Tier 1 - Basic", tier_num = 1, cost = 1,
+                        spellType = SpellType.Spell253_HuntingSpark, spellTargetMode = SpellTargetMode.Enemy, spellPower = 13,
+                        description = "Hunting Spark: Select an Enemy Monster and deal 13 direct damage."
                     },
                     new CardData
                     {
-                        id = 321, name = "321", cardType = CardType.Spell, element = "Spell Cards",
-                        role = "Convert & Trade Spell", tier_title = "Tier 1 - Basic", tier_num = 1, cost = 1,
-                        spellType = SpellType.ConvertDefToAtk, spellPower = 12,
-                        description = "📜 [Convert & Trade Spell]: Convert 12 DEF from your defender into decisive bonus ATK for this turn!"
+                        id = 267, name = "267", cardType = CardType.Spell, element = "Spell Cards",
+                        role = "Position", tier_title = "Tier 1 - Basic", tier_num = 1, cost = 1,
+                        spellType = SpellType.Spell267_TacticalRelocation, spellTargetMode = SpellTargetMode.AllyToEmptySlot, spellPower = 6,
+                        description = "Tactical Relocation: Move a selected allied monster to an empty slot and grant +6 DEF shield."
                     },
                     new CardData
                     {
-                        id = 361, name = "361", cardType = CardType.Spell, element = "Spell Cards",
-                        role = "Activate & Support Spell", tier_title = "Tier 1 - Basic", tier_num = 1, cost = 1,
-                        spellType = (SpellType)22, spellPower = 12,
-                        description = "📜 [Activate & Support Spell]: Reduce your monster's active skill cost by 1 this turn and boost its effect by +12!"
+                        id = 268, name = "268", cardType = CardType.Spell, element = "Spell Cards",
+                        role = "Buff", tier_title = "Tier 1 - Basic", tier_num = 1, cost = 1,
+                        spellType = SpellType.Spell268_CourageCharge, spellTargetMode = SpellTargetMode.Ally, spellPower = 11,
+                        description = "Courage Charge: Grant selected ally +11 ATK this turn and +4 DEF."
                     },
                     new CardData
                     {
-                        id = 401, name = "401", cardType = CardType.Spell, element = "Spell Cards",
-                        role = "Pierce & Destroy Spell", tier_title = "Tier 1 - Basic", tier_num = 1, cost = 1,
-                        spellType = (SpellType)26, spellPower = 12,
-                        description = "📜 [Pierce & Destroy Spell]: Arcane piercing projectile that bypasses immunity and deals 12 pure damage!"
+                        id = 282, name = "282", cardType = CardType.Spell, element = "Spell Cards",
+                        role = "Control", tier_title = "Tier 2 - Common", tier_num = 2, cost = 2,
+                        spellType = SpellType.Spell282_TacticalScaleReversal, spellTargetMode = SpellTargetMode.Any, spellPower = 0,
+                        description = "Tactical Scale Reversal: Swap current ATK and DEF of any selected monster."
                     }
                 };
+                foreach (var fallback in cachedSpells) NormalizeSpellMetadata(fallback);
             }
             return cachedSpells;
         }
@@ -125,7 +173,7 @@ namespace MonsterCardGame.Data
         {
             var list = GetAllSpells();
             var proto = list[UnityEngine.Random.Range(0, list.Count)];
-            return new CardData
+            var clone = new CardData
             {
                 id = proto.id,
                 name = proto.id.ToString(),
@@ -133,16 +181,21 @@ namespace MonsterCardGame.Data
                 card_type = "spell",
                 element = proto.element,
                 group = proto.group,
+                tribe = proto.tribe,
                 role = proto.role,
                 tier = proto.tier_title,
                 tier_title = proto.tier_title,
                 tier_num = proto.tier_num,
                 cost = proto.cost,
+                powerCost = proto.powerCost,
                 spellType = proto.spellType,
+                spellTargetMode = proto.spellTargetMode,
                 spellPower = proto.spellPower,
                 active_skill = proto.active_skill,
                 description = proto.description
             };
+            NormalizeSpellMetadata(clone);
+            return clone;
         }
     }
 }

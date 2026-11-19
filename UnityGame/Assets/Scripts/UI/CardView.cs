@@ -34,8 +34,8 @@ namespace MonsterCardGame.UI
 
             if (nameText != null) nameText.text = data.name;
             if (costText != null) costText.text = $"{data.cost}";
-            if (atkText != null) atkText.text = $"{data.atk}";
-            if (defText != null) defText.text = $"{data.def}";
+            if (atkText != null) atkText.text = (data.cardType == CardType.Environment) ? "∞" : $"{data.atk}";
+            if (defText != null) defText.text = (data.cardType == CardType.Environment) ? "∞" : $"{data.def}";
             if (elementText != null) elementText.text = data.element;
             if (roleText != null) roleText.text = data.role;
 
@@ -69,6 +69,7 @@ namespace MonsterCardGame.UI
                 case "Light": elemColor = new Color(1.0f, 0.95f, 0.6f); break;
                 case "Dark": elemColor = new Color(0.35f, 0.15f, 0.5f); break;
                 case "Arcane": elemColor = new Color(0.85f, 0.35f, 0.85f); break;
+                case "Desert": elemColor = new Color(0.92f, 0.70f, 0.15f); break;
             }
             cardFrame.color = elemColor;
         }

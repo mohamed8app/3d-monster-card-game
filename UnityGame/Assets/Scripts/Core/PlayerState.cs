@@ -24,6 +24,9 @@ namespace MonsterCardGame.Core
         public int denyDrawSacTurns = 0;
         public int teamImmuneTurns = 0;
         public int freeSkillBonus = 0;
+        public bool freeSkillManaZero = false;
+        public int nextSpellRepeats = 0;
+        public readonly Dictionary<int, int> discountedCardIds = new Dictionary<int, int>();
 
         public const int DefaultMaxHandSize = 7;
 
@@ -95,7 +98,7 @@ namespace MonsterCardGame.Core
             {
                 foreach (var c in initialDeck)
                 {
-                    if (c != null && uniqueIds.Add(c.id))
+                    if (c != null && (c.cardType == CardType.Environment || uniqueIds.Add(c.id)))
                     {
                         deck.Add(c);
                         cardTurnsWaiting[c.id] = 0;
@@ -117,6 +120,8 @@ namespace MonsterCardGame.Core
             denyDrawSacTurns = 0;
             teamImmuneTurns = 0;
             freeSkillBonus = 0;
+            freeSkillManaZero = false;
+            discountedCardIds.Clear();
         }
 
         public void AddRefillCardsToDeck(List<CardData> refillCards)
@@ -131,7 +136,7 @@ namespace MonsterCardGame.Core
 
             foreach (var c in refillCards)
             {
-                if (c != null && existingInDeck.Add(c.id))
+                if (c != null && (c.cardType == CardType.Environment || existingInDeck.Add(c.id)))
                 {
                     deck.Add(c);
                     if (!cardTurnsWaiting.ContainsKey(c.id))
@@ -360,7 +365,7 @@ namespace MonsterCardGame.Core
                 // Match novelty vs Fallen Veteran comeback mix:
                 // Never-drawn-yet cards surge; dead veterans retain ~15-22% thrilling comeback weight; other repeats stay suppressed
                 float stateFactor;
-                if (!drawnCardIdsThisMatch.Contains(c.id))
+                if (c.cardType == CardType.Environment || !drawnCardIdsThisMatch.Contains(c.id))
                 {
                     stateFactor = 2.8f + Mathf.Min(3.0f, turnNow * 0.06f);
                 }
@@ -422,6 +427,13 @@ namespace MonsterCardGame.Core
             return true;
         }
 
+        public int GetEffectiveCardCost(CardData card)
+        {
+            if (card == null) return 0;
+            int disc = (card.cardType == CardType.Monster && discountedCardIds.TryGetValue(card.id, out int charges) && charges > 0) ? 1 : 0;
+            return Mathf.Max(0, card.cost - disc);
+        }
+
         public bool SummonMonster(CardData card, int targetSlotIndex, int currentTurn)
         {
             if (targetSlotIndex < 0 || targetSlotIndex >= slots.Length)
@@ -433,13 +445,19 @@ namespace MonsterCardGame.Core
                 return false;
             }
 
-            if (card.cost > currentMana)
+            int effCost = GetEffectiveCardCost(card);
+            if (effCost > currentMana)
             {
-                Debug.LogWarning($"Not enough Mana! Required: {card.cost}, Available: {currentMana}");
+                Debug.LogWarning($"Not enough Mana! Required: {effCost}, Available: {currentMana}");
                 return false;
             }
 
-            currentMana -= card.cost;
+            currentMana -= effCost;
+            if (discountedCardIds.TryGetValue(card.id, out int rem) && rem > 0)
+            {
+                if (rem <= 1) discountedCardIds.Remove(card.id);
+                else discountedCardIds[card.id] = rem - 1;
+            }
             hand.Remove(card);
             monstersSummonedTotal++;
 
@@ -464,6 +482,20 @@ namespace MonsterCardGame.Core
         {
             if (damage <= 0 || teamImmuneTurns > 0) return;
 
+            if (slots != null)
+            {
+                foreach (var s in slots)
+                {
+                    if (s != null && s.IsOccupied && s.currentMonster != null && s.currentMonster.IsAlive &&
+                        s.currentMonster.HasPassiveSubstr("Tectonic Guard") != null)
+                    {
+                        damage = Mathf.Max(0, damage - 5);
+                        break;
+                    }
+                }
+            }
+            if (damage <= 0) return;
+
             bool hadShield = shield > 0;
             if (shield > 0)
             {
@@ -477,6 +509,11 @@ namespace MonsterCardGame.Core
                 currentHp = Mathf.Max(0, currentHp - damage);
                 Debug.Log($"🚨 [{playerName}] took {damage} direct Commander damage. Remaining HP: {currentHp}/{maxHp}");
                 MonsterCardGame.Audio.SoundManager.Instance?.PlayHpDamage();
+
+                if (currentHp <= 0)
+                {
+                    GameManager.Instance?.CheckGameOver();
+                }
             }
             else if (hadShield)
             {

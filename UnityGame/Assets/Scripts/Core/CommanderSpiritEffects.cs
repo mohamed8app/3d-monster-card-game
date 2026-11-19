@@ -208,10 +208,10 @@ namespace MonsterCardGame.Core
 
             switch (sid)
             {
-                case 451: // Archlich Valkor (Ghosts): Drain 12 HP & weaken 1 non-Ghost enemy
+                case 451: // Archlich Valkor (Ghosts): Drain 16 HP & weaken 1 non-Ghost enemy
                 {
-                    HitEnemyLeader(opponent, 12, "💀 DRAIN", spiritCol);
-                    HealFriendlyLeader(owner, opponent, 12);
+                    HitEnemyLeader(opponent, 16, "💀 DRAIN", spiritCol);
+                    HealFriendlyLeader(owner, opponent, 16);
                     var rival = FilterRivalTribeSlots(enemies, "Ghosts");
                     ApplyToRandomEnemies(rival, 1, (es) =>
                     {
@@ -221,8 +221,10 @@ namespace MonsterCardGame.Core
                     break;
                 }
 
-                case 452: // Lady Morghana (Ghosts): Weaken up to 2 enemy non-Ghosts
+                case 452: // Lady Morghana (Ghosts): Drain 8 HP & weaken up to 2 enemy non-Ghosts
                 {
+                    HitEnemyLeader(opponent, 8, "👻 DRAIN", spiritCol);
+                    HealFriendlyLeader(owner, opponent, 8);
                     var rival = FilterRivalTribeSlots(enemies, "Ghosts");
                     ApplyToRandomEnemies(rival, 2, (es) =>
                     {
@@ -232,45 +234,46 @@ namespace MonsterCardGame.Core
                     break;
                 }
 
-                case 453: // Emberlord Malakor (Demons): 10 fire dmg to enemy non-Demons (6 to Demons) & burn 2 rival foes
+                case 453: // Emberlord Malakor (Demons): 8 fire dmg to enemy non-Demons (5 to Demons) & burn 2 rival foes (4/T)
                 {
                     if (enemies.Count > 0 && CombatSystem.Instance != null)
                     {
                         foreach (var es in enemies)
                         {
-                            int dmg = IsRivalTribe(es.currentMonster, "Demons") ? 10 : 6;
+                            int dmg = IsRivalTribe(es.currentMonster, "Demons") ? 8 : 5;
                             CombatSystem.Instance.DealSpellOrSkillDamage(es.slotIndex, es.currentMonster, dmg, null, opponent, owner, false, true);
                         }
                         var rival = FilterRivalTribeSlots(GetOccupiedSlots(opponent), "Demons");
                         ApplyToRandomEnemies(rival, 2, (es) =>
                         {
-                            es.currentMonster.burnDmg = Mathf.Max(es.currentMonster.burnDmg, 5);
-                            SpawnSlotFloating(oppHuman, es.slotIndex, "🔥 BURN 5/T", spiritCol);
+                            es.currentMonster.burnDmg = Mathf.Max(es.currentMonster.burnDmg, 4);
+                            SpawnSlotFloating(oppHuman, es.slotIndex, "🔥 BURN 4/T", spiritCol);
                         });
                     }
                     else
                     {
-                        HitEnemyLeader(opponent, 8, "🔥 HELLFIRE", spiritCol);
+                        HitEnemyLeader(opponent, 6, "🔥 HELLFIRE", spiritCol);
                     }
                     break;
                 }
 
-                case 454: // Blood Baroness Lilitha (Demons): +10 Leader Shield & strongest allied Demon +5 ATK / +6 DEF
+                case 454: // Blood Baroness Lilitha (Demons): +16 Shield, 10 dmg & all allied Demons +6 ATK / +6 DEF
                 {
-                    GrantLeaderShield(owner, 10);
-                    var strongest = FindStrongestAlly(FilterTribeSlots(allies, "Demons"));
-                    if (strongest != null)
+                    GrantLeaderShield(owner, 16);
+                    HitEnemyLeader(opponent, 10, "🩸 PACT", spiritCol);
+                    foreach (var al in FilterTribeSlots(allies, "Demons"))
                     {
-                        strongest.currentMonster.bonusAtk += 5;
-                        strongest.currentMonster.AddBonusDef(6);
-                        SpawnSlotFloating(ownerHuman, strongest.slotIndex, "🩸 +5/+6", spiritCol);
+                        al.currentMonster.bonusAtk += 6;
+                        al.currentMonster.AddBonusDef(6);
+                        SpawnSlotFloating(ownerHuman, al.slotIndex, "🩸 +6/+6", spiritCol);
                     }
                     break;
                 }
 
-                case 455: // Archon Seraph Orion (Celestials): +18 Leader Shield & allied Celestials +8 DEF
+                case 455: // Archon Seraph Orion (Celestials): +20 Shield, Draw 1, allied Celestials +8 DEF
                 {
-                    GrantLeaderShield(owner, 18);
+                    GrantLeaderShield(owner, 20);
+                    owner.DrawCard();
                     foreach (var al in FilterTribeSlots(allies, "Celestials"))
                     {
                         al.currentMonster.AddBonusDef(8);
@@ -295,70 +298,98 @@ namespace MonsterCardGame.Core
                     break;
                 }
 
-                case 457: // Archmagus Zarathos (Mages): +1 Mana now & +4 Spell Surge
+                case 457: // Archmagus Zarathos (Mages): +1 Mana, +4 Spell Surge & Draw 1
                 {
                     owner.currentMana += 1;
                     owner.freeSkillBonus += 4;
+                    owner.DrawCard();
                     SpawnLeaderFloating(ownerHuman, "🔮 +1 MANA • +4 SURGE", spiritCol);
                     break;
                 }
 
-                case 458: // Astrea the Voidseer (Mages): Silence strongest enemy 2T & weaken rival clans
+                case 458: // Astrea the Voidseer (Mages): +12 Shield, Draw 1, Silence up to 2 enemies 2T & weaken rival clans
                 {
-                    var topEnemy = FindStrongestAlly(enemies);
-                    if (topEnemy != null)
+                    GrantLeaderShield(owner, 12);
+                    owner.DrawCard();
+                    ApplyToRandomEnemies(enemies, 2, (es) =>
                     {
-                        topEnemy.currentMonster.silencedTurns = Mathf.Max(topEnemy.currentMonster.silencedTurns, 2);
-                        if (IsRivalTribe(topEnemy.currentMonster, "Mages"))
-                            topEnemy.currentMonster.weakenedTurns = Mathf.Max(topEnemy.currentMonster.weakenedTurns, 1);
-                        SpawnSlotFloating(oppHuman, topEnemy.slotIndex, "🔮 SILENCED 2T", spiritCol);
+                        es.currentMonster.silencedTurns = Mathf.Max(es.currentMonster.silencedTurns, 2);
+                        if (IsRivalTribe(es.currentMonster, "Mages"))
+                            es.currentMonster.weakenedTurns = Mathf.Max(es.currentMonster.weakenedTurns, 1);
+                        SpawnSlotFloating(oppHuman, es.slotIndex, "🔮 SILENCED 2T", spiritCol);
+                    });
+                    break;
+                }
+
+                case 459: // Iron Marshal Garik (Warriors): +14 Shield, Warriors +7/+7, Draw 1 if <2 Warriors
+                {
+                    GrantLeaderShield(owner, 14);
+                    var wAllies = FilterTribeSlots(allies, "Warriors");
+                    foreach (var al in wAllies)
+                    {
+                        al.currentMonster.bonusAtk += 7;
+                        al.currentMonster.AddBonusDef(7);
+                        SpawnSlotFloating(ownerHuman, al.slotIndex, "⚔️ +7/+7", spiritCol);
+                    }
+                    if (wAllies.Count < 2)
+                    {
+                        owner.DrawCard();
                     }
                     break;
                 }
 
-                case 459: // Iron Marshal Garik (Warriors): +6 Shield & rally allied Warriors +5 ATK / +5 DEF
+                case 460: // Valeria the Shieldmaiden (Warriors): +20 Shield, Draw 1, Bubble on 2 weakest Warriors & +6/+6 weakest
                 {
-                    GrantLeaderShield(owner, 6);
-                    foreach (var al in FilterTribeSlots(allies, "Warriors"))
+                    GrantLeaderShield(owner, 20);
+                    owner.DrawCard();
+                    var wAllies = FilterTribeSlots(allies, "Warriors");
+                    wAllies.Sort((a, b) => a.currentMonster.currentDef.CompareTo(b.currentMonster.currentDef));
+                    int bCount = Mathf.Min(2, wAllies.Count);
+                    for (int i = 0; i < bCount; i++)
                     {
-                        al.currentMonster.bonusAtk += 5;
-                        al.currentMonster.AddBonusDef(5);
-                        SpawnSlotFloating(ownerHuman, al.slotIndex, "⚔️ +5/+5", spiritCol);
+                        wAllies[i].currentMonster.bubbleShield = true;
+                        SpawnSlotFloating(ownerHuman, wAllies[i].slotIndex, "🫧 BUBBLE", spiritCol);
+                    }
+                    if (wAllies.Count > 0)
+                    {
+                        wAllies[0].currentMonster.bonusAtk += 6;
+                        wAllies[0].currentMonster.AddBonusDef(6);
+                        SpawnSlotFloating(ownerHuman, wAllies[0].slotIndex, "🛡️ +6/+6", spiritCol);
                     }
                     break;
                 }
 
-                case 460: // Valeria the Shieldmaiden (Warriors): +15 Shield & Bubble Shield on weakest allied Warrior
+                case 461: // Ashmane Fenrir (Beasts): +12 Shield, 12 dmg to 2 non-Beasts & Beasts +6/+4
                 {
-                    GrantLeaderShield(owner, 15);
-                    var weakest = FindWeakestAlly(FilterTribeSlots(allies, "Warriors"));
-                    if (weakest != null)
+                    GrantLeaderShield(owner, 12);
+                    var rivals = FilterRivalTribeSlots(enemies, "Beasts");
+                    if (rivals.Count == 0) rivals = enemies;
+                    if (rivals.Count > 0 && CombatSystem.Instance != null)
                     {
-                        weakest.currentMonster.bubbleShield = true;
-                        SpawnSlotFloating(ownerHuman, weakest.slotIndex, "🫧 BUBBLE SHIELD", spiritCol);
+                        ApplyToRandomEnemies(rivals, 2, (es) =>
+                        {
+                            CombatSystem.Instance.DealSpellOrSkillDamage(es.slotIndex, es.currentMonster, 12, null, opponent, owner, false, true);
+                        });
                     }
-                    break;
-                }
-
-                case 461: // Ashmane Fenrir (Beasts): Allied Beasts gain +6 ATK
-                {
                     foreach (var al in FilterTribeSlots(allies, "Beasts"))
                     {
                         al.currentMonster.bonusAtk += 6;
-                        SpawnSlotFloating(ownerHuman, al.slotIndex, "🐺 +6 ATK", spiritCol);
+                        al.currentMonster.AddBonusDef(4);
+                        SpawnSlotFloating(ownerHuman, al.slotIndex, "🐺 +6/+4", spiritCol);
                     }
                     break;
                 }
 
-                case 462: // Clawmother Ravika (Beasts): Allied Beasts +4/+4 & weaken 1 non-Beast enemy 2T
+                case 462: // Clawmother Ravika (Beasts): +12 HP, Beasts +6/+6 & weaken 2 non-Beasts 2T
                 {
+                    HealFriendlyLeader(owner, opponent, 12);
                     foreach (var al in FilterTribeSlots(allies, "Beasts"))
                     {
-                        al.currentMonster.bonusAtk += 4;
-                        al.currentMonster.AddBonusDef(4);
-                        SpawnSlotFloating(ownerHuman, al.slotIndex, "🐾 +4/+4", spiritCol);
+                        al.currentMonster.bonusAtk += 6;
+                        al.currentMonster.AddBonusDef(6);
+                        SpawnSlotFloating(ownerHuman, al.slotIndex, "🐾 +6/+6", spiritCol);
                     }
-                    ApplyToRandomEnemies(FilterRivalTribeSlots(enemies, "Beasts"), 1, (es) =>
+                    ApplyToRandomEnemies(FilterRivalTribeSlots(enemies, "Beasts"), 2, (es) =>
                     {
                         es.currentMonster.weakenedTurns = Mathf.Max(es.currentMonster.weakenedTurns, 2);
                         SpawnSlotFloating(oppHuman, es.slotIndex, "🐾 MAULED 2T", spiritCol);
@@ -366,10 +397,12 @@ namespace MonsterCardGame.Core
                     break;
                 }
 
-                case 463: // Rootwarden Sylvandor (Elves): +1 Mana & allied Elves +7 DEF
+                case 463: // Rootwarden Sylvandor (Elves): +1 Mana, Draw 1, +8 HP & Elves +7 DEF
                 {
                     owner.currentMana += 1;
-                    SpawnLeaderFloating(ownerHuman, "🌿 +1 MANA", spiritCol);
+                    owner.DrawCard();
+                    HealFriendlyLeader(owner, opponent, 8);
+                    SpawnLeaderFloating(ownerHuman, "🌿 +1 MANA • +8 HP", spiritCol);
                     foreach (var al in FilterTribeSlots(allies, "Elves"))
                     {
                         al.currentMonster.AddBonusDef(7);
@@ -378,45 +411,65 @@ namespace MonsterCardGame.Core
                     break;
                 }
 
-                case 464: // Moonbow Elara (Elves): 9 lunar dmg to 2 enemy non-Elves (6 to Elves)
+                case 464: // Moonbow Elara (Elves): +12 HP & 12 lunar dmg to 2 enemy non-Elves (8 to Elves), else 10 leader
                 {
+                    HealFriendlyLeader(owner, opponent, 12);
                     var targets = FilterRivalTribeSlots(enemies, "Elves");
                     if (targets.Count == 0) targets = enemies;
                     if (targets.Count > 0 && CombatSystem.Instance != null)
                     {
                         ApplyToRandomEnemies(targets, 2, (es) =>
                         {
-                            int dmg = IsRivalTribe(es.currentMonster, "Elves") ? 9 : 6;
+                            int dmg = IsRivalTribe(es.currentMonster, "Elves") ? 12 : 8;
                             CombatSystem.Instance.DealSpellOrSkillDamage(es.slotIndex, es.currentMonster, dmg, null, opponent, owner, false, true);
                         });
                     }
                     else
                     {
-                        HitEnemyLeader(opponent, 8, "🌙 LUNAR", spiritCol);
+                        HitEnemyLeader(opponent, 10, "🌙 LUNAR", spiritCol);
                     }
                     break;
                 }
 
-                case 465: // Forgeking Thorin (Dwarves): +12 Leader Shield & allied Dwarves +7 DEF
+                case 465: // Forgeking Thorin (Dwarves): +14 Shield, 12 fire dmg to 2 non-Dwarves & Dwarves +8 DEF
                 {
-                    GrantLeaderShield(owner, 12);
+                    GrantLeaderShield(owner, 14);
+                    var rivals = FilterRivalTribeSlots(enemies, "Dwarves");
+                    if (rivals.Count == 0) rivals = enemies;
+                    if (rivals.Count > 0 && CombatSystem.Instance != null)
+                    {
+                        ApplyToRandomEnemies(rivals, 2, (es) =>
+                        {
+                            CombatSystem.Instance.DealSpellOrSkillDamage(es.slotIndex, es.currentMonster, 12, null, opponent, owner, false, true);
+                        });
+                    }
                     foreach (var al in FilterTribeSlots(allies, "Dwarves"))
                     {
-                        al.currentMonster.AddBonusDef(7);
-                        SpawnSlotFloating(ownerHuman, al.slotIndex, "⚒️ +7 DEF", spiritCol);
+                        al.currentMonster.AddBonusDef(8);
+                        SpawnSlotFloating(ownerHuman, al.slotIndex, "⚒️ +8 DEF", spiritCol);
                     }
                     break;
                 }
 
-                case 466: // Runesmith Brunda (Dwarves): Allied Dwarves +7 DEF & cleanse Freeze/Weaken
+                case 466: // Runesmith Brunda (Dwarves): +14 Shield, 9 dmg to 2 non-Dwarves, Dwarves +8 DEF & cleanse
                 {
+                    GrantLeaderShield(owner, 14);
+                    var rivals = FilterRivalTribeSlots(enemies, "Dwarves");
+                    if (rivals.Count == 0) rivals = enemies;
+                    if (rivals.Count > 0 && CombatSystem.Instance != null)
+                    {
+                        ApplyToRandomEnemies(rivals, 2, (es) =>
+                        {
+                            CombatSystem.Instance.DealSpellOrSkillDamage(es.slotIndex, es.currentMonster, 9, null, opponent, owner, false, true);
+                        });
+                    }
                     foreach (var al in FilterTribeSlots(allies, "Dwarves"))
                     {
                         var am = al.currentMonster;
                         am.frozenTurns = 0;
                         am.weakenedTurns = 0;
-                        am.AddBonusDef(7);
-                        SpawnSlotFloating(ownerHuman, al.slotIndex, "⚒️ +7 DEF", spiritCol);
+                        am.AddBonusDef(8);
+                        SpawnSlotFloating(ownerHuman, al.slotIndex, "⚒️ +8 DEF", spiritCol);
                     }
                     break;
                 }
@@ -438,29 +491,29 @@ namespace MonsterCardGame.Core
                     break;
                 }
 
-                case 468: // Basalt Matriarch Skaya (Giants): Freeze strongest enemy (2T vs non-Giant) & allied Giants +7 DEF
+                case 468: // Basalt Matriarch Skaya (Giants): Freeze strongest enemy 1T & allied Giants +5 DEF
                 {
                     var freezeTarget = FindStrongestAlly(enemies);
                     if (freezeTarget != null)
                     {
-                        int turns = IsRivalTribe(freezeTarget.currentMonster, "Giants") ? 2 : 1;
-                        freezeTarget.currentMonster.frozenTurns = Mathf.Max(freezeTarget.currentMonster.frozenTurns, turns);
-                        SpawnSlotFloating(oppHuman, freezeTarget.slotIndex, $"❄️ FROZEN {turns}T", spiritCol);
+                        freezeTarget.currentMonster.frozenTurns = Mathf.Max(freezeTarget.currentMonster.frozenTurns, 1);
+                        SpawnSlotFloating(oppHuman, freezeTarget.slotIndex, "❄️ FROZEN 1T", spiritCol);
                     }
                     foreach (var al in FilterTribeSlots(allies, "Giants"))
                     {
-                        al.currentMonster.AddBonusDef(7);
-                        SpawnSlotFloating(ownerHuman, al.slotIndex, "❄️ +7 DEF", spiritCol);
+                        al.currentMonster.AddBonusDef(5);
+                        SpawnSlotFloating(ownerHuman, al.slotIndex, "❄️ +5 DEF", spiritCol);
                     }
                     break;
                 }
 
-                case 469: // Hive Emperor Chitinus (Insects): Poison 2 enemy non-Insects (5/T) & allied Insects +6 DEF
+                case 469: // Hive Emperor Chitinus (Insects): +10 Shield, Poison 2 non-Insects (6/T) & Insects +6 DEF
                 {
+                    GrantLeaderShield(owner, 10);
                     ApplyToRandomEnemies(FilterRivalTribeSlots(enemies, "Insects"), 2, (es) =>
                     {
-                        es.currentMonster.poisonDmg = Mathf.Max(es.currentMonster.poisonDmg, 5);
-                        SpawnSlotFloating(oppHuman, es.slotIndex, "☠️ POISON 5/T", spiritCol);
+                        es.currentMonster.poisonDmg = Mathf.Max(es.currentMonster.poisonDmg, 6);
+                        SpawnSlotFloating(oppHuman, es.slotIndex, "☠️ POISON 6/T", spiritCol);
                     });
                     foreach (var al in FilterTribeSlots(allies, "Insects"))
                     {
@@ -470,17 +523,18 @@ namespace MonsterCardGame.Core
                     break;
                 }
 
-                case 470: // Mantis Queen Zerilla (Insects): Allied Insects +6 ATK & poison 1 non-Insect foe
+                case 470: // Mantis Queen Zerilla (Insects): +8 Shield, Insects +7 ATK & poison 2 non-Insect foes (6/T)
                 {
+                    GrantLeaderShield(owner, 8);
                     foreach (var al in FilterTribeSlots(allies, "Insects"))
                     {
-                        al.currentMonster.bonusAtk += 6;
-                        SpawnSlotFloating(ownerHuman, al.slotIndex, "🪲 +6 ATK", spiritCol);
+                        al.currentMonster.bonusAtk += 7;
+                        SpawnSlotFloating(ownerHuman, al.slotIndex, "🪲 +7 ATK", spiritCol);
                     }
-                    ApplyToRandomEnemies(FilterRivalTribeSlots(enemies, "Insects"), 1, (es) =>
+                    ApplyToRandomEnemies(FilterRivalTribeSlots(enemies, "Insects"), 2, (es) =>
                     {
-                        es.currentMonster.poisonDmg = Mathf.Max(es.currentMonster.poisonDmg, 4);
-                        SpawnSlotFloating(oppHuman, es.slotIndex, "☠️ POISON 4/T", spiritCol);
+                        es.currentMonster.poisonDmg = Mathf.Max(es.currentMonster.poisonDmg, 6);
+                        SpawnSlotFloating(oppHuman, es.slotIndex, "☠️ POISON 6/T", spiritCol);
                     });
                     break;
                 }
@@ -503,19 +557,19 @@ namespace MonsterCardGame.Core
                         SpawnSlotFloating(ownerHuman, slotIdx, "☀️ +8 DEF", spiritCol);
                     }
                     break;
-                case 460: // Valeria: strictly allied Warriors gain +8 DEF
+                case 460: // Valeria: strictly allied Warriors gain +9 DEF
                     if (IsTribe(m, "Warriors"))
                     {
-                        m.AddBonusDef(8);
-                        SpawnSlotFloating(ownerHuman, slotIdx, "🛡️ +8 DEF", spiritCol);
+                        m.AddBonusDef(9);
+                        SpawnSlotFloating(ownerHuman, slotIdx, "🛡️ +9 DEF", spiritCol);
                     }
                     break;
-                case 462: // Ravika: strictly allied Beasts gain +4/+4
+                case 462: // Ravika: strictly allied Beasts gain +5/+5
                     if (IsTribe(m, "Beasts"))
                     {
-                        m.bonusAtk += 4;
-                        m.AddBonusDef(4);
-                        SpawnSlotFloating(ownerHuman, slotIdx, "🐾 +4/+4", spiritCol);
+                        m.bonusAtk += 5;
+                        m.AddBonusDef(5);
+                        SpawnSlotFloating(ownerHuman, slotIdx, "🐾 +5/+5", spiritCol);
                     }
                     break;
                 case 465: // Thorin: strictly summoning a Dwarf grants +4 Leader Shield
@@ -540,7 +594,7 @@ namespace MonsterCardGame.Core
                 al.currentMonster.bonusAtk += 4;
                 SpawnSlotFloating(ownerHuman, al.slotIndex, "🩸 +4 ATK", spiritCol);
             }
-            HitEnemyLeader(opponent, 8, "🩸 BLOOD PACT", spiritCol);
+            HitEnemyLeader(opponent, 12, "🩸 BLOOD PACT", spiritCol);
         }
 
         public static void OnSpellCast(PlayerState owner, PlayerState opponent)
@@ -556,7 +610,7 @@ namespace MonsterCardGame.Core
                 al.currentMonster.bonusAtk += 3;
                 SpawnSlotFloating(ownerHuman, al.slotIndex, "🔮 +3 ATK", spiritCol);
             }
-            HitEnemyLeader(opponent, 6, "🔮 ARCANE SURGE", spiritCol);
+            HitEnemyLeader(opponent, 7, "🔮 ARCANE SURGE", spiritCol);
         }
 
         public static void OnStartOfTurn(PlayerState activePlayer, PlayerState otherPlayer)
@@ -568,8 +622,8 @@ namespace MonsterCardGame.Core
 
             switch (sid)
             {
-                case 452: // Morghana: +6 HP each turn & chill 1 rival enemy
-                    HealFriendlyLeader(activePlayer, otherPlayer, 6);
+                case 452: // Morghana: +7 HP each turn & chill 1 rival enemy
+                    HealFriendlyLeader(activePlayer, otherPlayer, 7);
                     ApplyToRandomEnemies(FilterRivalTribeSlots(GetOccupiedSlots(otherPlayer), "Ghosts"), 1, (es) =>
                     {
                         es.currentMonster.weakenedTurns = Mathf.Max(es.currentMonster.weakenedTurns, 1);
@@ -585,8 +639,8 @@ namespace MonsterCardGame.Core
                         al.currentMonster.HealDefense(4);
                     }
                     break;
-                case 463: // Sylvandor: strictly allied Elves heal +4 DEF & Leader restores +5 HP
-                    HealFriendlyLeader(activePlayer, otherPlayer, 5);
+                case 463: // Sylvandor: strictly allied Elves heal +4 DEF & Leader restores +4 HP
+                    HealFriendlyLeader(activePlayer, otherPlayer, 4);
                     foreach (var al in FilterTribeSlots(GetOccupiedSlots(activePlayer), "Elves"))
                     {
                         al.currentMonster.HealDefense(4);
@@ -609,18 +663,22 @@ namespace MonsterCardGame.Core
 
             switch (sid)
             {
-                case 451: return IsTribe(m, "Ghosts") ? 5 : 0;
-                case 453: return IsTribe(m, "Demons") ? 5 : 0;
-                case 455: return IsTribe(m, "Celestials") ? 4 : 0;
+                case 451: return IsTribe(m, "Ghosts") ? 6 : 0;
+                case 453: return IsTribe(m, "Demons") ? 4 : 0;
+                case 454: return IsTribe(m, "Demons") ? 4 : 0;
+                case 455: return IsTribe(m, "Celestials") ? 5 : 0;
                 case 457: return IsTribe(m, "Mages") ? 5 : 0;
                 case 458: return IsTribe(m, "Mages") ? 4 : 0;
-                case 459: return IsTribe(m, "Warriors") ? 4 : 0;
-                case 461: return IsTribe(m, "Beasts") ? 4 : 0;
-                case 464: return IsTribe(m, "Elves") ? 4 : 0;
-                case 465: return IsTribe(m, "Dwarves") ? 4 : 0;
-                case 466: return IsTribe(m, "Dwarves") ? 4 : 0;
+                case 459: return IsTribe(m, "Warriors") ? 5 : 0;
+                case 460: return IsTribe(m, "Warriors") ? 3 : 0;
+                case 461: return IsTribe(m, "Beasts") ? 5 : 0;
+                case 462: return IsTribe(m, "Beasts") ? 3 : 0;
+                case 463: return IsTribe(m, "Elves") ? 2 : 0;
+                case 464: return IsTribe(m, "Elves") ? 5 : 0;
+                case 465: return IsTribe(m, "Dwarves") ? 6 : 0;
+                case 466: return IsTribe(m, "Dwarves") ? 5 : 0;
                 case 467: return IsTribe(m, "Giants") ? 6 : 0;
-                case 468: return IsTribe(m, "Giants") ? 5 : 0;
+                case 468: return IsTribe(m, "Giants") ? 4 : 0;
                 case 469: return IsTribe(m, "Insects") ? 4 : 0;
                 case 470: return IsTribe(m, "Insects") ? 4 : 0;
                 default: return 0;
@@ -639,7 +697,7 @@ namespace MonsterCardGame.Core
                 452 => IsRivalTribe(attackerM, "Ghosts") ? 3 : 0,
                 456 => IsRivalTribe(attackerM, "Celestials") ? 2 : 0,
                 463 => IsRivalTribe(attackerM, "Elves") ? 2 : 0,
-                468 => IsRivalTribe(attackerM, "Giants") ? 3 : 0,
+                468 => IsRivalTribe(attackerM, "Giants") ? 2 : 0,
                 _ => 0
             };
         }
@@ -647,7 +705,10 @@ namespace MonsterCardGame.Core
         public static int GetSkillManaDiscount(PlayerState owner, MonsterInstance m)
         {
             if (owner == null || owner.activeLeader == null || m == null) return 0;
-            return ResolveSpiritEffectId(owner.activeLeader) == 458 && IsTribe(m, "Mages") ? 1 : 0;
+            int sid = ResolveSpiritEffectId(owner.activeLeader);
+            if (sid == 458 && IsTribe(m, "Mages")) return 1;
+            if (sid == 456 && IsTribe(m, "Celestials")) return 1;
+            return 0;
         }
 
         public static float GetCombatEvasionChance(PlayerState defenderOwner, int slotIdx, MonsterInstance defenderM)
@@ -658,7 +719,7 @@ namespace MonsterCardGame.Core
             {
                 452 => IsTribe(defenderM, "Ghosts") ? 0.22f : 0f,
                 458 => IsTribe(defenderM, "Mages") ? 0.20f : 0f,
-                464 => IsTribe(defenderM, "Elves") ? 0.20f : 0f,
+                464 => IsTribe(defenderM, "Elves") ? 0.25f : 0f,
                 _ => 0f
             };
         }
@@ -683,15 +744,19 @@ namespace MonsterCardGame.Core
 
             if (sid == 459 && IsTribe(attackerM, "Warriors") && defenderM != null)
             {
-                atkPower += 4;
+                atkPower += 5;
             }
-            else if (sid == 462 && IsTribe(attackerM, "Beasts") && UnityEngine.Random.value < 0.20f)
+            else if (sid == 462 && IsTribe(attackerM, "Beasts") && UnityEngine.Random.value < 0.30f)
             {
-                atkPower = Mathf.RoundToInt(atkPower * 1.40f);
+                atkPower = Mathf.RoundToInt(atkPower * 1.50f);
+            }
+            else if (sid == 466 && IsTribe(attackerM, "Dwarves") && defenderM != null && defenderM.currentDef < defenderM.baseDef)
+            {
+                atkPower += 5;
             }
             else if (sid == 470 && IsTribe(attackerM, "Insects") && defenderM != null && defenderM.poisonDmg > 0)
             {
-                atkPower += 4;
+                atkPower += 5;
             }
             return Mathf.Max(0, atkPower);
         }
@@ -709,7 +774,7 @@ namespace MonsterCardGame.Core
                 }
                 else if (attSid == 454 && IsTribe(attackerM, "Demons"))
                 {
-                    attackerM.HealDefense(Mathf.Max(2, Mathf.RoundToInt(dmgDealt * 0.20f)));
+                    attackerM.HealDefense(Mathf.Max(2, Mathf.RoundToInt(dmgDealt * 0.35f)));
                 }
                 else if (attSid == 469 && IsTribe(attackerM, "Insects"))
                 {
@@ -717,7 +782,7 @@ namespace MonsterCardGame.Core
                 }
                 else if (attSid == 470 && IsTribe(attackerM, "Insects"))
                 {
-                    defenderM.poisonDmg += 2;
+                    defenderM.poisonDmg += 3;
                 }
             }
 
@@ -726,10 +791,13 @@ namespace MonsterCardGame.Core
                 int defSid = ResolveSpiritEffectId(defenderOwner.activeLeader);
                 if (defSid == 460 && IsTribe(defenderM, "Warriors") && IsRivalTribe(attackerM, "Warriors"))
                 {
-                    attackerM.TakeDamage(3);
+                    attackerM.TakeDamage(5);
                 }
-                else if ((defSid == 466 && IsTribe(defenderM, "Dwarves")) ||
-                         (defSid == 468 && IsTribe(defenderM, "Giants")))
+                else if (defSid == 466 && IsTribe(defenderM, "Dwarves"))
+                {
+                    attackerM.TakeDamage(7);
+                }
+                else if (defSid == 468 && IsTribe(defenderM, "Giants"))
                 {
                     attackerM.TakeDamage(4);
                 }
@@ -774,7 +842,7 @@ namespace MonsterCardGame.Core
             if (ResolveSpiritEffectId(possessor.activeLeader) != 451) return;
 
             Color col = MonsterArtLoader.GetSpiritCategoryColor(possessor.activeLeader, IsOwnerHuman(possessor));
-            HitEnemyLeader(enemy, 6, "💀 SOUL HARVEST", col);
+            HitEnemyLeader(enemy, 7, "💀 SOUL HARVEST", col);
             var weakestGhost = FindWeakestAlly(FilterTribeSlots(GetOccupiedSlots(possessor), "Ghosts"));
             if (weakestGhost != null)
             {

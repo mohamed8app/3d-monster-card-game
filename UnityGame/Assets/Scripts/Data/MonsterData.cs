@@ -16,7 +16,8 @@ namespace MonsterCardGame.Data
         Nature,
         Light,
         Dark,
-        Arcane
+        Arcane,
+        Desert
     }
 
     [Serializable]

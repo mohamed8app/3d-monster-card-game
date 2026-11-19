@@ -42,3 +42,7 @@ Desktop.ini
 !UnityHubSetup*.exe
 *.tmp
 Docs/VFX_Drafts/
+
+# Offline Lab, Training & Project Archive
+_Project_Archive_And_Offline_Tools/
+

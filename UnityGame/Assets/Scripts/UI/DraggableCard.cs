@@ -164,6 +164,10 @@ namespace MonsterCardGame.UI
                     Destroy(gameObject);
                     return;
                 }
+                if (cardData.cardType == CardType.Spell && BattleUIManager.Instance != null && BattleUIManager.Instance.IsSelectingSpellTarget)
+                {
+                    return;
+                }
             }
 
             // Left Click: Select card in hand and display details in Inspector
@@ -310,6 +314,16 @@ namespace MonsterCardGame.UI
                         if (handled) break;
                     }
                 }
+                else if (cardData.cardType == CardType.Spell)
+                {
+                    var slotView = hit.gameObject.GetComponentInParent<SlotView>();
+                    if (slotView != null)
+                    {
+                        triedDirectSlot = true;
+                        handled = TryCastSpell(slotView.slotIndex, slotView.isPlayerSide);
+                        if (handled || (BattleUIManager.Instance != null && BattleUIManager.Instance.IsSelectingSpellTarget)) break;
+                    }
+                }
                 else if (cardData.cardType == CardType.Environment)
                 {
                     if (hit.gameObject.name.Contains("SharedEnvSlot") || hit.gameObject.name.Contains("SharedEnvCardSlot"))
@@ -331,7 +345,7 @@ namespace MonsterCardGame.UI
             }
 
             // 2. If Spell, Environment, or Leader card is dragged to the arena above the hand dock
-            if (!handled)
+            if (!handled && !(triedDirectSlot && cardData.cardType == CardType.Spell))
             {
                 if (cardData.cardType == CardType.Spell && eventData.position.y > 220f)
                 {
@@ -424,19 +438,16 @@ namespace MonsterCardGame.UI
             }
         }
 
-        private bool TryCastSpell()
+        private bool TryCastSpell(int explicitSlot = -1, bool explicitIsAlly = false)
         {
             var gm = GameManager.Instance;
             if (gm == null || !gm.isPlayerTurn) return false;
 
-            Vector3 startPos = transform.position;
-            bool success = gm.CastSpell(gm.humanPlayer, gm.aiPlayer, cardData);
-            if (success && BattleUIManager.Instance != null)
+            if (BattleUIManager.Instance != null)
             {
-                BattleUIManager.Instance.LaunchPlayerUtilityCardFlight(cardData, startPos);
-                BattleUIManager.Instance.DeselectHandCards();
+                return BattleUIManager.Instance.TryStartSpellCast(cardData, transform.position, explicitSlot, explicitIsAlly);
             }
-            return success;
+            return gm.CastSpell(gm.humanPlayer, gm.aiPlayer, cardData, explicitSlot, -1, explicitIsAlly);
         }
 
         private bool TryActivateEnvironment()

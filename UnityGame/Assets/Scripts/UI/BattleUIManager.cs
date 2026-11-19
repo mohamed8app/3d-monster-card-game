@@ -20,6 +20,10 @@ namespace MonsterCardGame.UI
         public Slider enemyHpSlider;
         public Image enemyAvatarImage;
 
+        [Header("Leader Title Badges")]
+        public Text playerTitleText;
+        public Text enemyTitleText;
+
         public Text playerPowerText;
         public Text enemyPowerText;
         public Text turnInfoText;
@@ -45,6 +49,7 @@ namespace MonsterCardGame.UI
         public GameObject envAltarPanel;
         public Button envSlotButton;
         public Image envCardArtImage;
+        public Image envCardFrameImage;
         public Text envCardTitleText;
         public Text envCardCostText;
         public Text envIconText;
@@ -57,6 +62,8 @@ namespace MonsterCardGame.UI
         public Image envAtmosphereOverlay;
         public Button testCycleEnvButton;
         public Button testCycleLevelButton;
+        public Button testCyclePlayerSpiritButton;
+        public Button testCycleEnemySpiritButton;
 
         [Header("Commander Spirit Circular Altars")]
         public Button playerLeaderSlotButton;
@@ -78,21 +85,21 @@ namespace MonsterCardGame.UI
 
         private static readonly string[] AllTestElements = {
             "Fire", "Water", "Ice", "Earth", "Electric", "Air",
-            "Nature", "Light", "Dark", "Arcane"
+            "Nature", "Light", "Dark", "Desert"
         };
         private int currentTestEnvIndex = -1;
 
-        private static readonly (string tribe, string element, string auraDesc)[] SpiritTribePresets = {
-            ("Ghosts", "Dark", "Spectral Veil: Allied Ghosts ONLY gain evasion & non-Ghost enemies suffer dread."),
-            ("Demons", "Fire", "Abyssal Pact: Allied Demons ONLY surge with blazing fury & life leech."),
-            ("Celestials", "Light", "Solar Sanctuary: Allied Celestials ONLY gain armor, healing & shield blessing."),
-            ("Mages", "Arcane", "Astral Resonance: Allied Mages ONLY amplify attack, evasion & skill cost discount."),
-            ("Warriors", "Fire", "Vanguard Valor: Allied Warriors ONLY gain attack, armor & counter-bash."),
-            ("Beasts", "Nature", "Primal Hunt: Allied Beasts ONLY gain savage crits, ferocity & kill feast."),
-            ("Elves", "Air", "Sylvan Wind: Allied Elves ONLY gain agility, healing & root enemy clans."),
-            ("Dwarves", "Earth", "Runeforge Bastion: Allied Dwarves ONLY fortify armor & molten rune thorns."),
-            ("Giants", "Earth", "Colossus Might: Allied Giants ONLY crush enemies & chill rival clans."),
-            ("Insects", "Nature", "Swarm Chitin: Allied Insects ONLY overwhelm rival clans with deadly poison.")
+        private static readonly (string tribe, string auraDesc)[] SpiritTribePresets = {
+            ("Ghosts", "Spectral Veil: Allied Ghosts ONLY gain evasion & non-Ghost enemies suffer dread."),
+            ("Demons", "Abyssal Pact: Allied Demons ONLY surge with blazing fury & life leech."),
+            ("Celestials", "Solar Sanctuary: Allied Celestials ONLY gain armor, healing & shield blessing."),
+            ("Mages", "Astral Resonance: Allied Mages ONLY amplify attack, evasion & skill cost discount."),
+            ("Warriors", "Vanguard Valor: Allied Warriors ONLY gain attack, armor & counter-bash."),
+            ("Beasts", "Primal Hunt: Allied Beasts ONLY gain savage crits, ferocity & kill feast."),
+            ("Elves", "Sylvan Wind: Allied Elves ONLY gain agility, healing & root enemy clans."),
+            ("Dwarves", "Runeforge Bastion: Allied Dwarves ONLY fortify armor & molten rune thorns."),
+            ("Giants", "Colossus Might: Allied Giants ONLY crush enemies & chill rival clans."),
+            ("Insects", "Swarm Chitin: Allied Insects ONLY overwhelm rival clans with deadly poison.")
         };
         private int currentTestSpiritIndex = -1;
 
@@ -150,6 +157,262 @@ namespace MonsterCardGame.UI
 
         private CardData selectedCardForAction = null;
         private int selectedBoardSlotIndex = -1;
+        [NonSerialized] private int pendingAbilitySourceSlot = -1;
+        [NonSerialized] private int pendingAbilitySkillIndex = 0;
+        [NonSerialized] private CombatSystem.AbilityTargetMode pendingAbilityTargetMode = CombatSystem.AbilityTargetMode.None;
+        public bool IsSelectingAbilityTarget => pendingAbilitySourceSlot >= 0 && pendingAbilityTargetMode != CombatSystem.AbilityTargetMode.None;
+
+        [NonSerialized] private CardData pendingSpellCard = null;
+        [NonSerialized] private SpellTargetMode pendingSpellTargetMode = SpellTargetMode.Global;
+        [NonSerialized] private int pendingSpellPrimarySlot = -1;
+        [NonSerialized] private bool pendingSpellPrimarySelected = false;
+        [NonSerialized] private Vector3 pendingSpellStartPos = Vector3.zero;
+        public bool IsSelectingSpellTarget => pendingSpellCard != null;
+        public bool IsSelectingAnyTarget => IsSelectingAbilityTarget || IsSelectingSpellTarget;
+
+        public void CancelPendingAbilityTargeting(bool silent = true)
+        {
+            bool wasTargeting = IsSelectingAbilityTarget;
+            pendingAbilitySourceSlot = -1;
+            pendingAbilitySkillIndex = 0;
+            pendingAbilityTargetMode = CombatSystem.AbilityTargetMode.None;
+            RefreshAbilityTargetHighlights();
+            if (wasTargeting && !silent)
+            {
+                LogCombatMessage("❎ Ability target selection cancelled.");
+            }
+        }
+
+        public void CancelPendingSpellTargeting(bool silent = true)
+        {
+            bool wasTargeting = IsSelectingSpellTarget;
+            pendingSpellCard = null;
+            pendingSpellTargetMode = SpellTargetMode.Global;
+            pendingSpellPrimarySlot = -1;
+            pendingSpellPrimarySelected = false;
+            pendingSpellStartPos = Vector3.zero;
+            RefreshAbilityTargetHighlights();
+            if (wasTargeting && !silent)
+            {
+                LogCombatMessage("❎ Spell target selection cancelled.");
+            }
+        }
+
+        public void RefreshAbilityTargetHighlights()
+        {
+            var gm = GameManager.Instance;
+
+            if (enemySlotViews != null)
+            {
+                for (int i = 0; i < enemySlotViews.Length; i++)
+                {
+                    if (enemySlotViews[i] != null)
+                    {
+                        enemySlotViews[i].SetEmptySlotTargetHighlight(false);
+                        enemySlotViews[i].SetAbilityTargetHighlight(false, true);
+                    }
+                }
+            }
+            if (playerSlotViews != null)
+            {
+                for (int i = 0; i < playerSlotViews.Length; i++)
+                {
+                    if (playerSlotViews[i] != null)
+                    {
+                        playerSlotViews[i].SetEmptySlotTargetHighlight(false);
+                        playerSlotViews[i].SetAbilityTargetHighlight(false, false);
+                    }
+                }
+            }
+
+            if (gm == null) return;
+
+            if (IsSelectingAbilityTarget)
+            {
+                if (pendingAbilityTargetMode == CombatSystem.AbilityTargetMode.SingleEnemy && CombatSystem.Instance != null)
+                {
+                    string actText = "";
+                    var srcSlot = (pendingAbilitySourceSlot >= 0 && gm.humanPlayer.slots != null && pendingAbilitySourceSlot < gm.humanPlayer.slots.Length)
+                        ? gm.humanPlayer.slots[pendingAbilitySourceSlot] : null;
+                    if (srcSlot != null && srcSlot.IsOccupied && srcSlot.currentMonster != null &&
+                        pendingAbilitySkillIndex >= 0 && pendingAbilitySkillIndex < srcSlot.currentMonster.actives.Count)
+                    {
+                        actText = srcSlot.currentMonster.actives[pendingAbilitySkillIndex];
+                    }
+                    bool canHitStealth = CombatSystem.Instance.SkillTargetsCanHitStealth(actText);
+
+                    if (enemySlotViews != null && gm.aiPlayer != null && gm.aiPlayer.slots != null)
+                    {
+                        for (int i = 0; i < enemySlotViews.Length && i < gm.aiPlayer.slots.Length; i++)
+                        {
+                            var es = gm.aiPlayer.slots[i];
+                            bool valid = es != null && es.IsOccupied && es.currentMonster != null && es.currentMonster.IsAlive &&
+                                         (canHitStealth || es.currentMonster.HasPassiveSubstr("Night Stealth") == null);
+                            if (enemySlotViews[i] != null) enemySlotViews[i].SetAbilityTargetHighlight(valid, true);
+                        }
+                    }
+                }
+                else if (pendingAbilityTargetMode == CombatSystem.AbilityTargetMode.SingleAlly)
+                {
+                    if (playerSlotViews != null && gm.humanPlayer != null && gm.humanPlayer.slots != null)
+                    {
+                        for (int i = 0; i < playerSlotViews.Length && i < gm.humanPlayer.slots.Length; i++)
+                        {
+                            var ps = gm.humanPlayer.slots[i];
+                            bool valid = ps != null && ps.IsOccupied && ps.currentMonster != null && ps.currentMonster.IsAlive;
+                            if (playerSlotViews[i] != null) playerSlotViews[i].SetAbilityTargetHighlight(valid, false);
+                        }
+                    }
+                }
+                return;
+            }
+
+            if (IsSelectingSpellTarget)
+            {
+                if (pendingSpellTargetMode == SpellTargetMode.Enemy || pendingSpellTargetMode == SpellTargetMode.Any)
+                {
+                    if (enemySlotViews != null && gm.aiPlayer != null && gm.aiPlayer.slots != null)
+                    {
+                        for (int i = 0; i < enemySlotViews.Length && i < gm.aiPlayer.slots.Length; i++)
+                        {
+                            var es = gm.aiPlayer.slots[i];
+                            bool valid = es != null && es.IsOccupied && es.currentMonster != null && es.currentMonster.IsAlive &&
+                                         es.currentMonster.HasPassiveSubstr("Night Stealth") == null;
+                            if (enemySlotViews[i] != null) enemySlotViews[i].SetAbilityTargetHighlight(valid, true);
+                        }
+                    }
+                }
+
+                if (pendingSpellTargetMode == SpellTargetMode.Ally || pendingSpellTargetMode == SpellTargetMode.Any ||
+                    (pendingSpellTargetMode == SpellTargetMode.AllyToEmptySlot && !pendingSpellPrimarySelected))
+                {
+                    if (playerSlotViews != null && gm.humanPlayer != null && gm.humanPlayer.slots != null)
+                    {
+                        for (int i = 0; i < playerSlotViews.Length && i < gm.humanPlayer.slots.Length; i++)
+                        {
+                            var ps = gm.humanPlayer.slots[i];
+                            bool valid = ps != null && ps.IsOccupied && ps.currentMonster != null && ps.currentMonster.IsAlive;
+                            if (playerSlotViews[i] != null) playerSlotViews[i].SetAbilityTargetHighlight(valid, false);
+                        }
+                    }
+                }
+                else if (pendingSpellTargetMode == SpellTargetMode.EmptySlot ||
+                         (pendingSpellTargetMode == SpellTargetMode.AllyToEmptySlot && pendingSpellPrimarySelected))
+                {
+                    string lbl = pendingSpellTargetMode == SpellTargetMode.EmptySlot ? "📍 REVIVE HERE" : "📍 MOVE HERE";
+                    if (playerSlotViews != null && gm.humanPlayer != null && gm.humanPlayer.slots != null)
+                    {
+                        for (int i = 0; i < playerSlotViews.Length && i < gm.humanPlayer.slots.Length; i++)
+                        {
+                            var ps = gm.humanPlayer.slots[i];
+                            bool isEmpty = ps != null && !ps.IsOccupied;
+                            if (playerSlotViews[i] != null)
+                            {
+                                playerSlotViews[i].SetEmptySlotTargetHighlight(isEmpty, lbl);
+                                if (pendingSpellTargetMode == SpellTargetMode.AllyToEmptySlot && i == pendingSpellPrimarySlot)
+                                    playerSlotViews[i].SetBoardSelected(true);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        public static string SanitizeAbilityText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            string clean = text.Trim();
+            clean = System.Text.RegularExpressions.Regex.Replace(clean, @"\s*\(P[_-]?Score:[^)]*\)", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            clean = System.Text.RegularExpressions.Regex.Replace(clean, @"\s*\(A[_-]?Score:[^)]*\)", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            clean = System.Text.RegularExpressions.Regex.Replace(clean, @"\s*\(Score:[^)]*\)", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            clean = System.Text.RegularExpressions.Regex.Replace(clean, @"\s*\(Eval:[^)]*\)", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            clean = System.Text.RegularExpressions.Regex.Replace(clean, @"\s*\(Win\s*Rate:[^)]*\)", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            clean = System.Text.RegularExpressions.Regex.Replace(clean, @"\s*\(Rating:[^)]*\)", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            clean = System.Text.RegularExpressions.Regex.Replace(clean, @"\s*Rating\s*\d+.*", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            clean = System.Text.RegularExpressions.Regex.Replace(clean, @"[\u0600-\u06FF]+", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            clean = System.Text.RegularExpressions.Regex.Replace(clean, @"[ \t]{2,}", " ").Trim();
+            return clean;
+        }
+
+        public static string FormatMonsterAbilityRichText(CardData data, MonsterInstance instance = null)
+        {
+            if (data == null) return "";
+
+            List<string> passives = new List<string>();
+            List<string> actives = new List<string>();
+
+            if (instance != null)
+            {
+                if (instance.passives != null) passives.AddRange(instance.passives);
+                if (instance.actives != null) actives.AddRange(instance.actives);
+            }
+            else
+            {
+                if (data.passives != null && data.passives.Count > 0)
+                {
+                    passives.AddRange(data.passives);
+                }
+                else if (!string.IsNullOrEmpty(data.passives_text) && !data.passives_text.StartsWith("None"))
+                {
+                    foreach (var p in data.passives_text.Split(new[] { " | " }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        string clean = p.Trim();
+                        if (clean.StartsWith("1. ") || clean.StartsWith("2. ")) clean = clean.Substring(3).Trim();
+                        if (!string.IsNullOrEmpty(clean) && !clean.StartsWith("None")) passives.Add(clean);
+                    }
+                }
+
+                if (data.active_skills != null && data.active_skills.Count > 0)
+                {
+                    actives.AddRange(data.active_skills);
+                }
+                else if (!string.IsNullOrEmpty(data.active_skill) && !data.active_skill.StartsWith("None"))
+                {
+                    foreach (var a in data.active_skill.Split(new[] { " | " }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        string clean = a.Trim();
+                        if (clean.StartsWith("1. ") || clean.StartsWith("2. ")) clean = clean.Substring(3).Trim();
+                        if (!string.IsNullOrEmpty(clean) && !clean.StartsWith("None")) actives.Add(clean);
+                    }
+                }
+            }
+
+            if (passives.Count == 0 && actives.Count == 0)
+            {
+                string fallback = string.IsNullOrEmpty(data.description)
+                    ? $"Tactical {data.element} monster with high battlefield combat capabilities."
+                    : data.description;
+                return $"<color=#E0E8F0>📜 <b>Basic Ability:</b> {SanitizeAbilityText(fallback)}</color>";
+            }
+
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < passives.Count; i++)
+            {
+                string pText = SanitizeAbilityText(passives[i]);
+                if (string.IsNullOrEmpty(pText)) continue;
+                if (sb.Length > 0) sb.Append("\n\n");
+                string pLabel = passives.Count > 1 ? $"PASSIVE {i + 1}" : "PASSIVE";
+                sb.Append($"<color=#FFD866><b>🛡️ {pLabel}:</b></color> <color=#FFFFFF>{pText}</color>");
+            }
+
+            for (int i = 0; i < actives.Count; i++)
+            {
+                string aText = SanitizeAbilityText(actives[i]);
+                if (string.IsNullOrEmpty(aText)) continue;
+                if (sb.Length > 0) sb.Append("\n\n");
+                if (i == 0)
+                {
+                    string aLabel = actives.Count > 1 ? "ACTIVE SKILL 1" : "ACTIVE SKILL";
+                    sb.Append($"<color=#38E1FF><b>⚡ {aLabel}:</b></color> <color=#E2F6FF>{aText}</color>");
+                }
+                else
+                {
+                    sb.Append($"<color=#FF6B81><b>⚡ ACTIVE SKILL 2:</b></color> <color=#FFEBEF>{aText}</color>");
+                }
+            }
+
+            return sb.ToString();
+        }
 
         private void Awake()
         {
@@ -178,6 +441,28 @@ namespace MonsterCardGame.UI
             {
                 testCycleEnvButton.onClick.RemoveAllListeners();
                 testCycleEnvButton.onClick.AddListener(OnTestCycleEnvironmentClicked);
+            }
+
+            if (testCyclePlayerSpiritButton == null)
+            {
+                var psb = GameObject.Find("TestCyclePlayerSpiritBtn");
+                if (psb != null) testCyclePlayerSpiritButton = psb.GetComponent<Button>();
+            }
+            if (testCyclePlayerSpiritButton != null)
+            {
+                testCyclePlayerSpiritButton.onClick.RemoveAllListeners();
+                testCyclePlayerSpiritButton.onClick.AddListener(OnTestCycleSpiritClicked);
+            }
+
+            if (testCycleEnemySpiritButton == null)
+            {
+                var esb = GameObject.Find("TestCycleEnemySpiritBtn");
+                if (esb != null) testCycleEnemySpiritButton = esb.GetComponent<Button>();
+            }
+            if (testCycleEnemySpiritButton != null)
+            {
+                testCycleEnemySpiritButton.onClick.RemoveAllListeners();
+                testCycleEnemySpiritButton.onClick.AddListener(OnTestCycleEnemySpiritClicked);
             }
 
             if (testCycleLevelButton == null)
@@ -218,13 +503,14 @@ namespace MonsterCardGame.UI
                 enemyLeaderSlotButton.onClick.AddListener(OnEnemyLeaderSlotClicked);
             }
 
-            UpdateUI();
-            StartCoroutine(DelayedInitialUpdate());
+            if (GameManager.Instance != null && GameManager.Instance.isMatchStarted)
+            {
+                StartBattleArenaVisuals();
+            }
         }
 
-        private System.Collections.IEnumerator DelayedInitialUpdate()
+        public void StartBattleArenaVisuals()
         {
-            yield return null;
             EnsureAtmosphereEngine();
             UpdateUI();
             UpdateEnvironmentVisuals();
@@ -247,7 +533,8 @@ namespace MonsterCardGame.UI
             var canvas = GetComponentInParent<Canvas>();
             if (canvas != null)
             {
-                var boardTr = canvas.transform.Find("CenterBattleBoard");
+                var boardTr = canvas.transform.Find("ScreenRootContainer/CenterBattleBoard");
+                if (boardTr == null) boardTr = canvas.transform.Find("CenterBattleBoard");
                 Transform targetRoot = boardTr != null ? boardTr : canvas.transform;
                 var bgTr = targetRoot.Find("ArenaBackground");
                 if (bgTr == null) bgTr = canvas.transform.Find("ArenaBackground");
@@ -260,7 +547,26 @@ namespace MonsterCardGame.UI
         {
             if (Input.GetKeyDown(KeyCode.Escape))
             {
+                if (IsSelectingAbilityTarget)
+                {
+                    CancelPendingAbilityTargeting(silent: false);
+                    UpdatePlayCardButtonState();
+                    return;
+                }
+                if (IsSelectingSpellTarget)
+                {
+                    CancelPendingSpellTargeting(silent: false);
+                    UpdatePlayCardButtonState();
+                    return;
+                }
                 OnQuitClicked();
+            }
+            else if (Input.GetMouseButtonDown(1) && IsSelectingAnyTarget)
+            {
+                if (IsSelectingAbilityTarget) CancelPendingAbilityTargeting(silent: false);
+                if (IsSelectingSpellTarget) CancelPendingSpellTargeting(silent: false);
+                UpdatePlayCardButtonState();
+                return;
             }
             else if (Input.GetKeyDown(KeyCode.F11))
             {
@@ -273,6 +579,14 @@ namespace MonsterCardGame.UI
             else if (Input.GetKeyDown(KeyCode.L))
             {
                 OnTestCycleEnvLevelClicked();
+            }
+            else if (Input.GetKeyDown(KeyCode.P))
+            {
+                OnTestCycleSpiritClicked();
+            }
+            else if (Input.GetKeyDown(KeyCode.O))
+            {
+                OnTestCycleEnemySpiritClicked();
             }
 
             // Safety check: if player hand has cards but UI container is empty, refresh immediately
@@ -375,7 +689,7 @@ namespace MonsterCardGame.UI
                 playerSpiritController?.TriggerSummonFlare();
                 MonsterCardGame.Audio.SoundManager.Instance?.PlayLeaderDeploy(spirit);
                 ShowCardDetails(spirit);
-                LogCombatMessage($"🔥 [Commander Spirit]: Previewing [{MonsterArtLoader.FormatSpiritTitle(spirit)}] ({spirit.tribe} / {spirit.element})!", spirit);
+                LogCombatMessage($"👑 [Commander Spirit]: Previewing [{MonsterArtLoader.FormatSpiritTitle(spirit)}] ({MonsterArtLoader.GetTribeEmoji(spirit.tribe)} {spirit.tribe} Clan)!", spirit);
             }
             else
             {
@@ -386,7 +700,7 @@ namespace MonsterCardGame.UI
                     name = $"Commander Spirit: {preset.tribe}",
                     cardType = CardType.Leader,
                     card_type = "leader",
-                    element = preset.element,
+                    element = "",
                     tribe = preset.tribe,
                     cost = 3,
                     atk = 0,
@@ -397,7 +711,65 @@ namespace MonsterCardGame.UI
                 playerSpiritController?.TriggerSummonFlare();
                 MonsterCardGame.Audio.SoundManager.Instance?.PlayLeaderDeploy(spirit);
                 ShowCardDetails(spirit);
-                LogCombatMessage($"🔥 [Commander Spirit]: Summoned [{spirit.name}] ({preset.tribe} / {preset.element})!", spirit);
+                LogCombatMessage($"👑 [Commander Spirit]: Summoned [{spirit.name}] ({MonsterArtLoader.GetTribeEmoji(preset.tribe)} {preset.tribe} Clan)!", spirit);
+            }
+
+            UpdateLeaderSlotsUI();
+            UpdateUI();
+        }
+
+        private int currentEnemySpiritIndex = 0;
+
+        /// <summary>
+        /// Cycles Commander Spirits on the Enemy circular Spirit Altar to preview every faction's warlord.
+        /// </summary>
+        public void OnTestCycleEnemySpiritClicked()
+        {
+            var gm = GameManager.Instance;
+            if (gm == null || gm.aiPlayer == null) return;
+
+            var loadedLeaders = (gm.allLeaders != null)
+                ? gm.allLeaders.FindAll(l => l != null && MonsterArtLoader.HasCustomCardArt(l))
+                : new List<CardData>();
+
+            int totalCount = loadedLeaders.Count > 0 ? loadedLeaders.Count : SpiritTribePresets.Length;
+            currentEnemySpiritIndex++;
+            if (currentEnemySpiritIndex >= totalCount)
+            {
+                currentEnemySpiritIndex = -1;
+                gm.aiPlayer.activeLeader = null;
+                LogCombatMessage("💀 [Enemy Spirit]: Cleared enemy Spirit Altar back to seal.");
+            }
+            else if (loadedLeaders.Count > 0)
+            {
+                var spirit = loadedLeaders[currentEnemySpiritIndex];
+                gm.aiPlayer.activeLeader = spirit;
+                enemySpiritController?.TriggerSummonFlare();
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayLeaderDeploy(spirit);
+                ShowCardDetails(spirit);
+                LogCombatMessage($"💀 [Enemy Spirit]: Previewing [{MonsterArtLoader.FormatSpiritTitle(spirit)}] ({MonsterArtLoader.GetTribeEmoji(spirit.tribe)} {spirit.tribe} Clan)!", spirit);
+            }
+            else
+            {
+                var preset = SpiritTribePresets[currentEnemySpiritIndex];
+                var spirit = new CardData
+                {
+                    id = 8000 + currentEnemySpiritIndex + 1,
+                    name = $"Enemy Spirit: {preset.tribe}",
+                    cardType = CardType.Leader,
+                    card_type = "leader",
+                    element = "",
+                    tribe = preset.tribe,
+                    cost = 3,
+                    atk = 0,
+                    def = 0,
+                    description = preset.auraDesc
+                };
+                gm.aiPlayer.activeLeader = spirit;
+                enemySpiritController?.TriggerSummonFlare();
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayLeaderDeploy(spirit);
+                ShowCardDetails(spirit);
+                LogCombatMessage($"💀 [Enemy Spirit]: Summoned [{spirit.name}] ({MonsterArtLoader.GetTribeEmoji(preset.tribe)} {preset.tribe} Clan)!", spirit);
             }
 
             UpdateLeaderSlotsUI();
@@ -432,12 +804,15 @@ namespace MonsterCardGame.UI
             var gm = GameManager.Instance;
             if (gm == null) return;
 
-            // 1. Update Leader HP
+            // 1. Update Leader HP & Title Badges
             if (playerHpText != null) playerHpText.text = $"❤️ {gm.humanPlayer.currentHp} / {gm.humanPlayer.maxHp} HP";
             if (playerHpSlider != null) playerHpSlider.value = (float)gm.humanPlayer.currentHp / gm.humanPlayer.maxHp;
 
             if (enemyHpText != null) enemyHpText.text = $"❤️ {gm.aiPlayer.currentHp} / {gm.aiPlayer.maxHp} HP";
             if (enemyHpSlider != null) enemyHpSlider.value = (float)gm.aiPlayer.currentHp / gm.aiPlayer.maxHp;
+
+            if (enemyTitleText != null && gm.aiPlayer != null) enemyTitleText.text = gm.aiPlayer.playerName;
+            if (playerTitleText != null && gm.humanPlayer != null) playerTitleText.text = gm.humanPlayer.playerName;
 
             // 2. Update Turn Mana & Permanent Power (Unlimited Power ∞) for both Player & Enemy
             if (playerPowerText != null)
@@ -552,10 +927,24 @@ namespace MonsterCardGame.UI
 
                 if (envCardArtImage != null)
                 {
-                    Sprite cardArt = (gm.activeEnvironmentCard != null ? MonsterArtLoader.GetCardSprite(gm.activeEnvironmentCard) : null)
-                                  ?? BattlefieldAtmosphereEngine.GetOrLoadGroundSprite(env.element, env.level);
-                    envCardArtImage.sprite = cardArt;
-                    envCardArtImage.color = (cardArt != null) ? Color.white : MonsterArtLoader.GetEnvironmentAtmosphereColor(env.element);
+                    if (string.Equals(env.element, "Desert", StringComparison.OrdinalIgnoreCase))
+                    {
+                        envCardArtImage.color = Color.white;
+                    }
+                    else
+                    {
+                        Sprite cardArt = BattlefieldAtmosphereEngine.GetOrLoadGroundSprite(env.element, env.level)
+                                      ?? (gm.activeEnvironmentCard != null ? MonsterArtLoader.GetCardSprite(gm.activeEnvironmentCard) : null);
+                        envCardArtImage.sprite = cardArt;
+                        envCardArtImage.color = (cardArt != null) ? Color.white : MonsterArtLoader.GetEnvironmentAtmosphereColor(env.element);
+                    }
+                }
+                if (envCardFrameImage != null)
+                {
+                    Sprite frameSp = MonsterArtLoader.GetCardFrameOverlaySprite(env.element);
+                    envCardFrameImage.sprite = frameSp;
+                    envCardFrameImage.color = Color.white;
+                    envCardFrameImage.enabled = (frameSp != null);
                 }
                 if (envCardTitleText != null)
                 {
@@ -568,11 +957,8 @@ namespace MonsterCardGame.UI
                 }
                 if (envOwnerText != null)
                 {
-                    string ownerStr = string.IsNullOrEmpty(gm.activeEnvironmentOwner) ? "Arena" : gm.activeEnvironmentOwner;
-                    envOwnerText.text = $"Controlled by: {ownerStr}";
-                    envOwnerText.color = ownerStr == "Enemy"
-                        ? new Color(0.92f, 0.64f, 0.64f)
-                        : new Color(0.74f, 0.84f, 0.94f);
+                    envOwnerText.text = "Shared Arena • Neutral Ground";
+                    envOwnerText.color = new Color(0.74f, 0.86f, 0.96f);
                 }
 
                 if (envIconText != null) envIconText.text = envEmoji;
@@ -589,23 +975,32 @@ namespace MonsterCardGame.UI
                 }
                 if (envDurationText != null)
                 {
-                    envDurationText.text = $"Remaining: {env.turnsRemaining} Turns";
+                    envDurationText.text = "Permanent • Active Until Countered";
                 }
                 if (envBuffText != null)
                 {
                     int buffPercent = Mathf.RoundToInt(env.buffPct * 100);
-                    envBuffText.text = $"+{buffPercent}% {env.buffedElement}";
+                    int armorPercent = Mathf.RoundToInt(env.defArmorPct * 100);
+                    envBuffText.text = armorPercent > 0
+                        ? $"+{buffPercent}% {env.buffedElement} ATK • +{armorPercent}% DEF"
+                        : $"+{buffPercent}% {env.buffedElement}";
                     envBuffText.color = new Color(0.45f, 0.94f, 0.62f);
                 }
                 if (envDebuffText != null)
                 {
                     int debuffPercent = Mathf.RoundToInt(env.debuffPct * 100);
-                    string debuffedStr = string.Join(", ", env.debuffedElements);
-                    envDebuffText.text = $"-{debuffPercent}% {debuffedStr}";
+                    int vulnPercent = Mathf.RoundToInt(env.oppVulnPct * 100);
+                    string debuffedStr = env.debuffedElements != null && env.debuffedElements.Count > 0
+                        ? string.Join(", ", env.debuffedElements)
+                        : "Rivals";
+                    string debPart = debuffPercent > 0 ? $"-{debuffPercent}% {debuffedStr}" : "Balanced ATK";
+                    if (vulnPercent > 0) debPart += $" • +{vulnPercent}% Vuln";
+                    envDebuffText.text = debPart;
                     envDebuffText.color = new Color(0.96f, 0.56f, 0.56f);
                 }
 
                 EnsureAtmosphereEngine();
+                EnvironmentCardAnimator.Instance?.SetActiveEnvironment(env.element);
                 if (BattlefieldAtmosphereEngine.Instance != null)
                 {
                     BattlefieldAtmosphereEngine.Instance.ApplyEnvironmentProfile(env);
@@ -613,6 +1008,7 @@ namespace MonsterCardGame.UI
             }
             else
             {
+                EnvironmentCardAnimator.Instance?.SetActiveEnvironment(null);
                 if (envCardArtImage != null)
                 {
                     Sprite neutralSprite = BattlefieldAtmosphereEngine.GetOrLoadGroundSprite("", 0);
@@ -621,11 +1017,12 @@ namespace MonsterCardGame.UI
                         ? new Color(0.62f, 0.66f, 0.74f, 0.92f)
                         : new Color(0.10f, 0.12f, 0.16f, 1f);
                 }
+                if (envCardFrameImage != null) envCardFrameImage.enabled = false;
                 if (envCardTitleText != null) envCardTitleText.text = "NEUTRAL ARENA";
                 if (envCardCostText != null) envCardCostText.text = "-";
                 if (envOwnerText != null)
                 {
-                    envOwnerText.text = "Controlled by: Arena (Neutral)";
+                    envOwnerText.text = "Shared Arena (Neutral)";
                     envOwnerText.color = new Color(0.66f, 0.72f, 0.80f);
                 }
 
@@ -705,6 +1102,10 @@ namespace MonsterCardGame.UI
             if (leader != null)
             {
                 if (emptyGroup != null) emptyGroup.SetActive(false);
+                if (spiritCtrl != null && spiritCtrl.circularRim != null)
+                {
+                    spiritCtrl.circularRim.gameObject.SetActive(false);
+                }
                 if (artImg != null)
                 {
                     artImg.gameObject.SetActive(true);
@@ -713,7 +1114,7 @@ namespace MonsterCardGame.UI
                     {
                         artImg.sprite = sp;
                         artImg.color = Color.white;
-                        artImg.preserveAspect = false;
+                        artImg.preserveAspect = true;
                     }
                     else
                     {
@@ -735,19 +1136,24 @@ namespace MonsterCardGame.UI
                 }
                 if (tribeTxt != null && spiritCtrl == null)
                 {
-                    string tPart = string.IsNullOrEmpty(leader.tribe) ? leader.element : $"{leader.element} • {leader.tribe}";
-                    tribeTxt.text = tPart;
+                    string catIcon = MonsterArtLoader.GetTribeEmoji(leader.tribe);
+                    string tribeDisplay = MonsterArtLoader.GetTribeDisplayName(leader.tribe);
+                    tribeTxt.text = $"{catIcon} {tribeDisplay.ToUpper()} CLAN";
                 }
                 if (descTxt != null)
                 {
                     descTxt.text = string.IsNullOrEmpty(leader.description)
-                        ? "Active Commander Spirit circular passive aura."
+                        ? "Commander Spirit passive aura is active and empowering allied clan monsters."
                         : leader.description;
                 }
             }
             else
             {
                 if (emptyGroup != null) emptyGroup.SetActive(true);
+                if (spiritCtrl != null && spiritCtrl.circularRim != null)
+                {
+                    spiritCtrl.circularRim.gameObject.SetActive(true);
+                }
                 if (artImg != null)
                 {
                     artImg.sprite = null;
@@ -760,18 +1166,18 @@ namespace MonsterCardGame.UI
                 }
                 if (nameTxt != null)
                 {
-                    nameTxt.text = isPlayer ? "No Commander Spirit" : "No Enemy Spirit";
+                    nameTxt.text = isPlayer ? "ALTAR VACANT" : "NO ENEMY SPIRIT";
                     nameTxt.color = isPlayer ? new Color(0.76f, 0.86f, 0.96f) : new Color(0.88f, 0.68f, 0.70f);
                 }
                 if (tribeTxt != null && spiritCtrl == null)
                 {
-                    tribeTxt.text = "✧ COMMANDER SEAL";
+                    tribeTxt.text = isPlayer ? "✧ SPIRIT SEAL (EMPTY)" : "✧ ENEMY SEAL (EMPTY)";
                 }
                 if (descTxt != null)
                 {
                     descTxt.text = isPlayer
-                        ? "Summon a Commander Spirit card into this circular altar to ignite its category aura."
-                        : "Enemy Commander Spirit circular seal (Protected passive aura zone).";
+                        ? "Drag a Commander Spirit card into this circular altar to activate clan aura."
+                        : "Enemy Commander Spirit altar (Protected passive sanctuary).";
                 }
             }
         }
@@ -1504,7 +1910,7 @@ namespace MonsterCardGame.UI
             return cardRootObj;
         }
 
-        private GameObject CreateDynamicCardUI(Transform parent, CardData card)
+        public GameObject CreateDynamicCardUI(Transform parent, CardData card)
         {
             Color elemColor = MonsterArtLoader.GetElementColor(card.element);
 
@@ -1601,9 +2007,30 @@ namespace MonsterCardGame.UI
                 }
                 frameImg.raycastTarget = false;
 
-                // Top-Center Summon Cost Number (Inscribed inside top medallion socket)
-                var txtCost = GameBootstrapper.CreateText(cardObj.transform, "CostText", card.cost.ToString(), 14,
-                    new Color(0.92f, 0.95f, 1f), TextAnchor.MiddleCenter, new Vector2(0, -11f), new Vector2(28, 22));
+                // Top-Left Clan / Tribe Emblem Badge (enlarged & inset cleanly away from frame edges)
+                Sprite clanSprite = MonsterArtLoader.GetClanEmblemSprite(card.tribe);
+                if (clanSprite != null)
+                {
+                    var clanObj = new GameObject("ClanEmblemBadge");
+                    clanObj.transform.SetParent(cardObj.transform, false);
+                    var rectClan = clanObj.AddComponent<RectTransform>();
+                    rectClan.anchorMin = new Vector2(0f, 1f);
+                    rectClan.anchorMax = new Vector2(0f, 1f);
+                    rectClan.sizeDelta = new Vector2(35f, 35f);
+                    rectClan.anchoredPosition = new Vector2(21.5f, -21.5f);
+                    var clanImg = clanObj.AddComponent<Image>();
+                    clanImg.sprite = clanSprite;
+                    clanImg.color = Color.white;
+                    clanImg.preserveAspect = true;
+                    clanImg.raycastTarget = false;
+                }
+
+                // Top-Center Summon Cost Number (Inscribed inside top medallion socket; shows discounted cost in green)
+                var gmHand = GameManager.Instance;
+                int effHandCost = (gmHand != null && gmHand.humanPlayer != null) ? gmHand.humanPlayer.GetEffectiveCardCost(card) : card.cost;
+                Color costNumCol = effHandCost < card.cost ? new Color(0.45f, 1f, 0.55f) : new Color(0.92f, 0.95f, 1f);
+                var txtCost = GameBootstrapper.CreateText(cardObj.transform, "CostText", effHandCost.ToString(), 14,
+                    costNumCol, TextAnchor.MiddleCenter, new Vector2(0, -11f), new Vector2(28, 22));
                 txtCost.rectTransform.anchorMin = new Vector2(0.5f, 1f);
                 txtCost.rectTransform.anchorMax = new Vector2(0.5f, 1f);
                 txtCost.rectTransform.anchoredPosition = new Vector2(0, -11f);
@@ -1643,12 +2070,12 @@ namespace MonsterCardGame.UI
                     cardImg.preserveAspect = false;
                     outline.enabled = false;
 
-                    // Top-Center Cost Number inside the Sapphire Scroll Medallion
+                    // Top-Center Cost Number inside the Sapphire Scroll Medallion (Accurately Centered)
                     var txtCost = GameBootstrapper.CreateText(cardObj.transform, "CostText", card.cost.ToString(), 14,
-                        new Color(0.92f, 0.95f, 1f), TextAnchor.MiddleCenter, new Vector2(0f, -9.5f), new Vector2(28f, 22f));
+                        new Color(0.92f, 0.95f, 1f), TextAnchor.MiddleCenter, new Vector2(0f, -14f), new Vector2(28f, 22f));
                     txtCost.rectTransform.anchorMin = new Vector2(0.5f, 1f);
                     txtCost.rectTransform.anchorMax = new Vector2(0.5f, 1f);
-                    txtCost.rectTransform.anchoredPosition = new Vector2(0f, -9.5f);
+                    txtCost.rectTransform.anchoredPosition = new Vector2(0f, -14f);
                     txtCost.fontStyle = FontStyle.Bold;
                     txtCost.raycastTarget = false;
                     GameBootstrapper.AddTextShadow(txtCost);
@@ -1671,25 +2098,26 @@ namespace MonsterCardGame.UI
                     }
                     else
                     {
-                        var runeTxt = GameBootstrapper.CreateText(cardObj.transform, "SpellIdCenter", $"🔮\n#{card.name}", 20,
+                        var runeTxt = GameBootstrapper.CreateText(cardObj.transform, "SpellIdCenter", $"🔮\n#{card.id}", 20,
                             new Color(0.24f, 0.14f, 0.34f), TextAnchor.MiddleCenter, new Vector2(0f, 10f), new Vector2(94f, 64f));
                         runeTxt.fontStyle = FontStyle.Bold;
                         runeTxt.raycastTarget = false;
+
+                        // Fallback text only when no art is assigned (Localization-safe: hidden when art exists)
+                        string spellDisplayName = string.IsNullOrEmpty(card.name) || card.name == card.id.ToString() ? $"Spell #{card.id}" : card.name;
+                        var txtName = GameBootstrapper.CreateText(cardObj.transform, "NameText", $"{spellDisplayName} • T{Mathf.Max(1, card.tier_num)}", 10,
+                            new Color(0.20f, 0.10f, 0.04f), TextAnchor.MiddleCenter, new Vector2(0f, -57f), new Vector2(94f, 13f));
+                        txtName.fontStyle = FontStyle.Bold;
+                        txtName.raycastTarget = false;
+
+                        string shortRole = string.IsNullOrEmpty(card.role)
+                            ? "Tactical Spell"
+                            : card.role.Replace(" Spell", "").Trim();
+                        var txtAction = GameBootstrapper.CreateText(cardObj.transform, "ActionText", shortRole, 9,
+                            new Color(0.32f, 0.16f, 0.07f), TextAnchor.MiddleCenter, new Vector2(0f, -65.5f), new Vector2(94f, 12f));
+                        txtAction.fontStyle = FontStyle.Bold;
+                        txtAction.raycastTarget = false;
                     }
-
-                    // Clean antique sepia ink inscription tucked cleanly above lower wood roller
-                    var txtName = GameBootstrapper.CreateText(cardObj.transform, "NameText", $"#{card.name} • T{Mathf.Max(1, card.tier_num)}", 10,
-                        new Color(0.20f, 0.10f, 0.04f), TextAnchor.MiddleCenter, new Vector2(0f, -57f), new Vector2(94f, 13f));
-                    txtName.fontStyle = FontStyle.Bold;
-                    txtName.raycastTarget = false;
-
-                    string shortRole = string.IsNullOrEmpty(card.role)
-                        ? "Tactical Spell"
-                        : card.role.Replace(" Spell", "").Trim();
-                    var txtAction = GameBootstrapper.CreateText(cardObj.transform, "ActionText", shortRole, 9,
-                        new Color(0.32f, 0.16f, 0.07f), TextAnchor.MiddleCenter, new Vector2(0f, -65.5f), new Vector2(94f, 12f));
-                    txtAction.fontStyle = FontStyle.Bold;
-                    txtAction.raycastTarget = false;
                 }
                 else
                 {
@@ -1766,16 +2194,58 @@ namespace MonsterCardGame.UI
                     artImg.raycastTarget = false;
                 }
 
-                var costCircle = GameBootstrapper.CreateCirclePanel(cardObj.transform, "CostCircle", new Color(0.10f, 0.28f, 0.65f, 0.96f),
-                    new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-18, -18), new Vector2(32, 32));
-                var costOutline = costCircle.AddComponent<Outline>();
-                costOutline.effectColor = elemColor;
-                costOutline.effectDistance = new Vector2(1.5f, 1.5f);
-                var txtCost = GameBootstrapper.CreateText(costCircle.transform, "CostText", card.cost.ToString(), 16,
-                    new Color(0.92f, 0.95f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(32, 32));
+                // Classic Hand-Crafted Elemental Frame Overlay for Environment Card in Hand
+                var frameObj = new GameObject("FrameOverlay");
+                frameObj.transform.SetParent(cardObj.transform, false);
+                var rectFrame = frameObj.AddComponent<RectTransform>();
+                rectFrame.anchorMin = Vector2.zero;
+                rectFrame.anchorMax = Vector2.one;
+                rectFrame.sizeDelta = Vector2.zero;
+                rectFrame.anchoredPosition = Vector2.zero;
+                var frameImg = frameObj.AddComponent<Image>();
+                Sprite frameSprite = MonsterArtLoader.GetCardFrameOverlaySprite(card.element);
+                if (frameSprite != null)
+                {
+                    frameImg.sprite = frameSprite;
+                    frameImg.color = Color.white;
+                    frameImg.preserveAspect = false;
+                }
+                frameImg.raycastTarget = false;
+
+                // Top-Center Summon Cost Number (Inscribed inside top medallion socket; shows discounted cost in green)
+                var gmHand = GameManager.Instance;
+                int effHandCost = (gmHand != null && gmHand.humanPlayer != null) ? gmHand.humanPlayer.GetEffectiveCardCost(card) : card.cost;
+                Color costNumCol = effHandCost < card.cost ? new Color(0.45f, 1f, 0.55f) : new Color(0.92f, 0.95f, 1f);
+                var txtCost = GameBootstrapper.CreateText(cardObj.transform, "CostText", effHandCost.ToString(), 14,
+                    costNumCol, TextAnchor.MiddleCenter, new Vector2(0, -11f), new Vector2(28, 22));
+                txtCost.rectTransform.anchorMin = new Vector2(0.5f, 1f);
+                txtCost.rectTransform.anchorMax = new Vector2(0.5f, 1f);
+                txtCost.rectTransform.anchoredPosition = new Vector2(0, -11f);
                 txtCost.fontStyle = FontStyle.Bold;
                 txtCost.raycastTarget = false;
+                GameBootstrapper.AddTextShadow(txtCost);
 
+                // Bottom-Left Socket: Infinity symbol ∞ representing non-combat / boundless atmospheric presence
+                var txtAtk = GameBootstrapper.CreateText(cardObj.transform, "AtkText", "∞", 17,
+                    new Color(0.92f, 0.96f, 1f), TextAnchor.MiddleCenter, new Vector2(17.5f, 20.5f), new Vector2(26, 22));
+                txtAtk.rectTransform.anchorMin = new Vector2(0f, 0f);
+                txtAtk.rectTransform.anchorMax = new Vector2(0f, 0f);
+                txtAtk.rectTransform.anchoredPosition = new Vector2(17.5f, 20.5f);
+                txtAtk.fontStyle = FontStyle.Bold;
+                txtAtk.raycastTarget = false;
+                GameBootstrapper.AddTextShadow(txtAtk);
+
+                // Bottom-Right Socket: Infinity symbol ∞ representing permanent weather duration
+                var txtDef = GameBootstrapper.CreateText(cardObj.transform, "DefText", "∞", 17,
+                    new Color(0.92f, 0.96f, 1f), TextAnchor.MiddleCenter, new Vector2(-17.5f, 20.5f), new Vector2(26, 22));
+                txtDef.rectTransform.anchorMin = new Vector2(1f, 0f);
+                txtDef.rectTransform.anchorMax = new Vector2(1f, 0f);
+                txtDef.rectTransform.anchoredPosition = new Vector2(-17.5f, 20.5f);
+                txtDef.fontStyle = FontStyle.Bold;
+                txtDef.raycastTarget = false;
+                GameBootstrapper.AddTextShadow(txtDef);
+
+                // Center Fallback icon only if artwork is missing (100% clean card when art exists)
                 if (envArt == null)
                 {
                     string envEmoji = MonsterArtLoader.GetEnvironmentEmoji(card.element);
@@ -1783,46 +2253,28 @@ namespace MonsterCardGame.UI
                         elemColor, TextAnchor.MiddleCenter, new Vector2(0, 22), new Vector2(110, 46));
                     iconObj.raycastTarget = false;
                 }
-
-                var namePanel = GameBootstrapper.CreatePanel(cardObj.transform, "NamePlate", new Color(0.08f, 0.14f, 0.18f, 0.92f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -16), new Vector2(130, 22));
-                var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", card.name, 13,
-                    Color.Lerp(elemColor, Color.white, 0.35f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(126, 22));
-                txtName.fontStyle = FontStyle.Bold;
-                txtName.raycastTarget = false;
-
-                var descPanel = GameBootstrapper.CreatePanel(cardObj.transform, "DescPanel", new Color(0.05f, 0.08f, 0.11f, 0.85f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -46), new Vector2(130, 40));
-                var txtDesc = GameBootstrapper.CreateText(descPanel.transform, "DescText", card.description, 12,
-                    new Color(0.9f, 0.95f, 0.95f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(126, 38));
-                txtDesc.fontStyle = FontStyle.Bold;
-                txtDesc.raycastTarget = false;
-
-                var actionBadge = GameBootstrapper.CreatePanel(cardObj.transform, "ActionBadge", new Color(0.15f, 0.34f, 0.48f, 0.95f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -72), new Vector2(124, 22));
-                var txtAction = GameBootstrapper.CreateText(actionBadge.transform, "ActionText", $"Shared Arena • {card.duration}T", 11,
-                    new Color(0.9f, 0.98f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(120, 20));
-                txtAction.fontStyle = FontStyle.Bold;
-                txtAction.raycastTarget = false;
             }
             else if (card.cardType == CardType.Leader)
             {
                 Color spiritCatCol = MonsterArtLoader.GetSpiritCategoryColor(card, true);
 
-                // Circular Medallion Halo (no rectangular card frame — genuine circular Spirit coin)
-                var haloObj = GameBootstrapper.CreateCirclePanel(cardObj.transform, "LeaderMedallionHalo", new Color(0.05f, 0.06f, 0.10f, 0.96f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 18f), new Vector2(126f, 126f));
+                // Medallion Halo for hover / selection highlight
+                var haloObj = GameBootstrapper.CreateCirclePanel(cardObj.transform, "LeaderMedallionHalo", Color.clear,
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 16f), new Vector2(134f, 134f));
                 haloObj.GetComponent<Image>().raycastTarget = false;
                 var haloOutline = haloObj.AddComponent<Outline>();
-                haloOutline.effectColor = Color.Lerp(spiritCatCol, Color.white, 0.35f);
+                haloOutline.effectColor = Color.Lerp(spiritCatCol, Color.white, 0.55f);
                 haloOutline.effectDistance = new Vector2(2f, 2f);
+                haloOutline.enabled = false;
 
-                // Masked Circular Disc for clean edge-to-edge oil-painting medallion art
-                var discObj = GameBootstrapper.CreateCirclePanel(haloObj.transform, "LeaderMedallionDisc", new Color(0.03f, 0.04f, 0.08f, 1f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(118f, 118f));
-                discObj.GetComponent<Image>().raycastTarget = false;
-                var discMask = discObj.AddComponent<Mask>();
-                discMask.showMaskGraphic = true;
+                // Circular Medallion Root - displays the user's full unhindered circular frame and art with 100% transparent background
+                var discObj = new GameObject("LeaderMedallionDisc");
+                discObj.transform.SetParent(cardObj.transform, false);
+                var discRt = discObj.AddComponent<RectTransform>();
+                discRt.anchorMin = new Vector2(0.5f, 0.5f);
+                discRt.anchorMax = new Vector2(0.5f, 0.5f);
+                discRt.anchoredPosition = new Vector2(0f, 16f);
+                discRt.sizeDelta = new Vector2(134f, 134f);
 
                 if (customArt != null)
                 {
@@ -1831,7 +2283,7 @@ namespace MonsterCardGame.UI
                     var rectArt = artObj.AddComponent<RectTransform>();
                     rectArt.anchorMin = Vector2.zero;
                     rectArt.anchorMax = Vector2.one;
-                    rectArt.sizeDelta = new Vector2(12f, 12f);
+                    rectArt.sizeDelta = Vector2.zero; // Full edge-to-edge fit showing the full circular frame!
                     rectArt.anchoredPosition = Vector2.zero;
                     var artImg = artObj.AddComponent<Image>();
                     artImg.sprite = customArt;
@@ -1841,36 +2293,28 @@ namespace MonsterCardGame.UI
                 }
                 else
                 {
-                    var crestObj = new GameObject("SpiritCardCrest");
-                    crestObj.transform.SetParent(discObj.transform, false);
-                    var crestRt = crestObj.AddComponent<RectTransform>();
-                    crestRt.anchorMin = new Vector2(0.5f, 0.5f);
-                    crestRt.anchorMax = new Vector2(0.5f, 0.5f);
-                    crestRt.sizeDelta = new Vector2(84f, 84f);
-                    crestRt.anchoredPosition = Vector2.zero;
-                    var crestImg = crestObj.AddComponent<Image>();
-                    crestImg.sprite = GameBootstrapper.GetSpiritCrestSprite();
-                    crestImg.color = Color.Lerp(spiritCatCol, Color.white, 0.25f);
-                    crestImg.raycastTarget = false;
+                    var crestObj = GameBootstrapper.CreateCirclePanel(discObj.transform, "SpiritCardCrest",
+                        Color.Lerp(new Color(0.08f, 0.12f, 0.20f, 0.95f), spiritCatCol, 0.35f),
+                        new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(126f, 126f));
+                    crestObj.GetComponent<Image>().raycastTarget = false;
+                    var crestArt = new GameObject("CrestSymbol");
+                    crestArt.transform.SetParent(crestObj.transform, false);
+                    var crestArtRt = crestArt.AddComponent<RectTransform>();
+                    crestArtRt.anchorMin = new Vector2(0.5f, 0.5f);
+                    crestArtRt.anchorMax = new Vector2(0.5f, 0.5f);
+                    crestArtRt.sizeDelta = new Vector2(88f, 88f);
+                    crestArtRt.anchoredPosition = Vector2.zero;
+                    var crestArtImg = crestArt.AddComponent<Image>();
+                    crestArtImg.sprite = GameBootstrapper.GetSpiritCrestSprite();
+                    crestArtImg.color = Color.Lerp(spiritCatCol, Color.white, 0.25f);
+                    crestArtImg.raycastTarget = false;
                 }
 
-                // Sculpted circular metallic bezel rim over the masked disc
-                var rimObj = new GameObject("SpiritCircularRim");
-                rimObj.transform.SetParent(haloObj.transform, false);
-                var rimRt = rimObj.AddComponent<RectTransform>();
-                rimRt.anchorMin = new Vector2(0.5f, 0.5f);
-                rimRt.anchorMax = new Vector2(0.5f, 0.5f);
-                rimRt.sizeDelta = new Vector2(128f, 128f);
-                var rimImg = rimObj.AddComponent<Image>();
-                rimImg.sprite = GameBootstrapper.GetCircularSpiritRimSprite();
-                rimImg.color = Color.Lerp(spiritCatCol, Color.white, 0.35f);
-                rimImg.raycastTarget = false;
-
                 var tagBadge = GameBootstrapper.CreatePanel(cardObj.transform, "LeaderBadge", Color.Lerp(new Color(0.08f, 0.12f, 0.20f), spiritCatCol, 0.35f),
-                    new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(28f, -12f), new Vector2(46f, 16f));
+                    new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(30f, -12f), new Vector2(56f, 16f));
                 tagBadge.GetComponent<Image>().raycastTarget = false;
                 var txtTag = GameBootstrapper.CreateText(tagBadge.transform, "TagText", "SPIRIT", 8,
-                    Color.Lerp(spiritCatCol, Color.white, 0.55f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(44f, 14f));
+                    Color.Lerp(spiritCatCol, Color.white, 0.55f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(54f, 14f));
                 txtTag.fontStyle = FontStyle.Bold;
                 txtTag.raycastTarget = false;
 
@@ -1899,9 +2343,10 @@ namespace MonsterCardGame.UI
                 txtName.resizeTextMaxSize = 10;
                 txtName.raycastTarget = false;
 
+                string tribeDisplay = MonsterArtLoader.GetTribeDisplayName(card.tribe);
                 string tribeText = string.IsNullOrEmpty(card.tribe)
                     ? "Commander Spirit"
-                    : $"{MonsterArtLoader.GetTribeEmoji(card.tribe)} {card.tribe}";
+                    : $"{MonsterArtLoader.GetTribeEmoji(card.tribe)} {tribeDisplay} Clan";
                 var actionBadge = GameBootstrapper.CreatePanel(cardObj.transform, "ActionBadge", Color.Lerp(new Color(0.08f, 0.12f, 0.20f), spiritCatCol, 0.32f),
                     new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -77f), new Vector2(128f, 20f));
                 actionBadge.GetComponent<Image>().raycastTarget = false;
@@ -1926,7 +2371,65 @@ namespace MonsterCardGame.UI
 
             var numTr = detailCardArt.transform.Find("DetailBigNumber");
             var spellSymTr = detailCardArt.transform.Find("InspectorSpellSymbol");
+            var clanBadgeTr = detailCardArt.transform.Find("InspectorClanEmblem");
             var detailStandby = detailCardArt.GetComponent<MonsterStandbyAnimator>();
+
+            Sprite inspectorClanSprite = (data.cardType == CardType.Monster)
+                ? MonsterArtLoader.GetClanEmblemSprite(data.tribe)
+                : null;
+            if (inspectorClanSprite != null)
+            {
+                Image clanImg;
+                RectTransform clanRect;
+                if (clanBadgeTr == null)
+                {
+                    var clanObj = new GameObject("InspectorClanEmblem");
+                    clanObj.transform.SetParent(detailCardArt.transform, false);
+                    clanRect = clanObj.AddComponent<RectTransform>();
+                    clanImg = clanObj.AddComponent<Image>();
+                    clanImg.raycastTarget = false;
+                }
+                else
+                {
+                    clanBadgeTr.gameObject.SetActive(true);
+                    clanRect = clanBadgeTr.GetComponent<RectTransform>();
+                    clanImg = clanBadgeTr.GetComponent<Image>();
+                }
+                if (clanRect != null)
+                {
+                    clanRect.anchorMin = new Vector2(0f, 1f);
+                    clanRect.anchorMax = new Vector2(0f, 1f);
+                    clanRect.sizeDelta = new Vector2(44f, 44f);
+                    clanRect.anchoredPosition = new Vector2(27f, -27f);
+                }
+                if (clanImg != null)
+                {
+                    clanImg.sprite = inspectorClanSprite;
+                    clanImg.preserveAspect = true;
+                    clanImg.color = Color.white;
+                }
+            }
+            else if (clanBadgeTr != null)
+            {
+                clanBadgeTr.gameObject.SetActive(false);
+            }
+
+            if (data.cardType == CardType.Environment)
+            {
+                if (detailStandby != null) detailStandby.ClearStandby();
+                if (spellSymTr != null) spellSymTr.gameObject.SetActive(false);
+                if (clanBadgeTr != null) clanBadgeTr.gameObject.SetActive(false);
+                if (numTr != null) numTr.gameObject.SetActive(false);
+
+                detailCardArt.preserveAspect = true;
+                detailCardArt.color = Color.white;
+                Sprite envFramed = MonsterArtLoader.GetEnvironmentFramedSprite(data) ?? customArt;
+                if (envFramed != null)
+                {
+                    detailCardArt.sprite = envFramed;
+                }
+                return;
+            }
 
             if (data.cardType == CardType.Spell)
             {
@@ -2091,14 +2594,13 @@ namespace MonsterCardGame.UI
 
             if (detailDescText != null)
             {
-                string desc = string.IsNullOrEmpty(data.description)
-                    ? $"Tactical {data.element} monster with high battlefield combat capabilities."
-                    : data.description;
-                detailDescText.text = $"📜 Ability: {desc}";
+                detailDescText.supportRichText = true;
+                detailDescText.text = FormatMonsterAbilityRichText(data, instance);
             }
 
             if (detailStatusText != null)
             {
+                detailStatusText.supportRichText = true;
                 if (instance != null)
                 {
                     if (isPlayer)
@@ -2128,19 +2630,27 @@ namespace MonsterCardGame.UI
 
                         if (instance.HasActiveSkill && CombatSystem.Instance != null && instance.currentSlot != null)
                         {
-                            var abState = CombatSystem.Instance.GetAbilityState(gm.humanPlayer, gm.aiPlayer, instance.currentSlot.slotIndex, out int cost, out string _);
-                            string abTag = abState switch
+                            var st1 = CombatSystem.Instance.GetAbilityState(gm.humanPlayer, gm.aiPlayer, instance.currentSlot.slotIndex, 0, out int c1, out string _);
+                            string tag1 = st1 == CombatSystem.AbilityReadyState.Ready
+                                ? $"<color=#2EE6FF>🔵 Skill 1 Ready ({c1}💧)</color>"
+                                : (st1 == CombatSystem.AbilityReadyState.AlreadyUsed ? "<color=#78B890>🔵 Skill 1 Used ✓</color>" : $"<color=#8CA8C8>🔵 Skill 1 ({c1}💧)</color>");
+
+                            if (instance.ActiveSkillCount >= 2)
                             {
-                                CombatSystem.AbilityReadyState.Ready => $"⚡ Aura Ready ({cost}⚡) — Click ⚡ Flash / 2x Click",
-                                CombatSystem.AbilityReadyState.AlreadyUsed => "✓ Skill Used",
-                                CombatSystem.AbilityReadyState.NotEnoughPower => $"⚡ Need {cost}⚡",
-                                CombatSystem.AbilityReadyState.NoValidTarget => "🎯 No Target",
-                                CombatSystem.AbilityReadyState.Silenced => "🔒 Silenced",
-                                CombatSystem.AbilityReadyState.Frozen => "❄️ Frozen",
-                                _ => $"⏳ Skill ({cost}⚡)"
-                            };
-                            detailStatusText.text = $"{atkStatus}\n{abTag}";
-                            detailStatusText.color = (abState == CombatSystem.AbilityReadyState.Ready) ? new Color(0.35f, 1f, 0.75f) : statusCol;
+                                var st2 = CombatSystem.Instance.GetAbilityState(gm.humanPlayer, gm.aiPlayer, instance.currentSlot.slotIndex, 1, out int c2, out string _);
+                                string tag2 = st2 == CombatSystem.AbilityReadyState.Ready
+                                    ? $"<color=#FF5263>🔴 Skill 2 Ready ({c2}💧)</color>"
+                                    : (st2 == CombatSystem.AbilityReadyState.AlreadyUsed ? "<color=#78B890>🔴 Skill 2 Used ✓</color>" : $"<color=#C88C94>🔴 Skill 2 ({c2}💧)</color>");
+                                detailStatusText.text = $"{atkStatus}\n{tag1}   |   {tag2}";
+                                detailStatusText.color = (st1 == CombatSystem.AbilityReadyState.Ready || st2 == CombatSystem.AbilityReadyState.Ready)
+                                    ? new Color(0.88f, 0.96f, 1f)
+                                    : statusCol;
+                            }
+                            else
+                            {
+                                detailStatusText.text = $"{atkStatus}\n{tag1}";
+                                detailStatusText.color = (st1 == CombatSystem.AbilityReadyState.Ready) ? new Color(0.35f, 1f, 0.75f) : statusCol;
+                            }
                         }
                         else
                         {
@@ -2150,15 +2660,51 @@ namespace MonsterCardGame.UI
                     }
                     else
                     {
-                        if (!instance.canAttack && gm != null && instance.summonedTurn == gm.currentTurn)
+                        string enemyBaseStatus;
+                        Color enemyStatusCol;
+                        if (instance.frozenTurns > 0)
                         {
-                            detailStatusText.text = "💤 Newly summoned enemy monster (Sleeping this turn).";
-                            detailStatusText.color = new Color(0.7f, 0.7f, 0.9f);
+                            enemyBaseStatus = $"❄️ Frozen Enemy ({instance.frozenTurns}T)";
+                            enemyStatusCol = new Color(0.55f, 0.90f, 1f);
+                        }
+                        else if (!instance.canAttack && gm != null && instance.summonedTurn == gm.currentTurn)
+                        {
+                            enemyBaseStatus = "💤 Newly summoned enemy (Sleeping this turn)";
+                            enemyStatusCol = new Color(0.75f, 0.78f, 0.95f);
                         }
                         else
                         {
-                            detailStatusText.text = "🎯 Hostile target on the battlefield.";
-                            detailStatusText.color = new Color(1f, 0.45f, 0.45f);
+                            enemyBaseStatus = "🎯 Hostile enemy on the battlefield";
+                            enemyStatusCol = new Color(1f, 0.50f, 0.50f);
+                        }
+
+                        if (instance.HasActiveSkill && CombatSystem.Instance != null && instance.currentSlot != null && gm != null)
+                        {
+                            var st1 = CombatSystem.Instance.GetAbilityState(gm.aiPlayer, gm.humanPlayer, instance.currentSlot.slotIndex, 0, out int c1, out string _);
+                            string sName1 = CombatSystem.GetShortSkillName(instance.actives[0]);
+                            string tag1 = st1 == CombatSystem.AbilityReadyState.AlreadyUsed
+                                ? $"<color=#65FF9A>🔵 {sName1}: USED ✓</color>"
+                                : $"<color=#2EE6FF>🔵 {sName1} ({c1}💧)</color>";
+
+                            if (instance.ActiveSkillCount >= 2)
+                            {
+                                var st2 = CombatSystem.Instance.GetAbilityState(gm.aiPlayer, gm.humanPlayer, instance.currentSlot.slotIndex, 1, out int c2, out string _);
+                                string sName2 = CombatSystem.GetShortSkillName(instance.actives[1]);
+                                string tag2 = st2 == CombatSystem.AbilityReadyState.AlreadyUsed
+                                    ? $"<color=#65FF9A>🔴 {sName2}: USED ✓</color>"
+                                    : $"<color=#FF5263>🔴 {sName2} ({c2}💧)</color>";
+                                detailStatusText.text = $"{enemyBaseStatus}\n{tag1}   |   {tag2}";
+                            }
+                            else
+                            {
+                                detailStatusText.text = $"{enemyBaseStatus}\n{tag1}";
+                            }
+                            detailStatusText.color = enemyStatusCol;
+                        }
+                        else
+                        {
+                            detailStatusText.text = enemyBaseStatus;
+                            detailStatusText.color = enemyStatusCol;
                         }
                     }
                 }
@@ -2178,14 +2724,14 @@ namespace MonsterCardGame.UI
             UpdateDetailArtNumber(data);
 
             if (detailCostText != null) detailCostText.text = data.cost.ToString();
-            if (detailAtkText != null) detailAtkText.text = data.atk.ToString();
-            if (detailDefText != null) detailDefText.text = data.def.ToString();
+            if (detailAtkText != null) detailAtkText.text = (data.cardType == CardType.Environment) ? "∞" : data.atk.ToString();
+            if (detailDefText != null) detailDefText.text = (data.cardType == CardType.Environment) ? "∞" : data.def.ToString();
 
             string typeName = data.cardType switch
             {
                 CardType.Spell => "Magic Spell 🔮",
                 CardType.Environment => "Shared Environment 🌍",
-                CardType.Leader => "Commander Spirit 🔥",
+                CardType.Leader => "Commander Spirit 👑",
                 _ => "Monster Card 🐉"
             };
 
@@ -2205,14 +2751,27 @@ namespace MonsterCardGame.UI
                 }
             }
 
+            var gmDetail = GameManager.Instance;
+            int effDetailCost = (gmDetail != null && gmDetail.humanPlayer != null) ? gmDetail.humanPlayer.GetEffectiveCardCost(data) : data.cost;
+            if (detailCostText != null) detailCostText.text = effDetailCost.ToString();
+
             if (detailMetaText != null)
             {
-                string elemEmoji = MonsterArtLoader.GetElementEmoji(data.element);
-                string tribePart = string.IsNullOrEmpty(data.tribe) ? "" : $" • {MonsterArtLoader.GetTribeEmoji(data.tribe)} {data.tribe}";
-                detailMetaText.text = $"{elemEmoji} {data.element}{tribePart} • {typeName} • Cost: {data.cost} Mana";
-                detailMetaText.color = data.cardType == CardType.Leader
-                    ? MonsterArtLoader.GetSpiritCategoryColor(data, true)
-                    : MonsterArtLoader.GetElementColor(data.element);
+                if (data.cardType == CardType.Leader)
+                {
+                    string tribePart = string.IsNullOrEmpty(data.tribe) ? "Universal Clan" : $"{MonsterArtLoader.GetTribeEmoji(data.tribe)} {data.tribe} Clan";
+                    string costSuffix = effDetailCost < data.cost ? $"{effDetailCost} Mana (Base: {data.cost})" : $"{data.cost} Mana";
+                    detailMetaText.text = $"👑 {tribePart} • Commander Spirit • Cost: {costSuffix}";
+                    detailMetaText.color = MonsterArtLoader.GetSpiritCategoryColor(data, true);
+                }
+                else
+                {
+                    string elemEmoji = MonsterArtLoader.GetElementEmoji(data.element);
+                    string tribePart = string.IsNullOrEmpty(data.tribe) ? "" : $" • {MonsterArtLoader.GetTribeEmoji(data.tribe)} {data.tribe}";
+                    string costSuffix = effDetailCost < data.cost ? $"{effDetailCost} Mana (Base: {data.cost})" : $"{data.cost} Mana";
+                    detailMetaText.text = $"{elemEmoji} {data.element}{tribePart} • {typeName} • Cost: {costSuffix}";
+                    detailMetaText.color = MonsterArtLoader.GetElementColor(data.element);
+                }
             }
 
             if (detailStatsText != null)
@@ -2223,7 +2782,17 @@ namespace MonsterCardGame.UI
                 }
                 else if (data.cardType == CardType.Spell)
                 {
-                    detailStatsText.text = $"Spell Type: {data.spellType} (Instant Effect)";
+                    SpellDatabase.NormalizeSpellMetadata(data);
+                    string targetDesc = data.spellTargetMode switch
+                    {
+                        SpellTargetMode.Enemy => "Targeted Enemy",
+                        SpellTargetMode.Ally => "Targeted Ally",
+                        SpellTargetMode.Any => "Any Monster",
+                        SpellTargetMode.EmptySlot => "Empty Allied Slot",
+                        SpellTargetMode.AllyToEmptySlot => "Ally -> Empty Slot",
+                        _ => "Instant Global"
+                    };
+                    detailStatsText.text = $"Spell #{data.id} ({targetDesc})";
                 }
                 else if (data.cardType == CardType.Leader)
                 {
@@ -2231,26 +2800,96 @@ namespace MonsterCardGame.UI
                 }
                 else
                 {
-                    detailStatsText.text = $"Shared Slot • {data.duration} Turns";
+                    if (data is EnvironmentCardData ecd && GameManager.Instance != null && GameManager.Instance.activeEnvironment == ecd)
+                    {
+                        detailStatsText.text = $"Active Level {ecd.level} • Permanent Climate (∞) • Level 1-3 Escalation";
+                    }
+                    else
+                    {
+                        detailStatsText.text = "Permanent Battlefield Climate (∞) • Boundless Stats (ATK: ∞ / DEF: ∞)";
+                    }
                 }
             }
 
             if (detailDescText != null)
             {
-                string desc = string.IsNullOrEmpty(data.description)
-                    ? $"Strategic {typeName} card."
-                    : data.description;
-                detailDescText.text = $"📜 Effect: {desc}";
+                detailDescText.supportRichText = true;
+                if (data.cardType == CardType.Monster)
+                {
+                    detailDescText.text = FormatMonsterAbilityRichText(data, null);
+                }
+                else if (data.cardType == CardType.Spell)
+                {
+                    string desc = string.IsNullOrEmpty(data.description)
+                        ? "Tactical magic spell with immediate battlefield effects."
+                        : SanitizeAbilityText(data.description);
+                    detailDescText.text = $"<color=#D29BFF><b>🔮 SPELL EFFECT:</b></color>\n<color=#FFFFFF>{desc}</color>";
+                }
+                else if (data.cardType == CardType.Leader)
+                {
+                    string desc = string.IsNullOrEmpty(data.description)
+                        ? "Empowers allied clan monsters on the battlefield with passive aura bonuses."
+                        : SanitizeAbilityText(data.description);
+                    detailDescText.text = $"<color=#FFD866><b>👑 COMMANDER AURA:</b></color>\n<color=#FFFFFF>{desc}</color>";
+                }
+                else if (data.cardType == CardType.Environment)
+                {
+                    string elemName = EnvironmentCardData.NormalizeElement(data.element);
+                    int lvl = 1;
+                    if (data is EnvironmentCardData ed) lvl = Mathf.Clamp(ed.level, 1, 3);
+                    else if (GameManager.Instance != null && GameManager.Instance.activeEnvironment != null && GameManager.Instance.activeEnvironment.element == data.element)
+                        lvl = GameManager.Instance.activeEnvironment.level;
+
+                    if (EnvironmentCardData.TryGetProfile(elemName, out var prof))
+                    {
+                        int atkPct = Mathf.RoundToInt(prof.atkBuff[lvl - 1] * 100f);
+                        int armPct = Mathf.RoundToInt(prof.defArmor[lvl - 1] * 100f);
+                        int debPct = Mathf.RoundToInt(prof.oppDebuff[lvl - 1] * 100f);
+                        string debList = string.Join(", ", prof.debuffs);
+                        string armStr = armPct > 0 ? $" & +{armPct}% Armor" : "";
+
+                        detailDescText.text = $"<color=#58E085><b>🌍 [ENVIRONMENT EFFECT - LEVEL {lvl}]:</b></color>\n" +
+                            $"<color=#FFD866>• Aligned Allies ({elemName}):</color> <color=#FFFFFF>+{atkPct}% ATK{armStr}</color>\n" +
+                            $"<color=#FF7B72>• Opposing Elements ({debList}):</color> <color=#FFFFFF>-{debPct}% ATK</color>\n" +
+                            $"<color=#79C0FF>• Unique Weather Perk:</color> <color=#FFFFFF>{prof.perkDesc}</color>\n" +
+                            $"<color=#8B949E><i>Permanent across turns until countered by an opponent environment card.</i></color>";
+                    }
+                    else
+                    {
+                        string desc = string.IsNullOrEmpty(data.description)
+                            ? "Alters the battlefield climate, buffing aligned elements."
+                            : SanitizeAbilityText(data.description);
+                        detailDescText.text = $"<color=#58E085><b>🌍 ENVIRONMENT EFFECT:</b></color>\n<color=#FFFFFF>{desc}</color>";
+                    }
+                }
+                else
+                {
+                    string desc = string.IsNullOrEmpty(data.description)
+                        ? $"Strategic {typeName} card."
+                        : SanitizeAbilityText(data.description);
+                    detailDescText.text = $"<color=#E0E8F0><b>📜 EFFECT:</b></color>\n<color=#FFFFFF>{desc}</color>";
+                }
             }
 
             if (detailStatusText != null)
             {
                 var gm = GameManager.Instance;
-                bool canAfford = (gm != null && gm.humanPlayer.currentMana >= data.cost);
-                detailStatusText.text = canAfford
-                    ? "✨ Ready to play (Enough Mana available)."
-                    : "⚠️ Insufficient Mana to play this card.";
-                detailStatusText.color = canAfford ? new Color(0.2f, 1f, 0.5f) : new Color(1f, 0.45f, 0.45f);
+                bool canAfford = (gm != null && gm.humanPlayer.currentMana >= effDetailCost);
+                if (data.cardType == CardType.Spell && gm != null)
+                {
+                    bool spellReady = gm.IsSpellPlayable(gm.humanPlayer, gm.aiPlayer, data, out string spellReason);
+                    detailStatusText.text = spellReady
+                        ? "✨ Ready to cast (Auto-targets sole target or select on board)."
+                        : $"⚠️ {spellReason}";
+                    detailStatusText.color = spellReady ? new Color(0.2f, 1f, 0.5f) : new Color(1f, 0.45f, 0.45f);
+                }
+                else
+                {
+                    detailStatusText.text = canAfford
+                        ? "✨ Ready to play (Enough Mana available)."
+                        : "⚠️ Insufficient Mana to play this card.";
+                    detailStatusText.color = canAfford ? new Color(0.2f, 1f, 0.5f) : new Color(1f, 0.45f, 0.45f);
+                }
             }
         }
 
@@ -2299,7 +2938,7 @@ namespace MonsterCardGame.UI
                 }
                 else if (card.cardType == CardType.Leader)
                 {
-                    LogCombatMessage($"🔥 Selected Commander Spirit: [{MonsterArtLoader.FormatSpiritTitle(card)}] (Cost: {card.cost}) — Drag to Circular Spirit Altar or click 'Summon Spirit'.");
+                    LogCombatMessage($"👑 Selected Commander Spirit: [{MonsterArtLoader.FormatSpiritTitle(card)}] (Cost: {card.cost}) — Drag to Circular Spirit Altar or click 'Summon Spirit'.");
                 }
             }
 
@@ -2314,6 +2953,7 @@ namespace MonsterCardGame.UI
 
         public void DeselectHandCards()
         {
+            CancelPendingSpellTargeting();
             selectedCardForAction = null;
             HighlightAvailableSlots(false);
 
@@ -2339,6 +2979,8 @@ namespace MonsterCardGame.UI
 
         public void ClearBoardSelection()
         {
+            CancelPendingAbilityTargeting();
+            CancelPendingSpellTargeting();
             selectedBoardSlotIndex = -1;
             if (playerSlotViews != null)
             {
@@ -2356,23 +2998,60 @@ namespace MonsterCardGame.UI
             var gm = GameManager.Instance;
             var txt = playCardButton.GetComponentInChildren<Text>();
 
+            if (IsSelectingSpellTarget)
+            {
+                playCardButton.interactable = true;
+                if (txt != null)
+                {
+                    txt.text = pendingSpellTargetMode switch
+                    {
+                        SpellTargetMode.Enemy => "🎯 Click Enemy Target (Cancel)",
+                        SpellTargetMode.Ally => "✨ Click Ally Target (Cancel)",
+                        SpellTargetMode.Any => "🔄 Click Any Monster (Cancel)",
+                        SpellTargetMode.EmptySlot => "💀 Click Empty Slot (Cancel)",
+                        SpellTargetMode.AllyToEmptySlot => pendingSpellPrimarySelected
+                            ? "📍 Click Empty Slot (Cancel)"
+                            : "🔄 Click Ally to Move (Cancel)",
+                        _ => "Cancel Targeting"
+                    };
+                }
+                return;
+            }
+
+            if (IsSelectingAbilityTarget)
+            {
+                playCardButton.interactable = true;
+                if (txt != null)
+                {
+                    txt.text = pendingAbilityTargetMode == CombatSystem.AbilityTargetMode.SingleEnemy
+                        ? "🎯 Click Enemy Target (Cancel)"
+                        : "✨ Click Ally Target (Cancel)";
+                }
+                return;
+            }
+
             if (selectedCardForAction != null)
             {
                 bool isInstantPlayType = selectedCardForAction.cardType == CardType.Spell ||
                                          selectedCardForAction.cardType == CardType.Environment ||
                                          selectedCardForAction.cardType == CardType.Leader;
-                bool canPlaySelected = gm != null && gm.isPlayerTurn && isInstantPlayType &&
-                    selectedCardForAction.cost <= gm.humanPlayer.currentMana;
+                int effCost = gm != null && gm.humanPlayer != null ? gm.humanPlayer.GetEffectiveCardCost(selectedCardForAction) : selectedCardForAction.cost;
+                bool canPlaySelected = gm != null && gm.isPlayerTurn && isInstantPlayType && effCost <= gm.humanPlayer.currentMana;
+                string spellBlock = null;
+                if (canPlaySelected && selectedCardForAction.cardType == CardType.Spell)
+                {
+                    canPlaySelected = gm.IsSpellPlayable(gm.humanPlayer, gm.aiPlayer, selectedCardForAction, out spellBlock);
+                }
 
                 playCardButton.interactable = canPlaySelected;
                 if (txt != null)
                 {
                     if (selectedCardForAction.cardType == CardType.Spell)
-                        txt.text = $"Cast Spell ({selectedCardForAction.cost}💧)";
+                        txt.text = !string.IsNullOrEmpty(spellBlock) ? "⚠️ No Valid Target" : $"Cast Spell ({effCost}💧)";
                     else if (selectedCardForAction.cardType == CardType.Environment)
-                        txt.text = $"Activate Environment ({selectedCardForAction.cost}💧)";
+                        txt.text = $"Activate Environment ({effCost}💧)";
                     else if (selectedCardForAction.cardType == CardType.Leader)
-                        txt.text = $"Summon Spirit ({selectedCardForAction.cost}💧)";
+                        txt.text = $"Summon Spirit ({effCost}💧)";
                     else
                         txt.text = "Select Slot to Summon";
                 }
@@ -2427,6 +3106,67 @@ namespace MonsterCardGame.UI
 
             var targetPlayer = isPlayerSide ? gm.humanPlayer : gm.aiPlayer;
             var slot = (slotIndex >= 0 && slotIndex < targetPlayer.slots.Length) ? targetPlayer.slots[slotIndex] : null;
+
+            // 0A. If currently in Spell Target Selection Mode, validate & execute or advance step!
+            if (IsSelectingSpellTarget)
+            {
+                HandleSpellTargetSlotClick(slotIndex, isPlayerSide, slot);
+                return;
+            }
+
+            // 0B. If currently in Ability Target Selection Mode, clicking a valid monster slot fires the ability on that slot!
+            if (IsSelectingAbilityTarget)
+            {
+                if (pendingAbilityTargetMode == CombatSystem.AbilityTargetMode.SingleEnemy)
+                {
+                    if (!isPlayerSide && slot != null && slot.IsOccupied && slot.currentMonster != null && slot.currentMonster.IsAlive)
+                    {
+                        string actText = "";
+                        var srcSlot = (pendingAbilitySourceSlot >= 0 && gm.humanPlayer.slots != null && pendingAbilitySourceSlot < gm.humanPlayer.slots.Length)
+                            ? gm.humanPlayer.slots[pendingAbilitySourceSlot] : null;
+                        if (srcSlot != null && srcSlot.IsOccupied && srcSlot.currentMonster != null &&
+                            pendingAbilitySkillIndex >= 0 && pendingAbilitySkillIndex < srcSlot.currentMonster.actives.Count)
+                        {
+                            actText = srcSlot.currentMonster.actives[pendingAbilitySkillIndex];
+                        }
+                        if (CombatSystem.Instance != null && !CombatSystem.Instance.SkillTargetsCanHitStealth(actText) &&
+                            slot.currentMonster.HasPassiveSubstr("Night Stealth") != null)
+                        {
+                            MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                            LogCombatMessage("🌑 That enemy monster is hidden in Night Stealth and cannot be targeted by this skill!");
+                            return;
+                        }
+                        int srcSlotIdx = pendingAbilitySourceSlot;
+                        int sIdx = pendingAbilitySkillIndex;
+                        CancelPendingAbilityTargeting();
+                        TryActivateBoardAbility(srcSlotIdx, sIdx, slotIndex);
+                        return;
+                    }
+                    else
+                    {
+                        MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                        LogCombatMessage("🎯 Please click a highlighted ENEMY monster slot to hit with your ability, or right-click / press Cancel.");
+                        return;
+                    }
+                }
+                else if (pendingAbilityTargetMode == CombatSystem.AbilityTargetMode.SingleAlly)
+                {
+                    if (isPlayerSide && slot != null && slot.IsOccupied && slot.currentMonster != null && slot.currentMonster.IsAlive)
+                    {
+                        int srcSlotIdx = pendingAbilitySourceSlot;
+                        int sIdx = pendingAbilitySkillIndex;
+                        CancelPendingAbilityTargeting();
+                        TryActivateBoardAbility(srcSlotIdx, sIdx, slotIndex);
+                        return;
+                    }
+                    else
+                    {
+                        MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                        LogCombatMessage("✨ Please click a highlighted ALLIED monster slot to buff with your ability, or right-click / press Cancel.");
+                        return;
+                    }
+                }
+            }
 
             // 1. If the slot is occupied by a monster, select & inspect it immediately
             if (slot != null && slot.IsOccupied && slot.currentMonster != null)
@@ -2526,8 +3266,18 @@ namespace MonsterCardGame.UI
             gm.EvaluateAutoEndTurn(0.65f + flightDuration);
         }
 
-        public void OnSlotAbilityButtonClicked(int slotIndex)
+        public void OnSlotAbilityButtonClicked(int slotIndex, int skillIndex = 0)
         {
+            // If clicking the exact same ability button while already selecting a target, toggle/cancel targeting
+            if (IsSelectingAbilityTarget && pendingAbilitySourceSlot == slotIndex && pendingAbilitySkillIndex == skillIndex)
+            {
+                CancelPendingAbilityTargeting(silent: false);
+                UpdatePlayCardButtonState();
+                return;
+            }
+
+            CancelPendingAbilityTargeting();
+            CancelPendingSpellTargeting();
             DeselectHandCards();
             selectedBoardSlotIndex = slotIndex;
             if (playerSlotViews != null)
@@ -2537,44 +3287,186 @@ namespace MonsterCardGame.UI
                     if (playerSlotViews[i] != null) playerSlotViews[i].SetBoardSelected(i == selectedBoardSlotIndex);
                 }
             }
-            TryActivateBoardAbility(slotIndex);
+            TryActivateBoardAbility(slotIndex, skillIndex, -1);
         }
 
-        public void TryActivateBoardAbility(int slotIndex)
+        public void OnSlotSigilClickedNonActivate(int slotIndex, bool isPlayerSide, int skillIndex = 0)
+        {
+            // If player is currently choosing a target for an ability or spell, clicking a sigil on a target monster selects that monster!
+            if (IsSelectingAnyTarget)
+            {
+                OnSlotClicked(slotIndex, isPlayerSide);
+                return;
+            }
+
+            OnSlotClicked(slotIndex, isPlayerSide);
+
+            var gm = GameManager.Instance;
+            if (gm == null || CombatSystem.Instance == null) return;
+            var owner = isPlayerSide ? gm.humanPlayer : gm.aiPlayer;
+            var opp = isPlayerSide ? gm.aiPlayer : gm.humanPlayer;
+            var slot = (slotIndex >= 0 && slotIndex < owner.slots.Length) ? owner.slots[slotIndex] : null;
+            var m = (slot != null && slot.IsOccupied) ? slot.currentMonster : null;
+            if (m != null && m.HasActiveSkillAt(skillIndex))
+            {
+                string actText = m.actives[skillIndex];
+                string badge = skillIndex == 0 ? "🔵 [BLUE SIGIL]" : "🔴 [RED SIGIL]";
+                var st = CombatSystem.Instance.GetAbilityState(owner, opp, slotIndex, skillIndex, out int cost, out string _);
+                string statusTag = st == CombatSystem.AbilityReadyState.AlreadyUsed ? "USED THIS TURN ✓" : $"Cost: {cost}💧";
+                LogCombatMessage($"💀 Enemy Monster #{m.data.name} — {badge} ({statusTag}): {actText}", m.data);
+            }
+        }
+
+        public void NotifyAIMonsterSkillActivated(PlayerState caster, int slotIndex, MonsterInstance monster, int skillIndex, string actText, string logMsg)
+        {
+            if (monster == null || monster.data == null) return;
+
+            var gm = GameManager.Instance;
+            bool isPlayerSide = (gm != null && caster == gm.humanPlayer);
+            string colorBadge = skillIndex == 0 ? "🔵 [BLUE SIGIL]" : "🔴 [RED SIGIL]";
+            string shortSkillName = CombatSystem.GetShortSkillName(actText);
+
+            LogCombatMessage(logMsg, monster.data);
+
+            var canvas = GetComponentInParent<Canvas>();
+            var sv = GetSlotView(slotIndex, isPlayerSide);
+            if (sv != null)
+            {
+                sv.PlaySkillCastHighlight(skillIndex, shortSkillName);
+                if (canvas != null)
+                {
+                    Color waveCol = skillIndex == 0 ? SlotView.Skill1BlueColor : SlotView.Skill2RedColor;
+                    StartCoroutine(BattleAnimations.AnimateAbilityShockwave(canvas.transform, sv.transform, waveCol));
+                }
+            }
+
+            string sidePrefix = isPlayerSide ? "" : "💀 ENEMY ";
+            ShowAbilityBanner(monster.data, $"{sidePrefix}#{monster.data.name} {colorBadge} {actText}");
+            ShowMonsterDetails(monster.data, monster, isPlayerSide);
+        }
+
+        public void TryActivateBoardAbility(int slotIndex, int skillIndex = 0, int explicitTargetSlot = -1)
         {
             var gm = GameManager.Instance;
             if (gm == null || CombatSystem.Instance == null) return;
 
             var slot = (slotIndex >= 0 && slotIndex < gm.humanPlayer.slots.Length) ? gm.humanPlayer.slots[slotIndex] : null;
             var monster = (slot != null && slot.IsOccupied) ? slot.currentMonster : null;
-            string actText = (monster != null && monster.HasActiveSkill) ? monster.actives[0] : "";
+            if (monster == null || !monster.HasActiveSkill) return;
 
-            if (!CombatSystem.Instance.ActivateMonsterAbility(gm.humanPlayer, gm.aiPlayer, slotIndex, out string msg))
+            if (skillIndex < 0 || skillIndex >= monster.ActiveSkillCount)
+            {
+                skillIndex = 0;
+            }
+            string actText = monster.actives[skillIndex];
+            string shortSkillName = CombatSystem.GetShortSkillName(actText);
+            string colorBadge = skillIndex == 0 ? "🔵 [BLUE SIGIL]" : "🔴 [RED SIGIL]";
+
+            // 1. Check if the chosen skill is ready before entering target selection or executing
+            var readyState = CombatSystem.Instance.GetAbilityState(gm.humanPlayer, gm.aiPlayer, slotIndex, skillIndex, out int skillCost, out string notReadyReason);
+            if (readyState != CombatSystem.AbilityReadyState.Ready)
             {
                 MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
-                LogCombatMessage(msg);
-                if (monster != null)
-                {
-                    ShowMonsterDetails(monster.data, monster, true);
-                }
+                LogCombatMessage(notReadyReason);
+                ShowMonsterDetails(monster.data, monster, true);
                 UpdatePlayCardButtonState();
                 return;
             }
 
-            if (MonsterCardGame.Audio.SoundManager.Instance != null)
-                MonsterCardGame.Audio.SoundManager.Instance.PlayMonsterSkill(monster != null ? monster.data : null);
-
-            LogCombatMessage(msg, monster != null ? monster.data : null);
-            if (monster != null)
+            // 2. If this skill targets a specific monster (SingleEnemy or SingleAlly), auto-target if exactly 1 valid targetable monster exists (excluding Night Stealth unless ignore-stealth); otherwise enter Target Selection Mode!
+            var targetMode = CombatSystem.Instance.GetSkillTargetMode(actText, gm.humanPlayer, gm.aiPlayer);
+            if (explicitTargetSlot < 0 && targetMode != CombatSystem.AbilityTargetMode.None)
             {
-                var canvas = GetComponentInParent<Canvas>();
-                var sv = GetSlotView(slotIndex, true);
-                if (canvas != null && sv != null)
+                int validTargetCount = 0;
+                int soleValidSlot = -1;
+
+                if (targetMode == CombatSystem.AbilityTargetMode.SingleEnemy)
                 {
-                    StartCoroutine(BattleAnimations.AnimateAbilityShockwave(canvas.transform, sv.transform, MonsterArtLoader.GetElementColor(monster.data.element)));
+                    var validList = CombatSystem.Instance.GetTargetableEnemySlots(gm.aiPlayer, actText);
+                    validTargetCount = validList.Count;
+                    if (validTargetCount == 1) soleValidSlot = validList[0].slotIndex;
                 }
-                ShowAbilityBanner(monster.data, actText);
+                else
+                {
+                    if (gm.humanPlayer != null && gm.humanPlayer.slots != null)
+                    {
+                        for (int i = 0; i < gm.humanPlayer.slots.Length; i++)
+                        {
+                            var ts = gm.humanPlayer.slots[i];
+                            if (ts != null && ts.IsOccupied && ts.currentMonster != null && ts.currentMonster.IsAlive)
+                            {
+                                validTargetCount++;
+                                soleValidSlot = i;
+                            }
+                        }
+                    }
+                }
+
+                if (validTargetCount == 0)
+                {
+                    MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                    string sideWord = targetMode == CombatSystem.AbilityTargetMode.SingleEnemy
+                        ? "targetable enemy (Night Stealth blocks targeting)"
+                        : "allied";
+                    LogCombatMessage($"🎯 No valid {sideWord} monster on the board for [{shortSkillName}]!");
+                    ShowMonsterDetails(monster.data, monster, true);
+                    UpdatePlayCardButtonState();
+                    return;
+                }
+                else if (validTargetCount == 1)
+                {
+                    // Auto-target when only 1 valid target exists on the board
+                    explicitTargetSlot = soleValidSlot;
+                }
+                else
+                {
+                    pendingAbilitySourceSlot = slotIndex;
+                    pendingAbilitySkillIndex = skillIndex;
+                    pendingAbilityTargetMode = targetMode;
+                    RefreshAbilityTargetHighlights();
+                    ShowMonsterDetails(monster.data, monster, true);
+                    UpdatePlayCardButtonState();
+
+                    if (targetMode == CombatSystem.AbilityTargetMode.SingleEnemy)
+                    {
+                        LogCombatMessage($"🎯 {colorBadge} [{shortSkillName}] Armed! Click any highlighted ENEMY monster on the board to strike it (Right-click/Esc to cancel).", monster.data);
+                    }
+                    else
+                    {
+                        LogCombatMessage($"✨ {colorBadge} [{shortSkillName}] Armed! Click any highlighted ALLIED monster on the board to buff it (Right-click/Esc to cancel).", monster.data);
+                    }
+                    return;
+                }
             }
+
+            // 3. Execute the ability on the chosen target (or immediately for AOE/Global skills)
+            if (!CombatSystem.Instance.ActivateMonsterAbility(gm.humanPlayer, gm.aiPlayer, slotIndex, skillIndex, explicitTargetSlot, out string msg))
+            {
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                LogCombatMessage(msg);
+                ShowMonsterDetails(monster.data, monster, true);
+                UpdatePlayCardButtonState();
+                return;
+            }
+
+            CancelPendingAbilityTargeting();
+
+            if (MonsterCardGame.Audio.SoundManager.Instance != null)
+                MonsterCardGame.Audio.SoundManager.Instance.PlayMonsterSkill(monster.data);
+
+            LogCombatMessage(msg, monster.data);
+            var canvas = GetComponentInParent<Canvas>();
+            var sv = GetSlotView(slotIndex, true);
+            if (sv != null)
+            {
+                sv.PlaySkillCastHighlight(skillIndex, shortSkillName);
+                if (canvas != null)
+                {
+                    Color waveCol = skillIndex == 0 ? SlotView.Skill1BlueColor : SlotView.Skill2RedColor;
+                    StartCoroutine(BattleAnimations.AnimateAbilityShockwave(canvas.transform, sv.transform, waveCol));
+                }
+            }
+            ShowAbilityBanner(monster.data, $"{colorBadge} {actText}");
 
             gm.CheckGameOver();
             UpdateUI();
@@ -2592,8 +3484,361 @@ namespace MonsterCardGame.UI
             gm.EvaluateAutoEndTurn();
         }
 
+        private List<int> GetAliveAllySlotIndices(PlayerState p)
+        {
+            var res = new List<int>();
+            if (p == null || p.slots == null) return res;
+            for (int i = 0; i < p.slots.Length; i++)
+            {
+                if (p.slots[i] != null && p.slots[i].IsOccupied && p.slots[i].currentMonster != null && p.slots[i].currentMonster.IsAlive)
+                    res.Add(i);
+            }
+            return res;
+        }
+
+        private List<int> GetEmptySlotIndices(PlayerState p)
+        {
+            var res = new List<int>();
+            if (p == null || p.slots == null) return res;
+            for (int i = 0; i < p.slots.Length; i++)
+            {
+                if (p.slots[i] != null && !p.slots[i].IsOccupied) res.Add(i);
+            }
+            return res;
+        }
+
+        private bool ExecuteSpellAndFinalize(CardData spellCard, Vector3 startPos, int primarySlot, int secondarySlot, bool primaryIsAlly)
+        {
+            var gm = GameManager.Instance;
+            if (gm == null || spellCard == null) return false;
+            if (!gm.CastSpell(gm.humanPlayer, gm.aiPlayer, spellCard, primarySlot, secondarySlot, primaryIsAlly))
+                return false;
+
+            CancelPendingSpellTargeting();
+            LaunchPlayerUtilityCardFlight(spellCard, startPos);
+            DeselectHandCards();
+            UpdateUI();
+            return true;
+        }
+
+        /// <summary>
+        /// Initiates deterministic targeting for a player Spell:
+        /// - Returns true ONLY if the spell immediately cast (Global or 1 sole valid target or valid explicit slot drop).
+        /// - Returns false if unplayable OR if waiting for multi-target click on board (IsSelectingSpellTarget == true).
+        /// </summary>
+        public bool TryStartSpellCast(CardData spellCard, Vector3? explicitStartPos = null, int explicitSlot = -1, bool explicitIsAlly = false)
+        {
+            var gm = GameManager.Instance;
+            if (gm == null || !gm.isPlayerTurn || spellCard == null || spellCard.cardType != CardType.Spell) return false;
+
+            if (!gm.IsSpellPlayable(gm.humanPlayer, gm.aiPlayer, spellCard, out string reason))
+            {
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                LogCombatMessage($"❌ {reason}");
+                return false;
+            }
+
+            CancelPendingAbilityTargeting();
+            CancelPendingSpellTargeting();
+
+            SpellDatabase.NormalizeSpellMetadata(spellCard);
+            SpellTargetMode tmode = SpellDatabase.GetTargetMode(spellCard.id);
+            Vector3 startPos = explicitStartPos ?? GetPlayerHandCardWorldPos(spellCard);
+
+            var validEnemies = gm.GetValidSpellEnemies(gm.aiPlayer);
+            var aliveAllies = GetAliveAllySlotIndices(gm.humanPlayer);
+            var emptyAllies = GetEmptySlotIndices(gm.humanPlayer);
+
+            if (explicitSlot >= 0 && explicitSlot < 6)
+            {
+                if (tmode == SpellTargetMode.Global)
+                {
+                    return ExecuteSpellAndFinalize(spellCard, startPos, -1, -1, false);
+                }
+                if (tmode == SpellTargetMode.Enemy)
+                {
+                    if (!explicitIsAlly && validEnemies.Exists(e => e.slotIndex == explicitSlot))
+                        return ExecuteSpellAndFinalize(spellCard, startPos, explicitSlot, -1, false);
+                    MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                    LogCombatMessage(!explicitIsAlly
+                        ? "🌑 That enemy cannot be targeted (check Night Stealth or empty slot)!"
+                        : "🎯 Drop onto a valid ENEMY monster to cast this spell!");
+                    return false;
+                }
+                if (tmode == SpellTargetMode.Ally)
+                {
+                    if (explicitIsAlly && aliveAllies.Contains(explicitSlot))
+                        return ExecuteSpellAndFinalize(spellCard, startPos, explicitSlot, -1, true);
+                    MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                    LogCombatMessage("✨ Drop onto one of your ALLIED monsters to cast this spell!");
+                    return false;
+                }
+                if (tmode == SpellTargetMode.Any)
+                {
+                    if (explicitIsAlly && aliveAllies.Contains(explicitSlot))
+                        return ExecuteSpellAndFinalize(spellCard, startPos, explicitSlot, -1, true);
+                    if (!explicitIsAlly && validEnemies.Exists(e => e.slotIndex == explicitSlot))
+                        return ExecuteSpellAndFinalize(spellCard, startPos, explicitSlot, -1, false);
+                    MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                    LogCombatMessage("🔄 Drop onto any valid Ally or non-Stealthed Enemy monster!");
+                    return false;
+                }
+                if (tmode == SpellTargetMode.EmptySlot)
+                {
+                    if (explicitIsAlly && emptyAllies.Contains(explicitSlot))
+                        return ExecuteSpellAndFinalize(spellCard, startPos, explicitSlot, -1, true);
+                    MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                    LogCombatMessage("💀 Drop onto an EMPTY allied slot to revive there!");
+                    return false;
+                }
+                if (tmode == SpellTargetMode.AllyToEmptySlot)
+                {
+                    if (explicitIsAlly && aliveAllies.Contains(explicitSlot))
+                    {
+                        if (emptyAllies.Count == 1)
+                            return ExecuteSpellAndFinalize(spellCard, startPos, explicitSlot, emptyAllies[0], true);
+                        pendingSpellCard = spellCard;
+                        pendingSpellTargetMode = tmode;
+                        pendingSpellPrimarySlot = explicitSlot;
+                        pendingSpellPrimarySelected = true;
+                        pendingSpellStartPos = startPos;
+                        RefreshAbilityTargetHighlights();
+                        UpdatePlayCardButtonState();
+                        LogCombatMessage($"📍 [{spellCard.name}] Step 2/2: Click any highlighted EMPTY allied slot to relocate there!");
+                        return false;
+                    }
+                    MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                    LogCombatMessage("🔄 Drop onto an ALLIED monster to relocate!");
+                    return false;
+                }
+            }
+
+            if (tmode == SpellTargetMode.Global)
+            {
+                return ExecuteSpellAndFinalize(spellCard, startPos, -1, -1, false);
+            }
+
+            if (tmode == SpellTargetMode.Enemy)
+            {
+                if (validEnemies.Count == 1)
+                    return ExecuteSpellAndFinalize(spellCard, startPos, validEnemies[0].slotIndex, -1, false);
+
+                pendingSpellCard = spellCard;
+                pendingSpellTargetMode = tmode;
+                pendingSpellPrimarySlot = -1;
+                pendingSpellPrimarySelected = false;
+                pendingSpellStartPos = startPos;
+                RefreshAbilityTargetHighlights();
+                UpdatePlayCardButtonState();
+                LogCombatMessage($"🎯 [{spellCard.name}] Armed! Click any highlighted ENEMY monster to strike (Right-click/Esc to cancel).", spellCard);
+                return false;
+            }
+
+            if (tmode == SpellTargetMode.Ally)
+            {
+                if (aliveAllies.Count == 1)
+                    return ExecuteSpellAndFinalize(spellCard, startPos, aliveAllies[0], -1, true);
+
+                pendingSpellCard = spellCard;
+                pendingSpellTargetMode = tmode;
+                pendingSpellPrimarySlot = -1;
+                pendingSpellPrimarySelected = false;
+                pendingSpellStartPos = startPos;
+                RefreshAbilityTargetHighlights();
+                UpdatePlayCardButtonState();
+                LogCombatMessage($"✨ [{spellCard.name}] Armed! Click any highlighted ALLIED monster to buff (Right-click/Esc to cancel).", spellCard);
+                return false;
+            }
+
+            if (tmode == SpellTargetMode.Any)
+            {
+                if (aliveAllies.Count + validEnemies.Count == 1)
+                {
+                    if (aliveAllies.Count == 1) return ExecuteSpellAndFinalize(spellCard, startPos, aliveAllies[0], -1, true);
+                    return ExecuteSpellAndFinalize(spellCard, startPos, validEnemies[0].slotIndex, -1, false);
+                }
+
+                pendingSpellCard = spellCard;
+                pendingSpellTargetMode = tmode;
+                pendingSpellPrimarySlot = -1;
+                pendingSpellPrimarySelected = false;
+                pendingSpellStartPos = startPos;
+                RefreshAbilityTargetHighlights();
+                UpdatePlayCardButtonState();
+                LogCombatMessage($"🔄 [{spellCard.name}] Armed! Click ANY highlighted Ally or Enemy monster to invert its ATK/DEF.", spellCard);
+                return false;
+            }
+
+            if (tmode == SpellTargetMode.EmptySlot)
+            {
+                if (emptyAllies.Count == 1)
+                    return ExecuteSpellAndFinalize(spellCard, startPos, emptyAllies[0], -1, true);
+
+                pendingSpellCard = spellCard;
+                pendingSpellTargetMode = tmode;
+                pendingSpellPrimarySlot = -1;
+                pendingSpellPrimarySelected = false;
+                pendingSpellStartPos = startPos;
+                RefreshAbilityTargetHighlights();
+                UpdatePlayCardButtonState();
+                LogCombatMessage($"💀 [{spellCard.name}] Armed! Click any highlighted EMPTY allied slot to revive into.", spellCard);
+                return false;
+            }
+
+            // AllyToEmptySlot (#267)
+            if (aliveAllies.Count == 1 && emptyAllies.Count == 1)
+            {
+                return ExecuteSpellAndFinalize(spellCard, startPos, aliveAllies[0], emptyAllies[0], true);
+            }
+            if (aliveAllies.Count == 1)
+            {
+                pendingSpellCard = spellCard;
+                pendingSpellTargetMode = tmode;
+                pendingSpellPrimarySlot = aliveAllies[0];
+                pendingSpellPrimarySelected = true;
+                pendingSpellStartPos = startPos;
+                RefreshAbilityTargetHighlights();
+                UpdatePlayCardButtonState();
+                LogCombatMessage($"📍 [{spellCard.name}] Step 2/2: Click any highlighted EMPTY allied slot to relocate there.", spellCard);
+                return false;
+            }
+
+            pendingSpellCard = spellCard;
+            pendingSpellTargetMode = tmode;
+            pendingSpellPrimarySlot = -1;
+            pendingSpellPrimarySelected = false;
+            pendingSpellStartPos = startPos;
+            RefreshAbilityTargetHighlights();
+            UpdatePlayCardButtonState();
+            LogCombatMessage($"🔄 [{spellCard.name}] Step 1/2: Click the ALLIED monster you want to relocate.", spellCard);
+            return false;
+        }
+
+        private void HandleSpellTargetSlotClick(int slotIndex, bool isPlayerSide, BoardSlot slot)
+        {
+            var gm = GameManager.Instance;
+            if (gm == null || pendingSpellCard == null)
+            {
+                CancelPendingSpellTargeting();
+                return;
+            }
+
+            var card = pendingSpellCard;
+            var mode = pendingSpellTargetMode;
+            Vector3 startPos = pendingSpellStartPos != Vector3.zero ? pendingSpellStartPos : GetPlayerHandCardWorldPos(card);
+
+            if (mode == SpellTargetMode.Enemy)
+            {
+                if (!isPlayerSide && slot != null && slot.IsOccupied && slot.currentMonster != null && slot.currentMonster.IsAlive)
+                {
+                    if (slot.currentMonster.HasPassiveSubstr("Night Stealth") != null)
+                    {
+                        MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                        LogCombatMessage("🌑 That enemy monster is hidden in Night Stealth and cannot be targeted!");
+                        return;
+                    }
+                    ExecuteSpellAndFinalize(card, startPos, slotIndex, -1, false);
+                    return;
+                }
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                LogCombatMessage("🎯 Please click a highlighted ENEMY monster (or right-click / press Cancel).");
+                return;
+            }
+
+            if (mode == SpellTargetMode.Ally)
+            {
+                if (isPlayerSide && slot != null && slot.IsOccupied && slot.currentMonster != null && slot.currentMonster.IsAlive)
+                {
+                    ExecuteSpellAndFinalize(card, startPos, slotIndex, -1, true);
+                    return;
+                }
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                LogCombatMessage("✨ Please click a highlighted ALLIED monster (or right-click / press Cancel).");
+                return;
+            }
+
+            if (mode == SpellTargetMode.Any)
+            {
+                if (slot != null && slot.IsOccupied && slot.currentMonster != null && slot.currentMonster.IsAlive)
+                {
+                    if (!isPlayerSide && slot.currentMonster.HasPassiveSubstr("Night Stealth") != null)
+                    {
+                        MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                        LogCombatMessage("🌑 That enemy monster is hidden in Night Stealth and cannot be targeted!");
+                        return;
+                    }
+                    ExecuteSpellAndFinalize(card, startPos, slotIndex, -1, isPlayerSide);
+                    return;
+                }
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                LogCombatMessage("🔄 Please click any highlighted Ally or Enemy monster (or right-click / press Cancel).");
+                return;
+            }
+
+            if (mode == SpellTargetMode.EmptySlot)
+            {
+                if (isPlayerSide && slot != null && !slot.IsOccupied)
+                {
+                    ExecuteSpellAndFinalize(card, startPos, slotIndex, -1, true);
+                    return;
+                }
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                LogCombatMessage("💀 Please click a highlighted EMPTY allied slot to revive into (or right-click / press Cancel).");
+                return;
+            }
+
+            if (mode == SpellTargetMode.AllyToEmptySlot)
+            {
+                if (!pendingSpellPrimarySelected)
+                {
+                    if (isPlayerSide && slot != null && slot.IsOccupied && slot.currentMonster != null && slot.currentMonster.IsAlive)
+                    {
+                        var emptyAllies = GetEmptySlotIndices(gm.humanPlayer);
+                        if (emptyAllies.Count == 1)
+                        {
+                            ExecuteSpellAndFinalize(card, startPos, slotIndex, emptyAllies[0], true);
+                            return;
+                        }
+                        pendingSpellPrimarySlot = slotIndex;
+                        pendingSpellPrimarySelected = true;
+                        RefreshAbilityTargetHighlights();
+                        UpdatePlayCardButtonState();
+                        LogCombatMessage($"📍 [{card.name}] Step 2/2: Click any highlighted EMPTY allied slot to relocate [{slot.currentMonster.data.name}] there!");
+                        return;
+                    }
+                    MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                    LogCombatMessage("🔄 Step 1/2: Please click one of your ALLIED monsters to relocate.");
+                    return;
+                }
+                else
+                {
+                    if (isPlayerSide && slot != null && !slot.IsOccupied)
+                    {
+                        ExecuteSpellAndFinalize(card, startPos, pendingSpellPrimarySlot, slotIndex, true);
+                        return;
+                    }
+                    MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                    LogCombatMessage("📍 Step 2/2: Please click a highlighted EMPTY allied slot to complete relocation (or right-click to cancel).");
+                    return;
+                }
+            }
+        }
+
         private void OnPlayCardClicked()
         {
+            if (IsSelectingSpellTarget)
+            {
+                CancelPendingSpellTargeting(silent: false);
+                UpdatePlayCardButtonState();
+                return;
+            }
+            if (IsSelectingAbilityTarget)
+            {
+                CancelPendingAbilityTargeting(silent: false);
+                UpdatePlayCardButtonState();
+                return;
+            }
+
             var gm = GameManager.Instance;
             if (gm == null || !gm.isPlayerTurn) return;
 
@@ -2603,12 +3848,7 @@ namespace MonsterCardGame.UI
                 Vector3 startPos = GetPlayerHandCardWorldPos(chosenCard);
                 if (chosenCard.cardType == CardType.Spell)
                 {
-                    if (gm.CastSpell(gm.humanPlayer, gm.aiPlayer, chosenCard))
-                    {
-                        LaunchPlayerUtilityCardFlight(chosenCard, startPos);
-                        DeselectHandCards();
-                        UpdateUI();
-                    }
+                    TryStartSpellCast(chosenCard, startPos);
                 }
                 else if (chosenCard.cardType == CardType.Environment)
                 {
@@ -2992,12 +4232,12 @@ namespace MonsterCardGame.UI
             }
         }
 
-        public void ShowEnvironmentBanner(EnvironmentCardData envData, string activatorName)
+        public void ShowEnvironmentBanner(EnvironmentCardData envData, string activatorName, string actionVerb = "activated")
         {
             var canvas = GetComponentInParent<Canvas>();
             if (canvas != null)
             {
-                StartCoroutine(BattleAnimations.AnimateEnvironmentShift(canvas, envData, activatorName));
+                StartCoroutine(BattleAnimations.AnimateEnvironmentShift(canvas, envData, activatorName, actionVerb));
             }
             if (BattlefieldAtmosphereEngine.Instance != null && envData != null)
             {
@@ -3068,6 +4308,10 @@ namespace MonsterCardGame.UI
 
             gameOverPanel.SetActive(true);
 
+            var gm = GameManager.Instance;
+            string currentOppName = (gm != null && gm.aiPlayer != null) ? gm.aiPlayer.playerName : "Opponent";
+            string nextOppName = (gm != null && gm.currentOpponent == GameManager.OpponentModel.Gora) ? "Navi (Tactical Control AI)" : "Gora (Aggressive Combat AI)";
+
             if (isVictory)
             {
                 if (gameOverTitleText != null)
@@ -3077,7 +4321,7 @@ namespace MonsterCardGame.UI
                 }
                 if (gameOverSubtitleText != null)
                 {
-                    gameOverSubtitleText.text = "You crushed the enemy warlord and claimed supreme dominion over the arena!";
+                    gameOverSubtitleText.text = $"You crushed {currentOppName}!\n🔁 Next Opponent: {nextOppName}";
                     gameOverSubtitleText.color = new Color(0.85f, 1f, 0.9f);
                 }
                 if (gameOverModalOutline != null)
@@ -3094,7 +4338,7 @@ namespace MonsterCardGame.UI
                 }
                 if (gameOverSubtitleText != null)
                 {
-                    gameOverSubtitleText.text = "Your army fought bravely to the last breath... Regroup for the next battle!";
+                    gameOverSubtitleText.text = $"{currentOppName} overpowered your forces... Regroup for the next battle!\n🔁 Next Opponent: {nextOppName}";
                     gameOverSubtitleText.color = new Color(1f, 0.8f, 0.8f);
                 }
                 if (gameOverModalOutline != null)
@@ -3103,11 +4347,17 @@ namespace MonsterCardGame.UI
                 }
             }
 
+            if (restartGameButton != null)
+            {
+                var btnTxt = restartGameButton.GetComponentInChildren<Text>();
+                if (btnTxt != null) btnTxt.text = $"🔁 NEXT BATTLE VS {nextOppName}";
+            }
+
             if (gameOverStatsText != null)
             {
                 string stats =
-                    $"⏱️ Turns Elapsed: {turns} Tactical Turns\n" +
-                    $"❤️ Your Remaining HP: {playerHp} / 500 HP\n" +
+                    $"⏱️ Tactical Turns Elapsed: {turns}\n" +
+                    $"❤️ Your Commander Remaining HP: {playerHp} / 500 HP\n" +
                     $"💀 Enemy Commander HP: {enemyHp} / 500 HP\n" +
                     $"⚔️ Monsters Summoned: {monstersSummoned}\n" +
                     $"🔮 Spells Cast: {spellsCast}\n" +

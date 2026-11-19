@@ -546,7 +546,7 @@ namespace MonsterCardGame.UI
         /// <summary>
         /// Environment Shift Banner Animation
         /// </summary>
-        public static IEnumerator AnimateEnvironmentShift(Canvas canvas, MonsterCardGame.Data.EnvironmentCardData envData, string activatorName)
+        public static IEnumerator AnimateEnvironmentShift(Canvas canvas, MonsterCardGame.Data.EnvironmentCardData envData, string activatorName, string actionVerb = "activated")
         {
             if (canvas == null || envData == null) yield break;
 
@@ -562,13 +562,18 @@ namespace MonsterCardGame.UI
             outline.effectDistance = new Vector2(3.5f, 3.5f);
 
             string stars = new string('★', envData.level);
-            string title = $"{envEmoji} Weather Shift: {envData.name} ({stars} Level {envData.level})";
+            string verb = string.IsNullOrEmpty(actionVerb) ? "ACTIVATED" : actionVerb.ToUpperInvariant();
+            string title = $"{envEmoji} {envData.element.ToUpperInvariant()} REALM {verb}";
             var titleTxt = GameBootstrapper.CreateText(bannerObj.transform, "EnvTitle", title, 24,
                 Color.white, TextAnchor.UpperCenter, new Vector2(0, 18), new Vector2(700, 32));
+            titleTxt.fontStyle = FontStyle.Bold;
+            GameBootstrapper.AddTextShadow(titleTxt);
 
-            string sub = $"{activatorName} activated ({envData.element}) weather: {envData.description}";
-            var subTxt = GameBootstrapper.CreateText(bannerObj.transform, "EnvDesc", sub, 13,
+            string sub = $"{activatorName} • Shared Weather Level {envData.level} {stars} (Permanent until countered)";
+            var subTxt = GameBootstrapper.CreateText(bannerObj.transform, "EnvDesc", sub, 15,
                 elemColor, TextAnchor.LowerCenter, new Vector2(0, -18), new Vector2(700, 26));
+            subTxt.fontStyle = FontStyle.Bold;
+            GameBootstrapper.AddTextShadow(subTxt);
 
             yield return AnimatePopupBanner(bannerObj, 1.1f, 0.25f, 0.22f, 40f);
         }
@@ -1004,7 +1009,7 @@ namespace MonsterCardGame.UI
         }
 
         /// <summary>
-        /// Magical Battlefield Mirage Effect ("سراب سحري") clipped cleanly inside CenterBattleBoard (1200x688)
+        /// Magical Battlefield Mirage Effect clipped cleanly inside CenterBattleBoard (1200x688)
         /// when activating a Spell card. Transforms the arena with flowing iridescent caustic ripples,
         /// refractive prism sweep waves, and rising shimmering haze wisps without resizing arena_ground.
         /// </summary>

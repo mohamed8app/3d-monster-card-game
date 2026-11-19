@@ -56,7 +56,80 @@ namespace MonsterCardGame.Data
         ArcanePiercingShot = 26,
         DrawTwoAndStrike = 27,
         ReviveFromGraveyard = 28,
-        ManaStealAndAOE = 29
+        ManaStealAndAOE = 29,
+
+        // Redesigned 60 Tactical Spells (#241 - #300)
+        Spell241_SummoningSpark = 241,
+        Spell242_EtherealSurge = 242,
+        Spell243_PulseOfKnowledge = 243,
+        Spell244_DepthsSearch = 244,
+        Spell245_MonsterExtraction = 245,
+        Spell246_SoulTrade = 246,
+        Spell247_PermanentDrainRift = 247,
+        Spell248_ArcaneRecycling = 248,
+        Spell249_FallenHeroesCall = 249,
+        Spell250_AbundanceBalance = 250,
+        Spell251_BurningGraveEcho = 251,
+        Spell252_DoubleSacrificeChance = 252,
+        Spell253_HuntingSpark = 253,
+        Spell254_PiercingSnipeArrow = 254,
+        Spell255_SwiftGuillotine = 255,
+        Spell256_OverkillPierceShell = 256,
+        Spell257_ChainAdjacentBolt = 257,
+        Spell258_DecisiveDoomVerdict = 258,
+        Spell259_MercyKillBlade = 259,
+        Spell260_GrandArenaTempest = 260,
+        Spell261_GiantsEarthquake = 261,
+        Spell262_FatalHubrisRecoil = 262,
+        Spell263_DirectThroneStrike = 263,
+        Spell264_RestorativeMeteorRain = 264,
+        Spell265_FlashDispelOvergrowth = 265,
+        Spell266_UnifiedSiegeOrder = 266,
+        Spell267_TacticalRelocation = 267,
+        Spell268_CourageCharge = 268,
+        Spell269_DecisiveSpear = 269,
+        Spell270_ProtectiveBubble = 270,
+        Spell271_InstantCleanseElixir = 271,
+        Spell272_BlitzWarAwakening = 272,
+        Spell273_TwinStrikeFury = 273,
+        Spell274_IronCitadelShield = 274,
+        Spell275_KnightsRallyCry = 275,
+        Spell276_SacredLeaderElixir = 276,
+        Spell277_GrandPurityPulse = 277,
+        Spell278_GoldenEmergencyBastion = 278,
+        Spell279_ArmoredKnightCrowning = 279,
+        Spell280_PhoenixDoubleStand = 280,
+        Spell281_QuellMightHealLeader = 281,
+        Spell282_TacticalScaleReversal = 282,
+        Spell283_ShieldForSwordSacrifice = 283,
+        Spell284_FreeSparkActivation = 284,
+        Spell285_ArcaneSkillAmplifier = 285,
+        Spell286_LifeSiphonClaw = 286,
+        Spell287_DigitalCloneMirror = 287,
+        Spell288_RemainingManaDetonation = 288,
+        Spell289_SpiritualNeighborLink = 289,
+        Spell290_SpellbreakAndSilence = 290,
+        Spell291_SniperSpoils = 291,
+        Spell292_PactOfSwiftMight = 292,
+        Spell293_SupremeEnvHarmony = 293,
+        Spell294_TitansGuillotine = 294,
+        Spell295_LegendarySummonMirror = 295,
+        Spell296_EpicenterOfDestruction = 296,
+        Spell297_CrushingBalanceVerdict = 297,
+        Spell298_ClanAllianceBanner = 298,
+        Spell299_ArcaneFinaleMeteor = 299,
+        Spell300_ImmediateFieldRevive = 300
+    }
+
+    [Serializable]
+    public enum SpellTargetMode
+    {
+        Global = 0,
+        Enemy = 1,
+        Ally = 2,
+        Any = 3,
+        EmptySlot = 4,
+        AllyToEmptySlot = 5
     }
 
     [Serializable]
@@ -87,7 +160,8 @@ namespace MonsterCardGame.Data
         public List<string> active_skills = new List<string>();
 
         // Spell specific attributes
-        public SpellType spellType = SpellType.LinkWingsStrike;
+        public SpellType spellType = SpellType.Spell241_SummoningSpark;
+        public SpellTargetMode spellTargetMode = SpellTargetMode.Global;
         public int spellPower = 20;
 
         // Simulator evaluation attributes
@@ -119,6 +193,8 @@ namespace MonsterCardGame.Data
                 case "Dark": return ElementType.Dark;
                 case "Arcane":
                 case "Arcane Monsters": return ElementType.Arcane;
+                case "Desert":
+                case "Sand": return ElementType.Desert;
                 default: return ElementType.Fire;
             }
         }

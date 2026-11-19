@@ -42,7 +42,9 @@ namespace MonsterCardGame.Utils
             Texture2D tex = LoadCardTexture(key);
             if (tex != null)
             {
-                Sprite closeUp = (data != null && data.cardType == CardType.Spell)
+                // Full uncropped texture for Spells, Leaders/Spirits, and Environments
+                bool isFullFrameCard = (data != null && (data.cardType == CardType.Spell || data.cardType == CardType.Leader || data.cardType == CardType.Environment));
+                Sprite closeUp = isFullFrameCard
                     ? Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f)
                     : CreateFocusedSpriteFromTexture(tex, 0.02f, 0.06f, 0.96f, 0.92f);
                 if (closeUp != null)
@@ -50,6 +52,39 @@ namespace MonsterCardGame.Utils
                     spriteCache[key] = closeUp;
                     return closeUp;
                 }
+            }
+
+            return null;
+        }
+
+        private static readonly Dictionary<string, Sprite> _envFramedCache = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Returns the exact full composite framed card artwork for Environment cards (including element frame, top cost socket, and infinity tokens).
+        /// </summary>
+        public static Sprite GetEnvironmentFramedSprite(CardData data)
+        {
+            if (data == null) return null;
+            string key = ResolveCardIdKey(data);
+            if (string.IsNullOrEmpty(key)) return null;
+
+            if (_envFramedCache.TryGetValue(key, out Sprite cached) && cached != null)
+            {
+                return cached;
+            }
+
+            string framedKey = $"{key}_framed";
+            Texture2D tex = LoadTextureByVariantKey(framedKey, false);
+            if (tex == null && !string.IsNullOrEmpty(data.element))
+            {
+                tex = LoadTextureByVariantKey($"env_{data.element.ToLowerInvariant()}_framed", false);
+            }
+
+            if (tex != null)
+            {
+                Sprite sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+                _envFramedCache[key] = sprite;
+                return sprite;
             }
 
             return null;
@@ -65,10 +100,21 @@ namespace MonsterCardGame.Utils
                 return cached;
             }
 
+            if (data != null && data.cardType == CardType.Environment)
+            {
+                Sprite envFramed = GetEnvironmentFramedSprite(data);
+                if (envFramed != null)
+                {
+                    inspectorSpriteCache[key] = envFramed;
+                    return envFramed;
+                }
+            }
+
             Texture2D tex = LoadCardTexture(key);
             if (tex != null)
             {
-                Sprite showcase = (data != null && data.cardType == CardType.Spell)
+                bool isFullFrameCard = (data != null && (data.cardType == CardType.Spell || data.cardType == CardType.Leader || data.cardType == CardType.Environment));
+                Sprite showcase = isFullFrameCard
                     ? Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f)
                     : CreateFocusedSpriteFromTexture(tex, 0.02f, 0.22f, 0.96f, 0.75f);
                 if (showcase != null)
@@ -162,6 +208,88 @@ namespace MonsterCardGame.Utils
             return null;
         }
 
+        private static readonly Dictionary<string, Sprite> _clanEmblemCache = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+
+        public static Sprite GetClanEmblemSprite(string tribe)
+        {
+            if (string.IsNullOrWhiteSpace(tribe) || tribe.Equals("None", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            string cleanTribe = tribe.Trim().ToLowerInvariant();
+            if (_clanEmblemCache.TryGetValue(cleanTribe, out Sprite cached) && cached != null)
+            {
+                return cached;
+            }
+
+            string[] nameVariants = {
+                $"clan_emblem_{cleanTribe}",
+                $"clan_emblem_{cleanTribe}.png",
+                $"tribe_emblem_{cleanTribe}",
+                $"tribe_emblem_{cleanTribe}.png"
+            };
+
+            Texture2D tex = null;
+
+            // 1. Check StreamingAssets at runtime for external overrides
+            if (Application.isPlaying)
+            {
+                foreach (var variant in nameVariants)
+                {
+                    string filename = variant.EndsWith(".png") ? variant : variant + ".png";
+                    string streamPath = Path.Combine(Application.streamingAssetsPath, filename);
+                    if (File.Exists(streamPath))
+                    {
+                        tex = LoadTextureFromDisk(streamPath);
+                        if (tex != null) break;
+                    }
+                }
+            }
+
+            // 2. Check Resources
+            if (tex == null)
+            {
+                foreach (var variant in nameVariants)
+                {
+                    string resName = variant.EndsWith(".png") ? variant.Substring(0, variant.Length - 4) : variant;
+                    tex = Resources.Load<Texture2D>(resName);
+                    if (tex != null) break;
+                }
+            }
+
+            // 3. Check external disk search directories at runtime
+            if (tex == null && Application.isPlaying)
+            {
+                string[] baseDirs = GetSearchDirectories();
+                foreach (string baseDir in baseDirs)
+                {
+                    if (string.IsNullOrEmpty(baseDir) || !Directory.Exists(baseDir)) continue;
+                    foreach (var variant in nameVariants)
+                    {
+                        string filename = variant.EndsWith(".png") ? variant : variant + ".png";
+                        string candidate = Path.Combine(baseDir, filename);
+                        if (File.Exists(candidate))
+                        {
+                            tex = LoadTextureFromDisk(candidate);
+                            if (tex != null) break;
+                        }
+                    }
+                    if (tex != null) break;
+                }
+            }
+
+            if (tex != null)
+            {
+                tex.filterMode = FilterMode.Bilinear;
+                Sprite sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+                _clanEmblemCache[cleanTribe] = sprite;
+                return sprite;
+            }
+
+            return null;
+        }
+
         private static Texture2D LoadCardTexture(string key)
         {
             return LoadTextureByVariantKey(key, true);
@@ -218,9 +346,11 @@ namespace MonsterCardGame.Utils
                 $"CardsArt/Monsters/{key}",
                 $"CardsArt/Spells/{key}",
                 $"CardsArt/Leaders/{key}",
+                $"CardsArt/Environments/{key}",
                 $"Monsters/{key}",
                 $"Spells/{key}",
                 $"Leaders/{key}",
+                $"Environments/{key}",
                 key
             };
 
@@ -539,6 +669,7 @@ namespace MonsterCardGame.Utils
                 "Electric" => new Color(1f, 0.9f, 0.2f),
                 "Dark" => new Color(0.6f, 0.25f, 0.85f),
                 "Arcane" or "Arcane Monsters" => new Color(0.95f, 0.45f, 0.95f),
+                "Desert" or "Sand" => new Color(0.92f, 0.70f, 0.15f),
                 "Light" => new Color(1f, 0.95f, 0.55f),
                 "Earth" => new Color(0.75f, 0.55f, 0.35f),
                 "Air" => new Color(0.4f, 0.95f, 0.75f),
@@ -592,11 +723,6 @@ namespace MonsterCardGame.Utils
                     return new Color(0.48f, 0.96f, 0.24f); // Venomous Neon Jade
             }
 
-            if (!string.IsNullOrEmpty(spirit.element))
-            {
-                return GetElementColor(spirit.element);
-            }
-
             return isPlayerFallback
                 ? new Color(0.24f, 0.76f, 1.00f)
                 : new Color(0.96f, 0.28f, 0.28f);
@@ -628,6 +754,30 @@ namespace MonsterCardGame.Utils
             };
         }
 
+        public static string GetArabicTribeName(string tribe)
+        {
+            return GetTribeDisplayName(tribe);
+        }
+
+        public static string GetTribeDisplayName(string tribe)
+        {
+            if (string.IsNullOrWhiteSpace(tribe)) return "Universal";
+            return tribe.Trim().ToLowerInvariant() switch
+            {
+                "ghosts" or "ghost" => "Ghosts",
+                "demons" or "demon" => "Demons",
+                "celestials" or "celestial" => "Celestials",
+                "mages" or "mage" => "Mages",
+                "warriors" or "warrior" => "Warriors",
+                "beasts" or "beast" => "Beasts",
+                "elves" or "elf" => "Elves",
+                "dwarves" or "dwarf" => "Dwarves",
+                "giants" or "giant" => "Giants",
+                "insects" or "insect" => "Insects",
+                _ => char.ToUpper(tribe[0]) + tribe.Substring(1).ToLower()
+            };
+        }
+
         public static string FormatSpiritTitle(CardData spirit)
         {
             if (spirit == null) return "Commander Spirit";
@@ -639,10 +789,6 @@ namespace MonsterCardGame.Utils
             if (!string.IsNullOrEmpty(spirit.tribe))
             {
                 return $"Commander Spirit: {spirit.tribe}";
-            }
-            if (!string.IsNullOrEmpty(spirit.element))
-            {
-                return $"Commander Spirit: {spirit.element}";
             }
             return $"Commander Spirit #{spirit.id}";
         }
@@ -681,12 +827,56 @@ namespace MonsterCardGame.Utils
                 "Light" => "✨",
                 "Dark" => "🌑",
                 "Arcane" or "Arcane Monsters" => "🔮",
+                "Desert" or "Sand" => "🏜️",
                 _ => "⭐"
             };
         }
 
         public static string GetSpellIcon(SpellType type)
         {
+            int id = (int)type;
+            if (id >= 241 && id <= 300)
+            {
+                return id switch
+                {
+                    241 or 246 or 251 => "🩸",
+                    242 or 250 or 288 => "💎",
+                    243 or 270 or 278 => "🛡️",
+                    244 => "📜",
+                    245 => "🕯️",
+                    247 or 290 => "🌑",
+                    248 or 249 => "♻️",
+                    252 => "⚖️",
+                    253 or 257 => "⚡",
+                    254 => "🏹",
+                    255 or 258 or 296 => "💀",
+                    256 or 263 or 294 => "☄️",
+                    259 or 273 or 291 => "⚔️",
+                    260 => "🌊",
+                    261 => "🗿",
+                    262 or 286 => "🔱",
+                    264 => "👻",
+                    265 or 297 => "💥",
+                    266 or 298 => "🤝",
+                    267 or 282 => "🔄",
+                    268 or 279 => "🏅",
+                    269 or 283 or 292 => "💢",
+                    271 or 276 => "💚",
+                    272 or 284 or 285 => "⚡",
+                    274 or 280 => "🏰",
+                    275 => "📣",
+                    277 => "✨",
+                    281 => "🩸",
+                    287 => "⚖️",
+                    289 => "🔗",
+                    293 => "🌟",
+                    295 => "👥",
+                    299 => "🌪️",
+                    300 => "⚰️",
+                    _ => "🔮"
+                };
+            }
+
             return type switch
             {
                 SpellType.LinkWingsStrike => "🔗",
@@ -756,6 +946,7 @@ namespace MonsterCardGame.Utils
                 "Light" => "✨",
                 "Dark" => "🌑",
                 "Arcane" or "Arcane Monsters" => "🔮",
+                "Desert" or "Sand" => "🏜️",
                 _ => "☀️"
             };
         }

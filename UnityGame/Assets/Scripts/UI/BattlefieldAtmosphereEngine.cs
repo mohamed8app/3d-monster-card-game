@@ -1,7 +1,9 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.UI;
 using UnityEngine.Video;
 using MonsterCardGame.Core;
@@ -56,6 +58,14 @@ namespace MonsterCardGame.UI
         private float shakeIntensity = 0f;
         private float iceShiverTimer = 0f;
         private float waterVortexTimer = 0f;
+
+        [NonSerialized] public float ambientVolume = 0.75f;
+        [NonSerialized] public float loopSilenceDuration = 3.0f;
+        [NonSerialized] public float ambientFadeDuration = 1.5f;
+
+        [NonSerialized] private AudioSource ambientAudioSource;
+        [NonSerialized] private Coroutine ambientRoutine;
+        [NonSerialized] private string activeAudioKey = "";
 
         public static BattlefieldAtmosphereEngine EnsureInstance(Transform canvasTransform, Image groundImg = null, Image overlayImg = null)
         {
@@ -122,6 +132,15 @@ namespace MonsterCardGame.UI
 
         private void OnDestroy()
         {
+            if (ambientRoutine != null)
+            {
+                StopCoroutine(ambientRoutine);
+                ambientRoutine = null;
+            }
+            if (ambientAudioSource != null && ambientAudioSource.isPlaying)
+            {
+                ambientAudioSource.Stop();
+            }
             ReleaseChannel(channelA);
             ReleaseChannel(channelB);
             if (Instance == this) Instance = null;
@@ -247,6 +266,17 @@ namespace MonsterCardGame.UI
                     DestroyImmediate(transform.GetChild(i).gameObject);
             }
 
+            // Initialize dedicated ambient audio source with soft natural envelope
+            if (ambientAudioSource == null)
+            {
+                ambientAudioSource = gameObject.GetComponent<AudioSource>();
+                if (ambientAudioSource == null) ambientAudioSource = gameObject.AddComponent<AudioSource>();
+                ambientAudioSource.playOnAwake = false;
+                ambientAudioSource.loop = false; // Custom 3s silence interval managed by coroutine
+                ambientAudioSource.spatialBlend = 0f;
+                ambientAudioSource.volume = 0f;
+            }
+
             // Apply current environment or default (00.jpg)
             var activeEnv = (GameManager.Instance != null) ? GameManager.Instance.activeEnvironment : null;
             currentElement = null;
@@ -345,9 +375,13 @@ namespace MonsterCardGame.UI
             return new string[]
             {
                 Path.Combine(Application.streamingAssetsPath, "Environments"),
+                Path.Combine(Application.streamingAssetsPath, "Audio/Environments"),
+                @"D:\deck game\UnityGame\Assets\StreamingAssets\Environments",
+                @"D:\deck game\Game_Windows_Exe\MonsterCardGame_Data\StreamingAssets\Environments",
                 Path.GetFullPath(Path.Combine(dataPath, "../Environments")),
                 Path.GetFullPath(Path.Combine(dataPath, "../../Environments")),
-                Path.GetFullPath(Path.Combine(dataPath, "Resources/Environments"))
+                Path.GetFullPath(Path.Combine(dataPath, "Resources/Environments")),
+                Path.GetFullPath(Path.Combine(dataPath, "Resources/Audio/SFX/Environments"))
             };
         }
 
@@ -370,7 +404,8 @@ namespace MonsterCardGame.UI
                 "Forest" => new[] { "env_forest", "forest", "9995" },
                 "Light" => new[] { "env_light", "light", "9996" },
                 "Dark" => new[] { "env_dark", "dark", "9997" },
-                "Arcane" => new[] { "env_magic", "env_arcane", "arcane", "magic", "10000" },
+                "Desert" => new[] { "env_desert", "desert", "10", "450", "00", "battlefield" },
+                "Arcane" => new[] { "env_desert", "desert", "env_magic", "arcane" },
                 _ => new[] { "00", "battlefield", "arena_ground", "ground", "default", "0" }
             };
 
@@ -470,6 +505,31 @@ namespace MonsterCardGame.UI
             return null;
         }
 
+        private static string TryFindDiskEnvironmentAudio(string elem, string key, int lvl = 1)
+        {
+            string[] folders = GetEnvironmentSearchFolders();
+            string[] names = GetCandidateNamesForElement(elem, key, lvl);
+            string[] audioExts = { ".wav", ".mp3", ".ogg" };
+
+            foreach (string folder in folders)
+            {
+                if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) continue;
+                foreach (string name in names)
+                {
+                    foreach (string ext in audioExts)
+                    {
+                        string fullPath = Path.Combine(folder, name + ext);
+                        if (File.Exists(fullPath))
+                        {
+                            return fullPath;
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+
         public static Sprite GetOrLoadGroundSprite(string elem, int lvl = 1)
         {
             string baseKey = elem switch
@@ -486,7 +546,8 @@ namespace MonsterCardGame.UI
                 "Dark" => "dark",
                 "Mecha" => "mecha",
                 "Ghosts" => "ghost",
-                "Arcane" => "magic",
+                "Desert" => "desert",
+                "Arcane" => "desert",
                 _ => "default"
             };
 
@@ -560,6 +621,130 @@ namespace MonsterCardGame.UI
 
             string videoPath = TryFindDiskEnvironmentVideo(elem, key, lvl);
             TransitionToVideo(videoPath);
+            TransitionToAudio(elem, key, lvl);
+        }
+
+        private void TransitionToAudio(string elem, string key, int lvl)
+        {
+            string audioKey = $"{elem}_{lvl}";
+            if (audioKey == activeAudioKey) return;
+            activeAudioKey = audioKey;
+
+            if (ambientRoutine != null)
+            {
+                StopCoroutine(ambientRoutine);
+                ambientRoutine = null;
+            }
+
+            ambientRoutine = StartCoroutine(TransitionAudioRoutine(elem, key, lvl));
+        }
+
+        private IEnumerator TransitionAudioRoutine(string elem, string key, int lvl)
+        {
+            if (ambientAudioSource == null) yield break;
+
+            // 1. Smoothly fade out currently playing audio if active
+            if (ambientAudioSource.isPlaying && ambientAudioSource.volume > 0f)
+            {
+                float fadeOutTime = 0.8f;
+                float startVol = ambientAudioSource.volume;
+                float elapsed = 0f;
+                while (elapsed < fadeOutTime)
+                {
+                    elapsed += Time.deltaTime;
+                    ambientAudioSource.volume = Mathf.Lerp(startVol, 0f, elapsed / fadeOutTime);
+                    yield return null;
+                }
+                ambientAudioSource.Stop();
+                ambientAudioSource.volume = 0f;
+            }
+
+            AudioClip clip = null;
+
+            // 2. Look for disk audio (.wav, .mp3, .ogg) in StreamingAssets / Environments
+            string filePath = TryFindDiskEnvironmentAudio(elem, key, lvl);
+            if (!string.IsNullOrEmpty(filePath))
+            {
+                AudioType audioType = AudioType.UNKNOWN;
+                string ext = Path.GetExtension(filePath).ToLowerInvariant();
+                if (ext == ".wav") audioType = AudioType.WAV;
+                else if (ext == ".mp3") audioType = AudioType.MPEG;
+                else if (ext == ".ogg") audioType = AudioType.OGGVORBIS;
+
+                string uri = "file:///" + filePath.Replace('\\', '/');
+                using (var uwr = UnityWebRequestMultimedia.GetAudioClip(uri, audioType))
+                {
+                    yield return uwr.SendWebRequest();
+                    if (uwr.result == UnityWebRequest.Result.Success)
+                    {
+                        clip = DownloadHandlerAudioClip.GetContent(uwr);
+                        if (clip != null)
+                        {
+                            clip.name = Path.GetFileNameWithoutExtension(filePath);
+                            Debug.Log($"[BattlefieldAtmosphereEngine] Loaded ambient audio: {filePath} ({clip.length:F1}s)");
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[BattlefieldAtmosphereEngine] Audio load error {uri}: {uwr.error}");
+                    }
+                }
+            }
+
+            // 3. Fallback to Resources
+            if (clip == null)
+            {
+                string[] candidates = GetCandidateNamesForElement(elem, key, lvl);
+                foreach (var c in candidates)
+                {
+                    clip = Resources.Load<AudioClip>($"Audio/SFX/Environments/{c}")
+                        ?? Resources.Load<AudioClip>($"Environments/{c}");
+                    if (clip != null) break;
+                }
+            }
+
+            if (clip == null) yield break;
+
+            // 4. Play with a 3-second breathing silence between loop cycles
+            while (true)
+            {
+                ambientAudioSource.clip = clip;
+                ambientAudioSource.volume = 0f;
+                ambientAudioSource.Play();
+
+                // Gentle fade-in
+                float fade = Mathf.Max(0.5f, ambientFadeDuration);
+                float t = 0f;
+                while (t < fade && ambientAudioSource.isPlaying)
+                {
+                    t += Time.deltaTime;
+                    ambientAudioSource.volume = Mathf.Lerp(0f, ambientVolume, t / fade);
+                    yield return null;
+                }
+                ambientAudioSource.volume = ambientVolume;
+
+                // Play clip until near the end
+                float clipDuration = clip.length;
+                float playWait = Mathf.Max(0f, clipDuration - fade);
+                yield return new WaitForSeconds(playWait);
+
+                // Gentle fade-out
+                t = 0f;
+                while (t < fade && ambientAudioSource.isPlaying)
+                {
+                    t += Time.deltaTime;
+                    ambientAudioSource.volume = Mathf.Lerp(ambientVolume, 0f, t / fade);
+                    yield return null;
+                }
+                ambientAudioSource.Stop();
+                ambientAudioSource.volume = 0f;
+
+                // Custom silence gap (e.g. 3 seconds) so loop never collides
+                if (loopSilenceDuration > 0f)
+                {
+                    yield return new WaitForSeconds(loopSilenceDuration);
+                }
+            }
         }
 
         private void TransitionToVideo(string videoPath)
@@ -705,7 +890,7 @@ namespace MonsterCardGame.UI
 
                 if (string.Equals(currentElement, "Ice", StringComparison.OrdinalIgnoreCase))
                 {
-                    // === ICE CATACLYSM: 3s Subtle Shiver (رجفة صقيع خفيفة) / 5s Calm Rest Cadence ===
+                    // === ICE CATACLYSM: 3s Subtle Shiver / 5s Calm Rest Cadence ===
                     const float ShiverDuration = 3.0f;
                     const float RestDuration = 5.0f;
                     const float CycleDuration = ShiverDuration + RestDuration; // 3s shiver + 5s calm = 8s
@@ -722,7 +907,7 @@ namespace MonsterCardGame.UI
                         else
                             envelope = 1.0f;
 
-                        // Subtle rhythmic chill spasm pulses (تكتكة برد ناعمة)
+                        // Subtle rhythmic chill spasm pulses
                         float spasmPulse = 0.80f + 0.20f * Mathf.Abs(Mathf.Sin(iceShiverTimer * 10f));
 
                         // High frequency refined micro-shudder (55Hz - 70Hz)
@@ -731,7 +916,7 @@ namespace MonsterCardGame.UI
                         float microNoiseX = (Mathf.PerlinNoise(t * 50f, 0f) - 0.5f) * 2f;
                         float microNoiseY = (Mathf.PerlinNoise(0f, t * 50f) - 0.5f) * 2f;
 
-                        // Refined subtle intensity (قللناها بنسبة 45% لراحة العين وإحساس الرجفة الطبيعي)
+                        // Refined subtle intensity
                         float totalPower = envelope * spasmPulse * shakeIntensity;
                         shakeOffsetX = (shiverJitterX * 0.85f + microNoiseX * 0.55f) * totalPower;
                         shakeOffsetY = (shiverJitterY * 0.70f + microNoiseY * 0.45f) * totalPower;
@@ -739,7 +924,7 @@ namespace MonsterCardGame.UI
                     }
                     else
                     {
-                        // 3.0s to 8.0s: 5 full seconds of completely steady rest (5 ثواني ثبات وراحة تامة)
+                        // 3.0s to 8.0s: 5 full seconds of completely steady rest
                         shakeOffsetX = 0f;
                         shakeOffsetY = 0f;
                         shakeRot = 0f;
