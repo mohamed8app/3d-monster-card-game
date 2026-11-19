@@ -116,6 +116,10 @@ namespace MonsterCardGame.UI
 
                 var oldCanvas = GameObject.Find("MainCanvas");
                 if (oldCanvas != null) DestroyImmediate(oldCanvas);
+
+                // Reset static sprite caches so updated assets reload freshly from disk
+                _rightWingAltarSprite = null;
+                _handTraySprite = null;
             }
             else if (FindObjectOfType<GameManager>() != null)
             {
@@ -1602,26 +1606,23 @@ namespace MonsterCardGame.UI
         {
             if (cache != null) return cache;
 
-            if (Application.isPlaying)
+            string streamPath = Path.Combine(Application.streamingAssetsPath, fileName);
+            if (File.Exists(streamPath))
             {
-                string streamPath = Path.Combine(Application.streamingAssetsPath, fileName);
-                if (File.Exists(streamPath))
+                try
                 {
-                    try
+                    byte[] bytes = File.ReadAllBytes(streamPath);
+                    Texture2D tex = new Texture2D(2, 2, TextureFormat.RGBA32, true);
+                    if (tex.LoadImage(bytes))
                     {
-                        byte[] bytes = File.ReadAllBytes(streamPath);
-                        Texture2D tex = new Texture2D(2, 2, TextureFormat.RGBA32, true);
-                        if (tex.LoadImage(bytes))
-                        {
-                            tex.filterMode = FilterMode.Trilinear;
-                            tex.anisoLevel = 16;
-                            tex.mipMapBias = mipBias;
-                            cache = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
-                            return cache;
-                        }
+                        tex.filterMode = FilterMode.Trilinear;
+                        tex.anisoLevel = 16;
+                        tex.mipMapBias = mipBias;
+                        cache = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+                        return cache;
                     }
-                    catch { }
                 }
+                catch { }
             }
 
             var resTex = Resources.Load<Texture2D>(resourceName);
