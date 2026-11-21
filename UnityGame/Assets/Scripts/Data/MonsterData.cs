@@ -42,7 +42,9 @@ namespace MonsterCardGame.Data
         Attacker,
         Defender,
         PureShield,
-        Support
+        Support,
+        Assassin,
+        Disruptor
     }
 
     [Serializable]

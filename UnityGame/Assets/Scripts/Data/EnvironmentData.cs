@@ -135,11 +135,12 @@ namespace MonsterCardGame.Data
         {
             string normalized = NormalizeElement(elem);
             cardType = CardType.Environment;
+            card_type = "environment";
             element = normalized;
             level = Mathf.Clamp(lvl, 1, 3);
             envLevel = level;
             buffedElement = normalized;
-            id = 440 + GetElementIndex(normalized);
+            id = GetElementIndex(normalized);
 
             SetupMatrix(normalized);
             SetLevelStats(level);
@@ -149,9 +150,9 @@ namespace MonsterCardGame.Data
         {
             level = Mathf.Clamp(lvl, 1, 3);
             envLevel = level;
-            cost = 1; // Unified single environment card per element
-            duration = -1; // Permanent across turns until countered
-            turnsRemaining = -1;
+            cost = 1; // Unified 1-Mana shared environment card per element
+            duration = level == 1 ? 10 : (level == 2 ? 6 : 3); // V2 Constitution: Lv1=10T, Lv2=6T, Lv3=3T
+            turnsRemaining = duration;
 
             int idx = level - 1;
             if (TryGetProfile(element, out EnvProfile prof))
@@ -164,9 +165,9 @@ namespace MonsterCardGame.Data
             }
             else
             {
-                if (level == 1) { buffPct = 0.30f; debuffPct = 0.20f; }
-                else if (level == 2) { buffPct = 0.40f; debuffPct = 0.30f; }
-                else { buffPct = 0.70f; debuffPct = 0.50f; }
+                if (level == 1) { buffPct = 0.20f; debuffPct = 0.0f; }
+                else if (level == 2) { buffPct = 0.35f; debuffPct = 0.0f; }
+                else { buffPct = 0.50f; debuffPct = 0.0f; }
                 defArmorPct = 0f;
                 oppVulnPct = 0f;
             }
@@ -174,10 +175,7 @@ namespace MonsterCardGame.Data
 
         public void UpgradeLevel()
         {
-            if (level < 3)
-            {
-                SetLevelStats(level + 1);
-            }
+            SetLevelStats(Mathf.Min(3, level + 1));
         }
 
         /// <summary>
@@ -196,12 +194,17 @@ namespace MonsterCardGame.Data
         }
 
         /// <summary>
-        /// Environment effects are permanent across rounds/turns.
-        /// They do NOT expire by turn countdown; only through opponent counter or player downgrade.
+        /// Counts down the shared environment's turn timer (Lv1=10T, Lv2=6T, Lv3=3T).
+        /// Returns true when the environment expires back to neutral weather.
         /// </summary>
         public bool TickTurn()
         {
             steppedDownLastTick = false;
+            if (turnsRemaining > 0)
+            {
+                turnsRemaining--;
+                return turnsRemaining <= 0;
+            }
             return false;
         }
 
@@ -287,16 +290,16 @@ namespace MonsterCardGame.Data
         {
             return NormalizeElement(elem) switch
             {
-                "Fire" => 1, "Water" => 2, "Ice" => 3, "Earth" => 4,
-                "Electric" => 5, "Air" => 6, "Nature" => 7, "Forest" => 7, "Light" => 8,
-                "Dark" => 9, "Desert" => 10, "Arcane" => 10, "Magic" => 10,
+                "Fire" => 1, "Water" => 2, "Nature" => 3, "Forest" => 3, "Electric" => 4,
+                "Ice" => 5, "Earth" => 6, "Dark" => 7, "Light" => 8,
+                "Air" => 9, "Desert" => 10, "Arcane" => 10, "Magic" => 10,
                 _ => 1
             };
         }
 
         public static List<EnvironmentCardData> GetAllEnvironments()
         {
-            string[] elems = { "Fire", "Water", "Ice", "Earth", "Electric", "Air", "Nature", "Light", "Dark", "Desert" };
+            string[] elems = { "Fire", "Water", "Nature", "Electric", "Ice", "Earth", "Dark", "Light", "Air", "Desert" };
             var list = new List<EnvironmentCardData>();
             foreach (var elem in elems)
             {
@@ -307,7 +310,7 @@ namespace MonsterCardGame.Data
 
         public static EnvironmentCardData GetRandomEnvironment()
         {
-            string[] elems = { "Fire", "Water", "Ice", "Earth", "Electric", "Air", "Nature", "Light", "Dark", "Desert" };
+            string[] elems = { "Fire", "Water", "Nature", "Electric", "Ice", "Earth", "Dark", "Light", "Air", "Desert" };
             string randomElem = elems[UnityEngine.Random.Range(0, elems.Length)];
             return new EnvironmentCardData(randomElem, 1);
         }

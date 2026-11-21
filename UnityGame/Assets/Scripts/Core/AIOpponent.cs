@@ -9,15 +9,27 @@ namespace MonsterCardGame.Core
     public enum AICombatStyle
     {
         Standard,
-        GoraAggressive,
-        NaviTactical
+        Neural41
     }
 
     public class AIOpponent : MonoBehaviour
     {
         public PlayerState aiPlayer;
         public PlayerState humanPlayer;
-        public AICombatStyle combatStyle = AICombatStyle.GoraAggressive;
+        public AICombatStyle combatStyle = AICombatStyle.Neural41;
+
+        [Header("Arena_Lab_V2 Neural Brain (41 Trained Models)")]
+        public bool useNeuralBrain = true;
+        public string activeModelId = "free_01";
+        public string activeModelDisplayName = "[Free] Free_01 (Vanguard)";
+        private V2NeuralBrain activeNeuralBrain = null;
+
+        public void SetNeuralModel(string modelId, string displayName)
+        {
+            activeModelId = string.IsNullOrEmpty(modelId) ? "free_01" : modelId;
+            activeModelDisplayName = string.IsNullOrEmpty(displayName) ? activeModelId : displayName;
+            activeNeuralBrain = V2NeuralBrain.LoadForModel(activeModelId, forceLiveReload: true);
+        }
 
         public void PlayTurn(int currentTurn, EnvironmentCardData activeEnv, Action onTurnFinished)
         {
@@ -27,8 +39,19 @@ namespace MonsterCardGame.Core
 
         private IEnumerator PlayTurnCoroutine(int currentTurn, EnvironmentCardData activeEnv, Action onTurnFinished)
         {
-            string brainName = (combatStyle == AICombatStyle.GoraAggressive) ? "Gora (Aggressive Combat AI)" : "Navi (Tactical Control AI)";
-            Debug.Log($"🤖 [{brainName}] is calculating tactical moves...");
+            if (useNeuralBrain && activeNeuralBrain == null && !string.IsNullOrEmpty(activeModelId))
+            {
+                activeNeuralBrain = V2NeuralBrain.LoadForModel(activeModelId);
+            }
+
+            if (useNeuralBrain && activeNeuralBrain != null && GameManager.Instance != null)
+            {
+                yield return PlayNeuralTurnCoroutine(currentTurn, activeEnv, onTurnFinished);
+                yield break;
+            }
+
+            string brainName = string.IsNullOrEmpty(activeModelDisplayName) ? "Arena_Lab_V2 AI" : activeModelDisplayName;
+            Debug.Log($"🤖 [{brainName}] fallback heuristic turn...");
             yield return new WaitForSeconds(0.55f);
 
             // 1. Tactical Sacrifice (+1 Power & +1 Mana) with smooth card flight from hand to Enemy Power bar
@@ -60,6 +83,206 @@ namespace MonsterCardGame.Core
 
             // 6. Execute Animated Combat Phase
             yield return CombatSystem.Instance.ExecuteCombatPhaseAnimated(aiPlayer, humanPlayer, GameManager.Instance.activeEnvironment, onTurnFinished);
+        }
+
+        /// <summary>
+        /// Drives the AI's entire Action Phase using the exact trained PyTorch FighterNet
+        /// (OBS_DIM=220 -> ACTION_DIM=62) exported from Arena_Lab_V2!
+        /// </summary>
+        private IEnumerator PlayNeuralTurnCoroutine(int currentTurn, EnvironmentCardData activeEnv, Action onTurnFinished)
+        {
+            var gm = GameManager.Instance;
+            var ui = MonsterCardGame.UI.BattleUIManager.Instance;
+            string modelLabel = string.IsNullOrEmpty(activeModelDisplayName) ? activeModelId : activeModelDisplayName;
+
+            Debug.Log($"🧠 [{modelLabel}] Neural Brain (OBS=220) thinking on Turn {currentTurn}...");
+            yield return new WaitForSeconds(0.42f);
+
+            int maxSteps = 22;
+            var blockedThisTurn = new HashSet<int>();
+
+            for (int step = 0; step < maxSteps; step++)
+            {
+                if (!aiPlayer.IsAlive || !humanPlayer.IsAlive || gm.currentPhase == GamePhase.GameOver)
+                    yield break;
+
+                float[] obs = V2NeuralBrain.BuildObservation220(aiPlayer, humanPlayer, currentTurn, gm.activeEnvironment);
+                bool[] mask = V2NeuralBrain.BuildLegalActionMask62(aiPlayer, humanPlayer, gm);
+                foreach (int badAct in blockedThisTurn)
+                {
+                    if (badAct > 0 && badAct < mask.Length) mask[badAct] = false;
+                }
+
+                int act = activeNeuralBrain.SelectAction(obs, mask, out float confPct, out float valEst, deterministic: true);
+                if (act == 0)
+                {
+                    if (step == 0 && ui != null)
+                        ui.LogCombatMessage($"🧠 [{modelLabel}] holds resources & enters Combat (Eval: {valEst:+0.00;-0.00} | {confPct:0}%).");
+                    break;
+                }
+
+                bool executed = false;
+
+                // 1..7: Sacrifice hand[h]
+                if (act >= 1 && act <= 7)
+                {
+                    int h = act - 1;
+                    if (h < aiPlayer.hand.Count && aiPlayer.hand[h] != null && !aiPlayer.hasSacrificedThisTurn)
+                    {
+                        var sacCard = aiPlayer.hand[h];
+                        if (ui != null) yield return ui.AnimateEnemyCardSacrificeRoutine();
+                        if (aiPlayer.SacrificeCard(sacCard))
+                        {
+                            executed = true;
+                            MonsterCardGame.Audio.SoundManager.Instance?.PlayCardSacrifice();
+                            if (ui != null)
+                            {
+                                ui.LogCombatMessage($"🧠 [{modelLabel}] sacrificed a card (+1 Mana -> {aiPlayer.currentMana}/{aiPlayer.power} | Eval {valEst:+0.00;-0.00}, {confPct:0}%).");
+                                ui.UpdateUI();
+                            }
+                            yield return new WaitForSeconds(0.32f);
+                        }
+                    }
+                }
+                // 8..49: Play hand[h] at slot s
+                else if (act >= 8 && act <= 49)
+                {
+                    int h = (act - 8) / 6;
+                    int slot = (act - 8) % 6;
+                    if (h < aiPlayer.hand.Count && aiPlayer.hand[h] != null)
+                    {
+                        var card = aiPlayer.hand[h];
+                        if (card.cardType == CardType.Monster)
+                        {
+                            if (slot >= 0 && slot < 6 && aiPlayer.slots[slot] != null && !aiPlayer.slots[slot].IsOccupied)
+                            {
+                                if (ui != null && ui.enemySlotViews != null && slot < ui.enemySlotViews.Length && ui.enemySlotViews[slot] != null)
+                                    yield return ui.AnimateEnemyCardPlayRoutine(card, ui.enemySlotViews[slot].transform.position, 0.48f, 0f, 1.02f);
+
+                                int effCost = aiPlayer.GetEffectiveCardCost(card);
+                                if (aiPlayer.SummonMonster(card, slot, currentTurn))
+                                {
+                                    executed = true;
+                                    MonsterCardGame.Audio.SoundManager.Instance?.PlayMonsterSummon(card);
+                                    if (ui != null)
+                                    {
+                                        ui.LogCombatMessage($"🧠 [{modelLabel}] summoned [{card.name}] in Slot {slot + 1} (-{effCost} Mana | {confPct:0}%).", card);
+                                        ui.UpdateUI();
+                                        if (ui.enemySlotViews != null && slot < ui.enemySlotViews.Length && ui.enemySlotViews[slot] != null)
+                                            ui.StartCoroutine(MonsterCardGame.UI.BattleAnimations.AnimateCardSettle(ui.enemySlotViews[slot].transform, 0.16f));
+                                    }
+                                    yield return new WaitForSeconds(0.28f);
+                                }
+                            }
+                        }
+                        else if (card.cardType == CardType.Environment)
+                        {
+                            if (ui != null) yield return ui.AnimateEnemyCardPlayRoutine(card, ui.GetEnvironmentTargetWorldPos(), 0.48f, 0.08f, 0.85f);
+                            if (gm.PlayEnvironmentCard(aiPlayer, card))
+                            {
+                                executed = true;
+                                if (ui != null)
+                                {
+                                    ui.LogCombatMessage($"🧠 [{modelLabel}] shifted Arena to [{card.name}] ({confPct:0}%).", card);
+                                    ui.UpdateUI();
+                                }
+                                yield return new WaitForSeconds(0.32f);
+                            }
+                        }
+                        else if (card.cardType == CardType.Leader)
+                        {
+                            if (ui != null) yield return ui.AnimateEnemyCardPlayRoutine(card, ui.GetEnemyLeaderTargetWorldPos(), 0.50f, 0.08f, 0.90f);
+                            gm.PlayLeaderCard(aiPlayer, card);
+                            executed = true;
+                            if (ui != null)
+                            {
+                                ui.LogCombatMessage($"🧠 [{modelLabel}] invoked Leader Spirit [{card.name}] ({confPct:0}%).", card);
+                                ui.UpdateUI();
+                            }
+                            yield return new WaitForSeconds(0.34f);
+                        }
+                        else if (card.cardType == CardType.Covenant)
+                        {
+                            if (gm.PlayCovenantCard(aiPlayer, card))
+                            {
+                                executed = true;
+                                if (ui != null) ui.UpdateUI();
+                                yield return new WaitForSeconds(0.34f);
+                            }
+                        }
+                        else if (card.cardType == CardType.Spell)
+                        {
+                            SpellDatabase.NormalizeSpellMetadata(card);
+                            SpellTargetMode tmode = SpellDatabase.GetTargetMode(card.id);
+                            int priSlot = slot;
+                            int secSlot = -1;
+                            bool priIsAlly = (tmode == SpellTargetMode.Ally);
+                            if (tmode == SpellTargetMode.Any || tmode == SpellTargetMode.AllyToEmptySlot || tmode == SpellTargetMode.Global)
+                            {
+                                PickTargetsForSpell(card, out priSlot, out secSlot, out priIsAlly);
+                            }
+                            if (ui != null) yield return ui.AnimateEnemyCardPlayRoutine(card, ui.GetCenterArenaWorldPos(), 0.45f, 0.16f, 1.10f);
+                            if (gm.CastSpell(aiPlayer, humanPlayer, card, priSlot, secSlot, priIsAlly))
+                            {
+                                executed = true;
+                                if (ui != null)
+                                {
+                                    ui.LogCombatMessage($"🧠 [{modelLabel}] cast [{card.name}] ({confPct:0}%).", card);
+                                    ui.UpdateUI();
+                                }
+                                yield return new WaitForSeconds(0.32f);
+                            }
+                        }
+                    }
+                }
+                // 50..61: Active skill k on slot s
+                else if (act >= 50 && act <= 61 && CombatSystem.Instance != null)
+                {
+                    int slot = (act - 50) / 2;
+                    int skillIdx = (act - 50) % 2;
+                    var pSlot = (slot >= 0 && slot < 6) ? aiPlayer.slots[slot] : null;
+                    var m = (pSlot != null && pSlot.IsOccupied) ? pSlot.currentMonster : null;
+                    if (m != null && m.IsAlive && m.HasActiveSkillAt(skillIdx) && !m.IsActiveSkillUsed(skillIdx))
+                    {
+                        string actText = m.actives[skillIdx];
+                        int targetSlot = CombatSystem.Instance.ChooseSmartSkillTargetSlot(actText, slot, m, aiPlayer, humanPlayer, aiPlayer.freeSkillBonus);
+                        if (CombatSystem.Instance.ActivateMonsterAbility(aiPlayer, humanPlayer, slot, skillIdx, targetSlot, out string msg))
+                        {
+                            executed = true;
+                            MonsterCardGame.Audio.SoundManager.Instance?.PlayMonsterSkill(m.data);
+                            if (ui != null)
+                            {
+                                ui.NotifyAIMonsterSkillActivated(aiPlayer, slot, m, skillIdx, actText, msg);
+                                ui.UpdateUI();
+                            }
+                            if (!aiPlayer.IsAlive || !humanPlayer.IsAlive)
+                            {
+                                gm.CheckGameOver();
+                                yield break;
+                            }
+                            yield return new WaitForSeconds(0.65f);
+                        }
+                    }
+                }
+
+                if (!executed)
+                {
+                    blockedThisTurn.Add(act);
+                }
+                else
+                {
+                    blockedThisTurn.Clear();
+                }
+            }
+
+            if (!aiPlayer.IsAlive || !humanPlayer.IsAlive || gm.currentPhase == GamePhase.GameOver)
+                yield break;
+
+            if (ui != null) ui.UpdateUI();
+            yield return new WaitForSeconds(0.30f);
+
+            // Execute Animated Combat Phase
+            yield return CombatSystem.Instance.ExecuteCombatPhaseAnimated(aiPlayer, humanPlayer, gm.activeEnvironment, onTurnFinished);
         }
 
         private IEnumerator DecideSacrificeCoroutine()
@@ -99,16 +322,6 @@ namespace MonsterCardGame.Core
             bool needsMana = (aiPlayer.power == 0)
                 || (hasHighCostMonster && affordableMonsters == 0)
                 || (aiPlayer.power < 8 && aiPlayer.hand.Count >= 5);
-
-            // Style adaptation: Gora ramps aggressively, Navi preserves card resources
-            if (combatStyle == AICombatStyle.GoraAggressive && aiPlayer.power < 4 && aiPlayer.hand.Count >= 3)
-            {
-                needsMana = true;
-            }
-            if (combatStyle == AICombatStyle.NaviTactical && aiPlayer.hand.Count < 5 && aiPlayer.power >= 2)
-            {
-                needsMana = false;
-            }
 
             if (!needsMana && aiPlayer.hand.Count < 7) yield break;
 
@@ -186,15 +399,6 @@ namespace MonsterCardGame.Core
                     if (probe.IsDebuffedElement(el)) score += 1.9f;
                     else if (EnvironmentCardData.AreSameElement(probe.buffedElement, el)) score -= 1.8f;
                 }
-            }
-
-            if (combatStyle == AICombatStyle.GoraAggressive && (EnvironmentCardData.AreSameElement(envElement, "Fire") || EnvironmentCardData.AreSameElement(envElement, "Dark") || EnvironmentCardData.AreSameElement(envElement, "Electric")))
-            {
-                score += 1.8f;
-            }
-            if (combatStyle == AICombatStyle.NaviTactical && (EnvironmentCardData.AreSameElement(envElement, "Water") || EnvironmentCardData.AreSameElement(envElement, "Ice") || EnvironmentCardData.AreSameElement(envElement, "Earth")))
-            {
-                score += 1.8f;
             }
 
             return score;
@@ -336,14 +540,6 @@ namespace MonsterCardGame.Core
                 {
                     val += 6f;
                 }
-                if (combatStyle == AICombatStyle.GoraAggressive && (string.Equals(card.tribe, "Warriors", StringComparison.OrdinalIgnoreCase) || string.Equals(card.tribe, "Demons", StringComparison.OrdinalIgnoreCase) || string.Equals(card.tribe, "Beasts", StringComparison.OrdinalIgnoreCase)))
-                {
-                    val += 6f;
-                }
-                if (combatStyle == AICombatStyle.NaviTactical && (string.Equals(card.tribe, "Celestials", StringComparison.OrdinalIgnoreCase) || string.Equals(card.tribe, "Mages", StringComparison.OrdinalIgnoreCase) || string.Equals(card.tribe, "Dwarves", StringComparison.OrdinalIgnoreCase)))
-                {
-                    val += 6f;
-                }
                 if (aiPlayer.activeLeader != null)
                 {
                     int curClan = 0;
@@ -379,6 +575,27 @@ namespace MonsterCardGame.Core
                 GameManager.Instance.PlayLeaderCard(aiPlayer, chosenSpirit);
                 if (ui != null) ui.UpdateUI();
                 yield return new WaitForSeconds(0.40f);
+            }
+
+            // Also activate Right-Wing Altar Covenant if AI holds one and none is active yet
+            if (aiPlayer.activeCovenant == null && !aiPlayer.covenantDestroyed)
+            {
+                CardData chosenCov = null;
+                foreach (var card in new List<CardData>(aiPlayer.hand))
+                {
+                    if (card != null && card.cardType == CardType.Covenant && aiPlayer.GetEffectiveCardCost(card) <= aiPlayer.currentMana)
+                    {
+                        chosenCov = card;
+                        break;
+                    }
+                }
+                if (chosenCov != null)
+                {
+                    GameManager.Instance.PlayCovenantCard(aiPlayer, chosenCov);
+                    var ui = MonsterCardGame.UI.BattleUIManager.Instance;
+                    if (ui != null) ui.UpdateUI();
+                    yield return new WaitForSeconds(0.35f);
+                }
             }
         }
 

@@ -7,35 +7,51 @@ namespace MonsterCardGame.Core
 {
     public class MonsterInstance
     {
+        public const int MaxPermBonusAtk = 10;
+        public const int MaxPermBonusDef = 15;
+
         public CardData data;
         public int currentDef;
         public int baseAtk;
         public int baseDef;
         public int bonusAtk;
+        public int permBonusDef;
         public int summonedTurn;
         public bool canAttack;
         public BoardSlot currentSlot;
 
-        // Tactical status effects (Synced 100% with the 100,000-match simulator)
+        // Tactical status effects (Synced 100% with the V2 2,270-Card Constitution)
         public List<string> passives = new List<string>();
         public List<string> actives = new List<string>();
         public List<bool> activeUsedThisTurn = new List<bool>();
         public bool hasUsedActiveThisTurn = false;
+        public int skillsUsedThisTurn = 0;
+        public bool doubleSkillOneTurn = false;
         public int frozenTurns = 0;
         public int silencedTurns = 0;
+        public int rootedTurns = 0;
         public int burnDmg = 0;
         public int poisonDmg = 0;
+        public int bleedDmg = 0;
         public int weakenedTurns = 0;
+        public int weakenedAtkFlat = 0;
+        public int ascendTurns = 0;
+        public bool ascendTriggered = false;
         public bool salvationUsed = false;
-        public bool bubbleShield = false;
+        public bool bubbleShield = false; // Deprecated by V2 Constitution (all defense is explicit +DEF)
         public bool doubleStrike = false;
         public int tempTurnAtk = 0;
         public bool soulPhylacteryUsed = false;
         public bool cycloneDiveUsed = false;
 
         public bool IsAlive => currentDef > 0;
-        public bool HasActiveSkill => actives != null && actives.Count > 0;
-        public int ActiveSkillCount => actives != null ? actives.Count : 0;
+        public bool IsBarrier => data != null && (data.is_barrier ||
+            string.Equals(data.role, "Barrier", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(data.role, "Pure Shield", StringComparison.OrdinalIgnoreCase));
+        public bool IsAllAttack => data != null && (data.is_all_attack || HasPassiveSubstr("All-Attack") != null);
+        public bool IsLocked => rootedTurns > 0 || HasPassiveSubstr("Tectonic Anchor") != null || HasPassiveSubstr("Locked") != null;
+        public bool HasActiveSkill => !IsBarrier && actives != null && actives.Count > 0;
+        public int ActiveSkillCount => (!IsBarrier && actives != null) ? actives.Count : 0;
 
         public bool HasActiveSkillAt(int skillIndex)
         {
@@ -44,7 +60,10 @@ namespace MonsterCardGame.Core
 
         public bool IsActiveSkillUsed(int skillIndex)
         {
-            if (activeUsedThisTurn != null && skillIndex >= 0 && skillIndex < activeUsedThisTurn.Count)
+            if (IsBarrier) return true;
+            int maxUses = doubleSkillOneTurn ? 2 : 1;
+            if (skillsUsedThisTurn >= maxUses) return true;
+            if (!doubleSkillOneTurn && activeUsedThisTurn != null && skillIndex >= 0 && skillIndex < activeUsedThisTurn.Count)
             {
                 return activeUsedThisTurn[skillIndex];
             }
@@ -53,36 +72,30 @@ namespace MonsterCardGame.Core
 
         public void MarkActiveSkillUsed(int skillIndex)
         {
+            skillsUsedThisTurn++;
+            int maxUses = doubleSkillOneTurn ? 2 : 1;
             if (activeUsedThisTurn == null) activeUsedThisTurn = new List<bool>();
             int count = actives != null ? actives.Count : 0;
             while (activeUsedThisTurn.Count < Mathf.Max(count, skillIndex + 1))
             {
                 activeUsedThisTurn.Add(false);
             }
-            if (skillIndex >= 0 && skillIndex < activeUsedThisTurn.Count)
+            if (skillIndex >= 0 && skillIndex < activeUsedThisTurn.Count && skillsUsedThisTurn >= maxUses)
             {
                 activeUsedThisTurn[skillIndex] = true;
             }
 
-            bool allUsed = count > 0;
-            for (int i = 0; i < count; i++)
-            {
-                if (!activeUsedThisTurn[i])
-                {
-                    allUsed = false;
-                    break;
-                }
-            }
-            hasUsedActiveThisTurn = allUsed;
+            hasUsedActiveThisTurn = (skillsUsedThisTurn >= maxUses);
         }
 
         public MonsterInstance(CardData monsterData, int currentTurn)
         {
             data = monsterData;
-            baseAtk = monsterData.atk;
-            baseDef = monsterData.def;
-            currentDef = monsterData.def;
+            baseAtk = (monsterData != null && monsterData.is_barrier) ? 0 : (monsterData != null ? monsterData.atk : 0);
+            baseDef = monsterData != null ? Mathf.Max(1, monsterData.def) : 1;
+            currentDef = baseDef;
             bonusAtk = 0;
+            permBonusDef = 0;
             summonedTurn = currentTurn;
             canAttack = false;
 
@@ -100,17 +113,20 @@ namespace MonsterCardGame.Core
                 }
             }
 
-            if (monsterData.active_skills != null && monsterData.active_skills.Count > 0)
+            if (!IsBarrier)
             {
-                actives = new List<string>(monsterData.active_skills);
-            }
-            else if (!string.IsNullOrEmpty(monsterData.active_skill) && !monsterData.active_skill.StartsWith("None"))
-            {
-                foreach (var a in monsterData.active_skill.Split(new[] { " | " }, StringSplitOptions.RemoveEmptyEntries))
+                if (monsterData.active_skills != null && monsterData.active_skills.Count > 0)
                 {
-                    string clean = a.Trim();
-                    if (clean.StartsWith("1. ") || clean.StartsWith("2. ")) clean = clean.Substring(3).Trim();
-                    if (!string.IsNullOrEmpty(clean) && !clean.StartsWith("None")) actives.Add(clean);
+                    actives = new List<string>(monsterData.active_skills);
+                }
+                else if (!string.IsNullOrEmpty(monsterData.active_skill) && !monsterData.active_skill.StartsWith("None"))
+                {
+                    foreach (var a in monsterData.active_skill.Split(new[] { " | " }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        string clean = a.Trim();
+                        if (clean.StartsWith("1. ") || clean.StartsWith("2. ")) clean = clean.Substring(3).Trim();
+                        if (!string.IsNullOrEmpty(clean) && !clean.StartsWith("None")) actives.Add(clean);
+                    }
                 }
             }
 
@@ -144,17 +160,51 @@ namespace MonsterCardGame.Core
 
         public int GetEffectiveAtk(EnvironmentCardData activeEnv, PlayerState owner)
         {
-            int totalAtk = baseAtk + bonusAtk + tempTurnAtk;
+            // V2 Constitution Rule #31: Barrier cards are strictly locked at 0 ATK forever!
+            if (IsBarrier) return 0;
+
+            // V2 Constitution Rule #35: All-Attack monsters cannot gain ATK from any buff or aura
+            if (IsAllAttack)
+            {
+                int lockedAtk = Mathf.Max(0, baseAtk - weakenedAtkFlat);
+                if (weakenedTurns > 0) lockedAtk = Mathf.RoundToInt(lockedAtk * 0.70f);
+                return Mathf.Clamp(lockedAtk, 0, baseAtk);
+            }
+
+            // V2 Constitution Rule #27: Permanent cumulative ATK bonus is capped at +10
+            int clampedBonusAtk = Mathf.Clamp(bonusAtk, -99, MaxPermBonusAtk);
+            int totalAtk = baseAtk + clampedBonusAtk + tempTurnAtk - weakenedAtkFlat;
+
+            int slotIdx = currentSlot != null ? currentSlot.slotIndex : -1;
+
             if (activeEnv != null)
             {
-                float mod = activeEnv.GetModifier(data.element);
-                totalAtk = Mathf.Max(0, Mathf.RoundToInt(totalAtk * mod));
+                int lvlIdx = Mathf.Clamp(activeEnv.level - 1, 0, 2);
+                bool matchesEnvElem = EnvironmentCardData.AreSameElement(activeEnv.element, data.element);
+                if (matchesEnvElem)
+                {
+                    bool offensiveElem = EnvironmentCardData.AreSameElement(activeEnv.element, "Fire") ||
+                                         EnvironmentCardData.AreSameElement(activeEnv.element, "Electric") ||
+                                         EnvironmentCardData.AreSameElement(activeEnv.element, "Dark") ||
+                                         EnvironmentCardData.AreSameElement(activeEnv.element, "Air") ||
+                                         EnvironmentCardData.AreSameElement(activeEnv.element, "Desert");
+                    totalAtk += offensiveElem
+                        ? (lvlIdx == 0 ? 5 : (lvlIdx == 1 ? 8 : 11))
+                        : (lvlIdx == 0 ? 4 : (lvlIdx == 1 ? 6 : 9));
+                }
+                else
+                {
+                    int mildEnvBonus = (lvlIdx == 0 ? 1 : (lvlIdx == 1 ? 2 : 3));
+                    if (EnvironmentCardData.AreSameElement(activeEnv.element, "Fire"))
+                        totalAtk += mildEnvBonus;
+                    else if (EnvironmentCardData.AreSameElement(activeEnv.element, "Air") && (slotIdx == 0 || slotIdx == 1 || slotIdx == 4 || slotIdx == 5))
+                        totalAtk += mildEnvBonus;
+                }
             }
             if (owner == null && CommanderSpiritEffects.TryResolveOwner(this, out PlayerState resolvedOwner, out _, out _))
             {
                 owner = resolvedOwner;
             }
-            int slotIdx = currentSlot != null ? currentSlot.slotIndex : -1;
             if (HasPassiveSubstr("Skyborne Agility") != null && (slotIdx == 0 || slotIdx == 1 || slotIdx == 4 || slotIdx == 5))
             {
                 totalAtk += 3;
@@ -183,13 +233,12 @@ namespace MonsterCardGame.Core
                     }
                     totalAtk += 3 * packCount;
                 }
-                if (HasPassiveSubstr("Chitin Swarm") != null)
+                if (HasPassiveSubstr("Chitin Swarm") != null || HasPassiveSubstr("Swarm Synergy") != null)
                 {
                     int swarmCount = 0;
                     foreach (var s in owner.slots)
                     {
-                        if (s != null && s.IsOccupied && s.currentMonster != null && s.currentMonster != this && s.currentMonster.IsAlive &&
-                            string.Equals(s.currentMonster.data.tribe, "Insects", StringComparison.OrdinalIgnoreCase))
+                        if (s != null && s.IsOccupied && s.currentMonster != null && s.currentMonster != this && s.currentMonster.IsAlive)
                         {
                             swarmCount++;
                         }
@@ -220,6 +269,10 @@ namespace MonsterCardGame.Core
                 totalAtk += Mathf.Max(2, Mathf.RoundToInt(totalAtk * 0.15f));
             }
             totalAtk += CommanderSpiritEffects.GetContinuousAtkBonusForInstance(this);
+            if (owner != null)
+            {
+                totalAtk += V2CardMechanicsEngine.GetUnitAuraAndCovenantAtkDelta(this, owner);
+            }
             return Mathf.Max(0, totalAtk);
         }
 
@@ -232,25 +285,45 @@ namespace MonsterCardGame.Core
         public void TakeDamage(int damage)
         {
             if (damage <= 0) return;
-            if (bubbleShield)
-            {
-                bubbleShield = false;
-                Debug.Log($"🫧 [{data.name}] completely absorbed the strike via Safety Bubble!");
-                return;
-            }
+            // V2 Constitution Rule #20: Bubble Shield & Digital Armor are eliminated; all protection is explicit +DEF
+            bubbleShield = false;
             currentDef = Mathf.Max(0, currentDef - damage);
             Debug.Log($"[{data.name}] took {damage} damage. Remaining DEF: {currentDef}");
         }
 
         public void HealDefense(int amount)
         {
-            currentDef = Mathf.Min(baseDef + 20, currentDef + amount);
+            if (amount <= 0) return;
+            int maxCap = baseDef + MaxPermBonusDef;
+            currentDef = Mathf.Min(maxCap, currentDef + amount);
         }
 
         public void AddBonusDef(int amount)
         {
-            baseDef += amount;
-            currentDef += amount;
+            if (amount <= 0) return;
+            int allowed = Mathf.Min(amount, Mathf.Max(0, MaxPermBonusDef - permBonusDef));
+            if (allowed > 0)
+            {
+                permBonusDef += allowed;
+                baseDef += allowed;
+                currentDef += allowed;
+            }
+            else
+            {
+                HealDefense(amount);
+            }
+        }
+
+        public void ApplyPermBuff(int atkDelta, int defDelta)
+        {
+            if (!IsBarrier && !IsAllAttack && atkDelta > 0)
+            {
+                bonusAtk = Mathf.Min(MaxPermBonusAtk, bonusAtk + atkDelta);
+            }
+            if (defDelta > 0)
+            {
+                AddBonusDef(defDelta);
+            }
         }
 
         public void ResetTurnReadiness(int currentTurn)
@@ -258,9 +331,12 @@ namespace MonsterCardGame.Core
             if (IsAlive)
             {
                 hasUsedActiveThisTurn = false;
+                skillsUsedThisTurn = 0;
+                doubleSkillOneTurn = false; // V2 Constitution Rule #36: Double Skill lasts 1 turn only!
                 tempTurnAtk = 0;
                 cycloneDiveUsed = false;
-                doubleStrike = false;
+                doubleStrike = HasPassiveSubstr("Twin Strike") != null;
+                if (rootedTurns > 0) rootedTurns--;
                 if (activeUsedThisTurn != null)
                 {
                     for (int i = 0; i < activeUsedThisTurn.Count; i++)
@@ -268,9 +344,13 @@ namespace MonsterCardGame.Core
                         activeUsedThisTurn[i] = false;
                     }
                 }
-                if (currentTurn > summonedTurn && frozenTurns <= 0)
+                if (!IsBarrier && currentTurn > summonedTurn && frozenTurns <= 0)
                 {
                     canAttack = true;
+                }
+                else if (IsBarrier)
+                {
+                    canAttack = false;
                 }
             }
         }

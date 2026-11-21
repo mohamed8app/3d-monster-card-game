@@ -152,13 +152,14 @@ namespace MonsterCardGame.UI
                 return;
             }
 
-            // Double Left Click on Spell / Environment / Leader: Instant play directly from hand
+            // Double Left Click on Spell / Environment / Leader / Covenant: Instant play directly from hand
             if (eventData.clickCount >= 2 && cardData != null && cardData.cardType != CardType.Monster)
             {
                 bool played = false;
                 if (cardData.cardType == CardType.Spell) played = TryCastSpell();
                 else if (cardData.cardType == CardType.Environment) played = TryActivateEnvironment();
                 else if (cardData.cardType == CardType.Leader) played = TrySummonLeader();
+                else if (cardData.cardType == CardType.Covenant) played = TryActivateCovenant();
                 if (played)
                 {
                     Destroy(gameObject);
@@ -359,6 +360,10 @@ namespace MonsterCardGame.UI
                 {
                     handled = TrySummonLeader();
                 }
+                else if (cardData.cardType == CardType.Covenant && eventData.position.y > 220f)
+                {
+                    handled = TryActivateCovenant();
+                }
             }
 
             // 3. Proximity snap distance for monster drops near player slots (skip if player already dropped directly on a slot that refused)
@@ -472,6 +477,21 @@ namespace MonsterCardGame.UI
 
             Vector3 startPos = transform.position;
             bool success = gm.PlayLeaderCard(gm.humanPlayer, cardData);
+            if (success && BattleUIManager.Instance != null)
+            {
+                BattleUIManager.Instance.LaunchPlayerUtilityCardFlight(cardData, startPos);
+                BattleUIManager.Instance.DeselectHandCards();
+            }
+            return success;
+        }
+
+        private bool TryActivateCovenant()
+        {
+            var gm = GameManager.Instance;
+            if (gm == null || !gm.isPlayerTurn) return false;
+
+            Vector3 startPos = transform.position;
+            bool success = gm.PlayCovenantCard(gm.humanPlayer, cardData);
             if (success && BattleUIManager.Instance != null)
             {
                 BattleUIManager.Instance.LaunchPlayerUtilityCardFlight(cardData, startPos);

@@ -1064,6 +1064,7 @@ namespace MonsterCardGame.UI
 
             UpdateSingleLeaderSlot(
                 gm.humanPlayer != null ? gm.humanPlayer.activeLeader : null,
+                gm.humanPlayer != null ? gm.humanPlayer.activeCovenant : null,
                 true,
                 playerLeaderCardArt,
                 playerLeaderEmptyGroup,
@@ -1075,6 +1076,7 @@ namespace MonsterCardGame.UI
 
             UpdateSingleLeaderSlot(
                 gm.aiPlayer != null ? gm.aiPlayer.activeLeader : null,
+                gm.aiPlayer != null ? gm.aiPlayer.activeCovenant : null,
                 false,
                 enemyLeaderCardArt,
                 enemyLeaderEmptyGroup,
@@ -1087,6 +1089,7 @@ namespace MonsterCardGame.UI
 
         private void UpdateSingleLeaderSlot(
             CardData leader,
+            CardData covenant,
             bool isPlayer,
             Image artImg,
             GameObject emptyGroup,
@@ -1131,7 +1134,9 @@ namespace MonsterCardGame.UI
                 }
                 if (nameTxt != null)
                 {
-                    nameTxt.text = MonsterArtLoader.FormatSpiritTitle(leader);
+                    string titleStr = MonsterArtLoader.FormatSpiritTitle(leader);
+                    if (covenant != null) titleStr += $"\n⚖️ {covenant.name}";
+                    nameTxt.text = titleStr;
                     nameTxt.color = Color.Lerp(catColor, Color.white, 0.48f);
                 }
                 if (tribeTxt != null && spiritCtrl == null)
@@ -1142,9 +1147,45 @@ namespace MonsterCardGame.UI
                 }
                 if (descTxt != null)
                 {
-                    descTxt.text = string.IsNullOrEmpty(leader.description)
+                    string dStr = string.IsNullOrEmpty(leader.description)
                         ? "Commander Spirit passive aura is active and empowering allied clan monsters."
                         : leader.description;
+                    if (covenant != null) dStr += $"\n⚖️ COVENANT: {covenant.description}";
+                    descTxt.text = dStr;
+                }
+            }
+            else if (covenant != null)
+            {
+                if (emptyGroup != null) emptyGroup.SetActive(false);
+                if (spiritCtrl != null && spiritCtrl.circularRim != null)
+                {
+                    spiritCtrl.circularRim.gameObject.SetActive(true);
+                }
+                if (artImg != null)
+                {
+                    artImg.gameObject.SetActive(true);
+                    Sprite sp = MonsterArtLoader.GetCardSprite(covenant);
+                    artImg.sprite = sp != null ? sp : GameBootstrapper.GetSpiritCrestSprite();
+                    artImg.color = sp != null ? Color.white : new Color(0.96f, 0.74f, 0.28f);
+                    artImg.preserveAspect = true;
+                }
+                if (costTxt != null)
+                {
+                    costTxt.gameObject.SetActive(false);
+                    if (costTxt.transform.parent != null) costTxt.transform.parent.gameObject.SetActive(false);
+                }
+                if (nameTxt != null)
+                {
+                    nameTxt.text = $"⚖️ {covenant.name}";
+                    nameTxt.color = new Color(0.98f, 0.80f, 0.34f);
+                }
+                if (tribeTxt != null && spiritCtrl == null)
+                {
+                    tribeTxt.text = "⚖️ ALTAR COVENANT ACTIVE";
+                }
+                if (descTxt != null)
+                {
+                    descTxt.text = covenant.description;
                 }
             }
             else
@@ -1171,13 +1212,13 @@ namespace MonsterCardGame.UI
                 }
                 if (tribeTxt != null && spiritCtrl == null)
                 {
-                    tribeTxt.text = isPlayer ? "✧ SPIRIT SEAL (EMPTY)" : "✧ ENEMY SEAL (EMPTY)";
+                    tribeTxt.text = isPlayer ? "✧ SPIRIT / COVENANT ALTAR" : "✧ ENEMY ALTAR (EMPTY)";
                 }
                 if (descTxt != null)
                 {
                     descTxt.text = isPlayer
-                        ? "Drag a Commander Spirit card into this circular altar to activate clan aura."
-                        : "Enemy Commander Spirit altar (Protected passive sanctuary).";
+                        ? "Drag a Commander Spirit or Altar Covenant card here to activate it."
+                        : "Enemy Spirit & Altar Covenant sanctuary.";
                 }
             }
         }
@@ -1209,22 +1250,36 @@ namespace MonsterCardGame.UI
             var gm = GameManager.Instance;
             if (gm == null || gm.humanPlayer == null) return;
 
-            if (selectedCardForAction != null &&
-                (selectedCardForAction.cardType == CardType.Leader || string.Equals(selectedCardForAction.card_type, "leader", StringComparison.OrdinalIgnoreCase)) &&
-                gm.isPlayerTurn)
+            if (selectedCardForAction != null && gm.isPlayerTurn)
             {
-                if (gm.PlayLeaderCard(gm.humanPlayer, selectedCardForAction))
+                if (selectedCardForAction.cardType == CardType.Leader || string.Equals(selectedCardForAction.card_type, "leader", StringComparison.OrdinalIgnoreCase))
                 {
-                    playerSpiritController?.TriggerSummonFlare();
-                    DeselectHandCards();
-                    UpdateUI();
+                    if (gm.PlayLeaderCard(gm.humanPlayer, selectedCardForAction))
+                    {
+                        playerSpiritController?.TriggerSummonFlare();
+                        DeselectHandCards();
+                        UpdateUI();
+                    }
+                    return;
                 }
-                return;
+                if (selectedCardForAction.cardType == CardType.Covenant || string.Equals(selectedCardForAction.card_type, "covenant", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (gm.PlayCovenantCard(gm.humanPlayer, selectedCardForAction))
+                    {
+                        DeselectHandCards();
+                        UpdateUI();
+                    }
+                    return;
+                }
             }
 
             if (gm.humanPlayer.activeLeader != null)
             {
                 ShowCardDetails(gm.humanPlayer.activeLeader);
+            }
+            else if (gm.humanPlayer.activeCovenant != null)
+            {
+                ShowCardDetails(gm.humanPlayer.activeCovenant);
             }
         }
 
@@ -2352,6 +2407,95 @@ namespace MonsterCardGame.UI
                 actionBadge.GetComponent<Image>().raycastTarget = false;
                 var txtAction = GameBootstrapper.CreateText(actionBadge.transform, "ActionText", tribeText, 10,
                     new Color(0.92f, 0.97f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(124f, 18f));
+                txtAction.fontStyle = FontStyle.Bold;
+                txtAction.raycastTarget = false;
+            }
+            else if (card.cardType == CardType.Covenant)
+            {
+                // Right-Wing Altar Covenant Card (0-Mana Self-Restriction & Permanent Altar Reward)
+                Color covBg = new Color(0.18f, 0.06f, 0.08f, 0.98f);
+                Color covGold = new Color(0.96f, 0.78f, 0.32f, 1f);
+                var bgImg = cardObj.GetComponent<Image>();
+                if (bgImg != null) bgImg.color = covBg;
+
+                if (customArt != null)
+                {
+                    var artObj = new GameObject("CardArt");
+                    artObj.transform.SetParent(cardObj.transform, false);
+                    var rectArt = artObj.AddComponent<RectTransform>();
+                    rectArt.anchorMin = Vector2.zero;
+                    rectArt.anchorMax = Vector2.one;
+                    rectArt.sizeDelta = Vector2.zero;
+                    rectArt.anchoredPosition = Vector2.zero;
+                    var artImg = artObj.AddComponent<Image>();
+                    artImg.sprite = customArt;
+                    artImg.color = new Color(1f, 1f, 1f, 0.78f);
+                    artImg.raycastTarget = false;
+                }
+
+                var covOutline = cardObj.GetComponent<Outline>() ?? cardObj.AddComponent<Outline>();
+                covOutline.effectColor = covGold;
+                covOutline.effectDistance = new Vector2(2f, 2f);
+
+                // Top-left COVENANT tag
+                var tagBadge = GameBootstrapper.CreatePanel(cardObj.transform, "CovenantBadge", new Color(0.42f, 0.10f, 0.14f, 0.96f),
+                    new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(46f, -14f), new Vector2(84f, 18f));
+                tagBadge.GetComponent<Image>().raycastTarget = false;
+                var txtTag = GameBootstrapper.CreateText(tagBadge.transform, "TagText", "⚖️ COVENANT", 8,
+                    covGold, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(82f, 16f));
+                txtTag.fontStyle = FontStyle.Bold;
+                txtTag.raycastTarget = false;
+
+                // Top-right Mana Cost circle (0 Mana)
+                var costCircle = GameBootstrapper.CreateCirclePanel(cardObj.transform, "CostCircle", new Color(0.50f, 0.14f, 0.16f, 0.98f),
+                    new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-15f, -15f), new Vector2(28f, 28f));
+                costCircle.GetComponent<Image>().raycastTarget = false;
+                var costOut = costCircle.AddComponent<Outline>();
+                costOut.effectColor = covGold;
+                costOut.effectDistance = new Vector2(1.5f, 1.5f);
+                var txtCost = GameBootstrapper.CreateText(costCircle.transform, "CostText", card.cost.ToString(), 14,
+                    covGold, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(28f, 28f));
+                txtCost.fontStyle = FontStyle.Bold;
+                txtCost.raycastTarget = false;
+
+                // Center Emblem (when no custom art)
+                if (customArt == null)
+                {
+                    var emblem = GameBootstrapper.CreateText(cardObj.transform, "CovEmblem", "⚖️", 34,
+                        covGold, TextAnchor.MiddleCenter, new Vector2(0f, 32f), new Vector2(96f, 44f));
+                    emblem.raycastTarget = false;
+                }
+
+                // Name Plate
+                var namePanel = GameBootstrapper.CreatePanel(cardObj.transform, "NamePlate", new Color(0.10f, 0.04f, 0.06f, 0.95f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -6f), new Vector2(134f, 24f));
+                namePanel.GetComponent<Image>().raycastTarget = false;
+                var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", $"{card.name}", 10,
+                    covGold, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(128f, 22f));
+                txtName.fontStyle = FontStyle.Bold;
+                txtName.resizeTextForBestFit = true;
+                txtName.resizeTextMinSize = 7;
+                txtName.resizeTextMaxSize = 10;
+                txtName.raycastTarget = false;
+
+                // Description box
+                var descPanel = GameBootstrapper.CreatePanel(cardObj.transform, "DescPanel", new Color(0.06f, 0.03f, 0.05f, 0.92f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -44f), new Vector2(134f, 46f));
+                descPanel.GetComponent<Image>().raycastTarget = false;
+                var txtDesc = GameBootstrapper.CreateText(descPanel.transform, "DescText", card.description, 9,
+                    new Color(0.96f, 0.92f, 0.86f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(128f, 44f));
+                txtDesc.resizeTextForBestFit = true;
+                txtDesc.resizeTextMinSize = 6;
+                txtDesc.resizeTextMaxSize = 9;
+                txtDesc.raycastTarget = false;
+
+                // Bottom Style / Tier badge
+                var actionBadge = GameBootstrapper.CreatePanel(cardObj.transform, "ActionBadge", new Color(0.46f, 0.14f, 0.18f, 0.96f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -77f), new Vector2(128f, 18f));
+                actionBadge.GetComponent<Image>().raycastTarget = false;
+                string styleLabel = string.IsNullOrEmpty(card.playstyle) ? "Altar Vow" : $"{card.playstyle} • T{Mathf.Max(1, card.tier_num)}";
+                var txtAction = GameBootstrapper.CreateText(actionBadge.transform, "ActionText", $"📜 {styleLabel}", 9,
+                    covGold, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(124f, 16f));
                 txtAction.fontStyle = FontStyle.Bold;
                 txtAction.raycastTarget = false;
             }
@@ -3869,6 +4013,15 @@ namespace MonsterCardGame.UI
                         UpdateUI();
                     }
                 }
+                else if (chosenCard.cardType == CardType.Covenant)
+                {
+                    if (gm.PlayCovenantCard(gm.humanPlayer, chosenCard))
+                    {
+                        LaunchPlayerUtilityCardFlight(chosenCard, startPos);
+                        DeselectHandCards();
+                        UpdateUI();
+                    }
+                }
             }
             else if (selectedBoardSlotIndex >= 0)
             {
@@ -4310,7 +4463,7 @@ namespace MonsterCardGame.UI
 
             var gm = GameManager.Instance;
             string currentOppName = (gm != null && gm.aiPlayer != null) ? gm.aiPlayer.playerName : "Opponent";
-            string nextOppName = (gm != null && gm.currentOpponent == GameManager.OpponentModel.Gora) ? "Navi (Tactical Control AI)" : "Gora (Aggressive Combat AI)";
+            string nextOppName = (gm != null) ? gm.GetOpponentDisplayName() : "AI Opponent";
 
             if (isVictory)
             {

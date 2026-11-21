@@ -7,10 +7,11 @@ namespace MonsterCardGame.Data
     [Serializable]
     public enum CardType
     {
-        Monster = 0,        // Field Monster Card occupying a tactical slot
-        Spell = 1,          // Instant Intermediary Tactical Spell Card
-        Environment = 2,    // Shared Global Battlefield Environment Card
-        Leader = 3          // Dedicated Side Leader Card passive commander aura
+        Monster = 0,        // Field Monster Card occupying a tactical slot (IDs 471..2270)
+        Spell = 1,          // Instant Tactical Magic Spell Card (IDs 171..470)
+        Environment = 2,    // Shared Global Battlefield Environment Card (IDs 1..10)
+        Leader = 3,         // Dedicated Owner-Only Commander Spirit Talisman Card (IDs 11..70)
+        Covenant = 4        // Right-Wing Altar Covenant & Self-Restriction Card (IDs 71..170)
     }
 
     [Serializable]
@@ -141,7 +142,8 @@ namespace MonsterCardGame.Data
         public string card_type = "monster";
         public string element = "Fire";
         public string tribe = "";
-        public string group = "🔥 Fire";
+        public string playstyle = "";
+        public string group = "Fire";
         public string group_en = "Fire";
         public int cost = 1;
         public int powerCost = 0; // Optional permanent Power cost required on monster active skill
@@ -154,6 +156,9 @@ namespace MonsterCardGame.Data
         public int tier_num = 1;
         public int atk = 10;
         public int def = 20;
+        public bool is_barrier = false;
+        public bool is_all_attack = false;
+        public string v2_ops_json = "";
         public string passives_text = "";
         public string active_skill = "";
         public List<string> passives = new List<string>();
@@ -219,12 +224,16 @@ namespace MonsterCardGame.Data
 
         public TacticalRole GetRoleEnum()
         {
+            if (is_barrier) return TacticalRole.PureShield;
             switch (role)
             {
                 case "Attacker": return TacticalRole.Attacker;
+                case "Assassin": return TacticalRole.Assassin;
                 case "Defender": return TacticalRole.Defender;
+                case "Barrier":
                 case "Pure Shield": return TacticalRole.PureShield;
                 case "Support": return TacticalRole.Support;
+                case "Disruptor": return TacticalRole.Disruptor;
                 default: return TacticalRole.Attacker;
             }
         }

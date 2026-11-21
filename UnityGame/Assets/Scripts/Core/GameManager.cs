@@ -42,6 +42,36 @@ namespace MonsterCardGame.Core
     {
         public ChampionDeckEntry fire_aggro;
         public ChampionDeckEntry water_control;
+
+        // Pillar I: Aggressive & Tempo
+        public ChampionDeckEntry flank_blitz_rush;
+        public ChampionDeckEntry infernal_burn_sacrifice;
+        public ChampionDeckEntry venomous_brood_swarm;
+        public ChampionDeckEntry windfury_infiltration;
+
+        // Pillar II: Midrange & Board Domination
+        public ChampionDeckEntry vanguard_phalanx;
+        public ChampionDeckEntry runic_forge_ramp;
+        public ChampionDeckEntry apex_predator_hunt;
+        public ChampionDeckEntry radiant_retribution;
+
+        // Pillar III: Control & Attrition
+        public ChampionDeckEntry glacial_lock_freeze;
+        public ChampionDeckEntry tidal_bubble_stall;
+        public ChampionDeckEntry granite_bastion_stalemate;
+        public ChampionDeckEntry divine_purify_aegis;
+
+        // Pillar IV: Combo & Engines
+        public ChampionDeckEntry shadow_necromancy;
+        public ChampionDeckEntry arcane_overcharge_spellburst;
+        public ChampionDeckEntry soul_harvest_drain;
+        public ChampionDeckEntry metamorphic_cloning;
+
+        // Pillar V: Disruptive & Climate Specialists
+        public ChampionDeckEntry sandstorm_erosion;
+        public ChampionDeckEntry mind_thefts_puppetry;
+        public ChampionDeckEntry mana_wither_denial;
+        public ChampionDeckEntry colossal_cataclysm_ramp;
     }
 
     [Serializable]
@@ -50,6 +80,29 @@ namespace MonsterCardGame.Core
         public string deck_name;
         public string description;
         public int[] card_ids;
+    }
+
+    [Serializable]
+    public class V2ModelEntry
+    {
+        public string model_id;
+        public string display_name;
+        public string category;
+        public int matches;
+        public float elo;
+        public float win_rate;
+        public string brain_resource;
+        public int[] card_ids;
+    }
+
+    [Serializable]
+    public class V2Roster41Wrapper
+    {
+        public string updated_at;
+        public int obs_dim;
+        public int action_dim;
+        public int total_models;
+        public V2ModelEntry[] models;
     }
 
     public class GameManager : MonoBehaviour
@@ -64,15 +117,20 @@ namespace MonsterCardGame.Core
             NaviChampion,
             FireAggro,
             WaterControl,
-            CustomJson
+            CustomJson,
+            ModelRoster41
         }
 
-        [Header("Gora & Navi Arena AI Opponents & Deck Setup")]
+        [Header("Arena_Lab_V2 41-Model Neural AI & Deck Setup")]
+        public bool useV2RosterOpponent = true;
+        public string selectedOpponentModelId = "free_01";
+        public string selectedPlayerModelDeckId = "free_02";
         public OpponentModel currentOpponent = OpponentModel.Gora;
-        public PlayerDeckSelection selectedPlayerDeck = PlayerDeckSelection.BalancedDraft;
+        public PlayerDeckSelection selectedPlayerDeck = PlayerDeckSelection.ModelRoster41;
         public int matchCounter = 0;
         public readonly Dictionary<int, CardData> masterCardIndex = new Dictionary<int, CardData>();
         private ChampionDecksWrapper cachedChampionDecks = null;
+        private V2Roster41Wrapper cachedRoster41 = null;
 
         [Header("Players")]
         public PlayerState humanPlayer;
@@ -88,6 +146,7 @@ namespace MonsterCardGame.Core
         public CardData activeEnvironmentCard = null;
         public string activeEnvironmentOwner = "";
         public List<CardData> allLeaders = new List<CardData>();
+        public List<CardData> allCovenants = new List<CardData>();
 
         [Header("Match Statistics")]
         public int playerSpellsCastCount = 0;
@@ -145,7 +204,9 @@ namespace MonsterCardGame.Core
                 {
                     allMonsters = new List<MonsterData>();
                     allLeaders = new List<CardData>();
+                    allCovenants = new List<CardData>();
                     var allSpells = new List<CardData>();
+                    var loadedEnvs = new List<EnvironmentCardData>();
 
                     foreach (var c in wrapper.cards)
                     {
@@ -159,7 +220,8 @@ namespace MonsterCardGame.Core
                                 cardType = CardType.Monster,
                                 card_type = "monster",
                                 element = c.element,
-                        tribe = c.tribe,
+                                tribe = c.tribe,
+                                playstyle = c.playstyle,
                                 group = c.group,
                                 group_en = c.group_en,
                                 role = c.role,
@@ -168,8 +230,11 @@ namespace MonsterCardGame.Core
                                 tier_num = c.tier_num,
                                 cost = c.cost,
                                 powerCost = c.powerCost,
-                                atk = c.atk,
+                                atk = c.is_barrier ? 0 : c.atk,
                                 def = c.def,
+                                is_barrier = c.is_barrier,
+                                is_all_attack = c.is_all_attack,
+                                v2_ops_json = c.v2_ops_json,
                                 passives_text = c.passives_text,
                                 active_skill = c.active_skill,
                                 passives = c.passives ?? new List<string>(),
@@ -194,20 +259,40 @@ namespace MonsterCardGame.Core
                             if (string.IsNullOrEmpty(c.name)) c.name = c.id.ToString();
                             allLeaders.Add(c);
                         }
+                        else if (c.cardType == CardType.Covenant || string.Equals(c.card_type, "covenant", StringComparison.OrdinalIgnoreCase))
+                        {
+                            c.cardType = CardType.Covenant;
+                            if (string.IsNullOrEmpty(c.name)) c.name = c.id.ToString();
+                            allCovenants.Add(c);
+                        }
+                        else if (c.cardType == CardType.Environment || string.Equals(c.card_type, "environment", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var env = new EnvironmentCardData(c.element, 1)
+                            {
+                                id = c.id,
+                                name = string.IsNullOrEmpty(c.name) ? $"{c.element} Arena" : c.name,
+                                description = string.IsNullOrEmpty(c.description) ? $"{c.element} Arena" : c.description,
+                                v2_ops_json = c.v2_ops_json
+                            };
+                            loadedEnvs.Add(env);
+                        }
                     }
 
                     SpellDatabase.SetSpellsFromDatabase(allSpells);
-                    Debug.Log($"✅ Loaded Unified Balanced Database: {allMonsters.Count} Monsters + {allSpells.Count} Tactical Spells + {allLeaders.Count} Commander Spirits!");
+                    Debug.Log($"✅ Loaded V2 Master Database ({wrapper.cards.Count} Cards): {allMonsters.Count} Monsters + {allSpells.Count} Spells + {allCovenants.Count} Covenants + {allLeaders.Count} Commander Spirits + {loadedEnvs.Count} Environments!");
 
                     masterCardIndex.Clear();
                     foreach (var m in allMonsters) if (m != null) masterCardIndex[m.id] = m;
                     foreach (var s in allSpells) if (s != null) masterCardIndex[s.id] = s;
                     foreach (var l in allLeaders) if (l != null) masterCardIndex[l.id] = l;
-                    string[] elems = { "Fire", "Water", "Ice", "Earth", "Electric", "Air", "Nature", "Light", "Dark", "Desert" };
+                    foreach (var cov in allCovenants) if (cov != null) masterCardIndex[cov.id] = cov;
+                    foreach (var e in loadedEnvs) if (e != null) masterCardIndex[e.id] = e;
+                    string[] elems = { "Fire", "Water", "Nature", "Electric", "Ice", "Earth", "Dark", "Light", "Air", "Desert" };
                     for (int i = 0; i < elems.Length; i++)
                     {
                         var env = new EnvironmentCardData(elems[i], 1);
-                        masterCardIndex[env.id] = env;
+                        if (!masterCardIndex.ContainsKey(env.id))
+                            masterCardIndex[env.id] = env;
                     }
                     return;
                 }
@@ -245,10 +330,16 @@ namespace MonsterCardGame.Core
             if (masterCardIndex.TryGetValue(id, out var proto))
             {
                 if (proto is MonsterData md) return CloneMonsterCard(md);
-                if (proto is EnvironmentCardData ed) return new EnvironmentCardData(ed.element, 1);
+                if (proto is EnvironmentCardData ed) return new EnvironmentCardData(ed.element, 1) { id = ed.id, name = ed.name, description = ed.description, v2_ops_json = ed.v2_ops_json };
                 if (proto.cardType == CardType.Spell) return CloneSpellCard(proto);
                 if (proto.cardType == CardType.Leader) return CloneLeaderCard(proto);
-                if (proto.cardType == CardType.Environment) return new EnvironmentCardData(proto.element, 1);
+                if (proto.cardType == CardType.Covenant) return CloneCovenantCard(proto);
+                if (proto.cardType == CardType.Environment) return new EnvironmentCardData(proto.element, 1) { id = proto.id, name = proto.name, description = proto.description, v2_ops_json = proto.v2_ops_json };
+            }
+            if (id >= 1 && id <= 10)
+            {
+                string[] elems = { "Fire", "Water", "Nature", "Electric", "Ice", "Earth", "Dark", "Light", "Air", "Desert" };
+                return new EnvironmentCardData(elems[id - 1], 1);
             }
             if (id >= 441 && id <= 450)
             {
@@ -347,12 +438,36 @@ namespace MonsterCardGame.Core
         public List<int> GetArchetypeCardIds(string key)
         {
             var c = LoadChampionDecksDatabase();
-            if (c != null && c.archetypes != null)
+            if (c != null && c.archetypes != null && !string.IsNullOrEmpty(key))
             {
-                if (key == "fire_aggro" && c.archetypes.fire_aggro != null && c.archetypes.fire_aggro.card_ids != null)
-                    return new List<int>(c.archetypes.fire_aggro.card_ids);
-                if (key == "water_control" && c.archetypes.water_control != null && c.archetypes.water_control.card_ids != null)
-                    return new List<int>(c.archetypes.water_control.card_ids);
+                ChampionDeckEntry entry = null;
+                switch (key.ToLowerInvariant())
+                {
+                    case "fire_aggro": entry = c.archetypes.fire_aggro ?? c.archetypes.infernal_burn_sacrifice; break;
+                    case "water_control": entry = c.archetypes.water_control ?? c.archetypes.tidal_bubble_stall; break;
+                    case "flank_blitz_rush": entry = c.archetypes.flank_blitz_rush; break;
+                    case "infernal_burn_sacrifice": entry = c.archetypes.infernal_burn_sacrifice; break;
+                    case "venomous_brood_swarm": entry = c.archetypes.venomous_brood_swarm; break;
+                    case "windfury_infiltration": entry = c.archetypes.windfury_infiltration; break;
+                    case "vanguard_phalanx": entry = c.archetypes.vanguard_phalanx; break;
+                    case "runic_forge_ramp": entry = c.archetypes.runic_forge_ramp; break;
+                    case "apex_predator_hunt": entry = c.archetypes.apex_predator_hunt; break;
+                    case "radiant_retribution": entry = c.archetypes.radiant_retribution; break;
+                    case "glacial_lock_freeze": entry = c.archetypes.glacial_lock_freeze; break;
+                    case "tidal_bubble_stall": entry = c.archetypes.tidal_bubble_stall; break;
+                    case "granite_bastion_stalemate": entry = c.archetypes.granite_bastion_stalemate; break;
+                    case "divine_purify_aegis": entry = c.archetypes.divine_purify_aegis; break;
+                    case "shadow_necromancy": entry = c.archetypes.shadow_necromancy; break;
+                    case "arcane_overcharge_spellburst": entry = c.archetypes.arcane_overcharge_spellburst; break;
+                    case "soul_harvest_drain": entry = c.archetypes.soul_harvest_drain; break;
+                    case "metamorphic_cloning": entry = c.archetypes.metamorphic_cloning; break;
+                    case "sandstorm_erosion": entry = c.archetypes.sandstorm_erosion; break;
+                    case "mind_thefts_puppetry": entry = c.archetypes.mind_thefts_puppetry; break;
+                    case "mana_wither_denial": entry = c.archetypes.mana_wither_denial; break;
+                    case "colossal_cataclysm_ramp": entry = c.archetypes.colossal_cataclysm_ramp; break;
+                }
+                if (entry != null && entry.card_ids != null)
+                    return new List<int>(entry.card_ids);
             }
             return null;
         }
@@ -434,11 +549,121 @@ namespace MonsterCardGame.Core
             return GetGoraCardIds();
         }
 
+        public V2Roster41Wrapper LoadV2Roster41(bool forceReload = false)
+        {
+            if (cachedRoster41 != null && !forceReload) return cachedRoster41;
+
+            string jsonText = null;
+            try
+            {
+                string externalPath = System.IO.Path.Combine(Application.dataPath, "../v2_roster_41.json");
+                if (System.IO.File.Exists(externalPath))
+                    jsonText = System.IO.File.ReadAllText(externalPath, System.Text.Encoding.UTF8);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"Could not load external v2_roster_41.json: {e.Message}");
+            }
+
+            if (string.IsNullOrEmpty(jsonText))
+            {
+                var resAsset = Resources.Load<TextAsset>("v2_roster_41");
+                if (resAsset != null) jsonText = resAsset.text;
+            }
+
+            if (!string.IsNullOrEmpty(jsonText))
+            {
+                try
+                {
+                    cachedRoster41 = JsonUtility.FromJson<V2Roster41Wrapper>(jsonText);
+                    if (cachedRoster41 != null && cachedRoster41.models != null)
+                        Debug.Log($"🧠 Loaded Arena_Lab_V2 41-Model Neural Roster ({cachedRoster41.models.Length} models, OBS={cachedRoster41.obs_dim})!");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"Error parsing v2_roster_41.json: {e.Message}");
+                }
+            }
+            return cachedRoster41;
+        }
+
+        public List<V2ModelEntry> GetRoster41Models()
+        {
+            var r = LoadV2Roster41();
+            if (r != null && r.models != null && r.models.Length > 0)
+                return new List<V2ModelEntry>(r.models);
+            return new List<V2ModelEntry>();
+        }
+
+        public V2ModelEntry GetModelEntryById(string modelId)
+        {
+            if (string.IsNullOrEmpty(modelId)) return null;
+            var r = LoadV2Roster41();
+            if (r == null || r.models == null) return null;
+            for (int i = 0; i < r.models.Length; i++)
+            {
+                if (r.models[i] != null && string.Equals(r.models[i].model_id, modelId, StringComparison.OrdinalIgnoreCase))
+                    return r.models[i];
+            }
+            return r.models.Length > 0 ? r.models[0] : null;
+        }
+
+        public void SetOpponentModel41(string modelId)
+        {
+            if (string.IsNullOrEmpty(modelId)) return;
+            useV2RosterOpponent = true;
+            selectedOpponentModelId = modelId;
+            Debug.Log($"🧠 AI Opponent locked to V2 Neural Model: {modelId}");
+        }
+
+        public void CycleOpponentModel41(int delta)
+        {
+            var list = GetRoster41Models();
+            if (list.Count == 0) return;
+            int idx = 0;
+            for (int i = 0; i < list.Count; i++)
+            {
+                if (string.Equals(list[i].model_id, selectedOpponentModelId, StringComparison.OrdinalIgnoreCase))
+                {
+                    idx = i;
+                    break;
+                }
+            }
+            int nextIdx = (idx + delta) % list.Count;
+            if (nextIdx < 0) nextIdx += list.Count;
+            SetOpponentModel41(list[nextIdx].model_id);
+        }
+
+        public void SetPlayerDeckModel41(string modelId)
+        {
+            if (string.IsNullOrEmpty(modelId)) return;
+            selectedPlayerModelDeckId = modelId;
+            selectedPlayerDeck = PlayerDeckSelection.ModelRoster41;
+            Debug.Log($"🎴 Player deck set to 41-Model Settled Deck: {modelId}");
+        }
+
+        public string GetOpponentDisplayName()
+        {
+            if (useV2RosterOpponent)
+            {
+                var entry = GetModelEntryById(selectedOpponentModelId);
+                if (entry != null) return entry.display_name;
+            }
+            return (currentOpponent == OpponentModel.Gora)
+                ? "Gora (Aggressive Combat AI)"
+                : "Navi (Tactical Control AI)";
+        }
+
         public List<CardData> BuildPlayerSelectedDeck()
         {
             List<int> ids = null;
             switch (selectedPlayerDeck)
             {
+                case PlayerDeckSelection.ModelRoster41:
+                    var mEntry = GetModelEntryById(selectedPlayerModelDeckId);
+                    if (mEntry != null && mEntry.card_ids != null && mEntry.card_ids.Length > 0)
+                        ids = new List<int>(mEntry.card_ids);
+                    break;
                 case PlayerDeckSelection.GoraChampion: ids = GetGoraCardIds(); break;
                 case PlayerDeckSelection.NaviChampion: ids = GetNaviCardIds(); break;
                 case PlayerDeckSelection.FireAggro: ids = GetArchetypeCardIds("fire_aggro"); break;
@@ -461,7 +686,16 @@ namespace MonsterCardGame.Core
 
         public List<CardData> BuildAIOpponentDeck()
         {
-            List<int> ids = (currentOpponent == OpponentModel.Gora) ? GetGoraCardIds() : GetNaviCardIds();
+            List<int> ids = null;
+            if (useV2RosterOpponent)
+            {
+                var oppEntry = GetModelEntryById(selectedOpponentModelId);
+                if (oppEntry != null && oppEntry.card_ids != null && oppEntry.card_ids.Length > 0)
+                    ids = new List<int>(oppEntry.card_ids);
+            }
+            if (ids == null || ids.Count == 0)
+                ids = (currentOpponent == OpponentModel.Gora) ? GetGoraCardIds() : GetNaviCardIds();
+
             if (ids != null && ids.Count > 0)
             {
                 var deck = BuildDeckFromIds(ids);
@@ -475,12 +709,19 @@ namespace MonsterCardGame.Core
 
         public void AdvanceToNextOpponent()
         {
+            if (useV2RosterOpponent)
+            {
+                // Keep the player's manually selected 41-Model Opponent locked so they can evaluate & rematch it freely!
+                Debug.Log($"🧠 Retaining selected 41-Model Opponent for rematch: {GetOpponentDisplayName()}");
+                return;
+            }
             currentOpponent = (currentOpponent == OpponentModel.Gora) ? OpponentModel.Navi : OpponentModel.Gora;
             Debug.Log($"🔄 Next Opponent switched to: {currentOpponent}");
         }
 
         public void SetOpponent(OpponentModel opp)
         {
+            useV2RosterOpponent = false;
             currentOpponent = opp;
             Debug.Log($"🎯 Opponent manually set to: {currentOpponent}");
         }
@@ -495,6 +736,11 @@ namespace MonsterCardGame.Core
         {
             switch (selectedPlayerDeck)
             {
+                case PlayerDeckSelection.ModelRoster41:
+                    var mEntry = GetModelEntryById(selectedPlayerModelDeckId);
+                    if (mEntry != null)
+                        return $"🧠 {mEntry.display_name} Settled Deck (50 Cards)";
+                    return "🧠 Selected 41-Model Settled Deck (50 Cards)";
                 case PlayerDeckSelection.GoraChampion: return "🏆 Gora Core Settled Deck (50 Cards)";
                 case PlayerDeckSelection.NaviChampion: return "🟣 Navi Tactical Settled Deck (50 Cards)";
                 case PlayerDeckSelection.FireAggro: return "🔥 Fire Aggro Assault Deck (50 Cards)";
@@ -517,19 +763,38 @@ namespace MonsterCardGame.Core
             matchCounter++;
 
             LoadChampionDecksDatabase();
+            LoadV2Roster41();
 
             var deckA = BuildPlayerSelectedDeck();
             var deckB = BuildAIOpponentDeck();
 
-            if (currentOpponent == OpponentModel.Gora)
+            if (useV2RosterOpponent && GetModelEntryById(selectedOpponentModelId) != null)
+            {
+                var oppEntry = GetModelEntryById(selectedOpponentModelId);
+                aiPlayer.playerName = $"{oppEntry.display_name} [Neural AI]";
+                if (aiOpponent != null)
+                {
+                    aiOpponent.useNeuralBrain = true;
+                    aiOpponent.SetNeuralModel(oppEntry.model_id, oppEntry.display_name);
+                }
+            }
+            else if (currentOpponent == OpponentModel.Gora)
             {
                 aiPlayer.playerName = "Gora (Aggressive Combat AI)";
-                if (aiOpponent != null) aiOpponent.combatStyle = AICombatStyle.GoraAggressive;
+                if (aiOpponent != null)
+                {
+                    aiOpponent.useNeuralBrain = false;
+                    aiOpponent.combatStyle = AICombatStyle.GoraAggressive;
+                }
             }
             else
             {
                 aiPlayer.playerName = "Navi (Tactical Control AI)";
-                if (aiOpponent != null) aiOpponent.combatStyle = AICombatStyle.NaviTactical;
+                if (aiOpponent != null)
+                {
+                    aiOpponent.useNeuralBrain = false;
+                    aiOpponent.combatStyle = AICombatStyle.NaviTactical;
+                }
             }
 
             humanPlayer.InitializeDeck(deckA);
@@ -846,11 +1111,12 @@ namespace MonsterCardGame.Core
             return new MonsterData
             {
                 id = src.id,
-                name = src.id.ToString(),
+                name = string.IsNullOrEmpty(src.name) ? src.id.ToString() : src.name,
                 cardType = CardType.Monster,
                 card_type = "monster",
                 element = src.element,
                 tribe = src.tribe,
+                playstyle = src.playstyle,
                 group = src.group,
                 group_en = src.group_en,
                 role = src.role,
@@ -859,8 +1125,11 @@ namespace MonsterCardGame.Core
                 tier_num = src.tier_num,
                 cost = src.cost,
                 powerCost = src.powerCost,
-                atk = src.atk,
+                atk = src.is_barrier ? 0 : src.atk,
                 def = src.def,
+                is_barrier = src.is_barrier,
+                is_all_attack = src.is_all_attack,
+                v2_ops_json = src.v2_ops_json,
                 passives_text = src.passives_text,
                 active_skill = src.active_skill,
                 passives = src.passives != null ? new List<string>(src.passives) : new List<string>(),
@@ -877,11 +1146,12 @@ namespace MonsterCardGame.Core
             var clone = new CardData
             {
                 id = proto.id,
-                name = proto.id.ToString(),
+                name = string.IsNullOrEmpty(proto.name) ? proto.id.ToString() : proto.name,
                 cardType = CardType.Spell,
                 card_type = "spell",
                 element = proto.element,
                 tribe = proto.tribe,
+                playstyle = proto.playstyle,
                 group = proto.group,
                 role = proto.role,
                 tier = proto.tier_title,
@@ -892,6 +1162,7 @@ namespace MonsterCardGame.Core
                 spellType = proto.spellType,
                 spellTargetMode = proto.spellTargetMode,
                 spellPower = proto.spellPower,
+                v2_ops_json = proto.v2_ops_json,
                 active_skill = proto.active_skill,
                 description = proto.description
             };
@@ -909,6 +1180,7 @@ namespace MonsterCardGame.Core
                 card_type = "leader",
                 element = src.element,
                 tribe = src.tribe,
+                playstyle = src.playstyle,
                 group = src.group,
                 group_en = src.group_en,
                 role = src.role,
@@ -919,6 +1191,7 @@ namespace MonsterCardGame.Core
                 powerCost = src.powerCost,
                 atk = src.atk,
                 def = src.def,
+                v2_ops_json = src.v2_ops_json,
                 passives_text = src.passives_text,
                 active_skill = src.active_skill,
                 passives = src.passives != null ? new List<string>(src.passives) : new List<string>(),
@@ -926,6 +1199,33 @@ namespace MonsterCardGame.Core
                 description = src.description,
                 p_score = src.p_score,
                 a_score = src.a_score,
+                win_rate = src.win_rate
+            };
+        }
+
+        private static CardData CloneCovenantCard(CardData src)
+        {
+            return new CardData
+            {
+                id = src.id,
+                name = string.IsNullOrEmpty(src.name) ? src.id.ToString() : src.name,
+                cardType = CardType.Covenant,
+                card_type = "covenant",
+                element = src.element,
+                tribe = src.tribe,
+                playstyle = src.playstyle,
+                group = src.group,
+                group_en = src.group_en,
+                role = src.role,
+                tier = src.tier_title,
+                tier_title = src.tier_title,
+                tier_num = src.tier_num,
+                cost = src.cost,
+                powerCost = src.powerCost,
+                atk = src.atk,
+                def = src.def,
+                v2_ops_json = src.v2_ops_json,
+                description = src.description,
                 win_rate = src.win_rate
             };
         }
@@ -958,7 +1258,14 @@ namespace MonsterCardGame.Core
             {
                 foreach (var l in allLeaders)
                 {
-                    if (l != null && MonsterArtLoader.HasCustomCardArt(l) && seen.Add(l.id)) allCatalogIds.Add(l.id);
+                    if (l != null && seen.Add(l.id)) allCatalogIds.Add(l.id);
+                }
+            }
+            if (allCovenants != null)
+            {
+                foreach (var cov in allCovenants)
+                {
+                    if (cov != null && seen.Add(cov.id)) allCatalogIds.Add(cov.id);
                 }
             }
         }
@@ -1141,15 +1448,35 @@ namespace MonsterCardGame.Core
                 reason = "Invalid spell card.";
                 return false;
             }
-            if (spellCard.cost > caster.currentMana)
+            if (V2CardMechanicsEngine.IsCovenantActiveForPlayer(caster))
             {
-                reason = $"Not enough Mana for [{spellCard.name}]! (Req: {spellCard.cost}💧, Avail: {caster.currentMana}💧)";
+                var cov = V2CardMechanicsEngine.GetCovenantOps(caster.activeCovenant);
+                if (cov != null)
+                {
+                    if (cov.ban_self_spells)
+                    {
+                        reason = $"Your active Covenant [{caster.activeCovenant.name}] forbids casting Magic Spells!";
+                        return false;
+                    }
+                    if (caster.cardsPlayedThisTurn >= cov.max_plays_turn)
+                    {
+                        reason = $"Your active Covenant [{caster.activeCovenant.name}] limits you to {cov.max_plays_turn} card play(s) per turn!";
+                        return false;
+                    }
+                }
+            }
+            int effCost = caster.GetEffectiveCardCost(spellCard);
+            if (effCost > caster.currentMana)
+            {
+                reason = $"Not enough Mana for [{spellCard.name}]! (Req: {effCost}💧, Avail: {caster.currentMana}💧)";
                 return false;
             }
 
             SpellDatabase.NormalizeSpellMetadata(spellCard);
-            SpellTargetMode tmode = SpellDatabase.GetTargetMode(spellCard.id);
-            if (spellCard.id < 241 || spellCard.id > 440)
+            SpellTargetMode tmode = !string.IsNullOrEmpty(spellCard.v2_ops_json)
+                ? spellCard.spellTargetMode
+                : SpellDatabase.GetTargetMode(spellCard.id);
+            if (string.IsNullOrEmpty(spellCard.v2_ops_json) && (spellCard.id < 241 || spellCard.id > 440))
                 tmode = spellCard.spellTargetMode;
 
             var allies = GetAliveSlots(caster);
@@ -1222,8 +1549,10 @@ namespace MonsterCardGame.Core
                 return false;
             }
 
-            caster.currentMana -= spellCard.cost;
+            int effSpellCost = caster.GetEffectiveCardCost(spellCard);
+            caster.currentMana -= effSpellCost;
             caster.hand.Remove(spellCard);
+            caster.cardsPlayedThisTurn++;
             if (spellCard.id < 9000)
             {
                 caster.graveyard.Add(spellCard);
@@ -1242,7 +1571,19 @@ namespace MonsterCardGame.Core
             if (BattleUIManager.Instance != null)
             {
                 BattleUIManager.Instance.ShowSpellBanner(spellCard, caster.playerName);
-                BattleUIManager.Instance.LogCombatMessage($"🔮 [{caster.playerName}] cast Spell #{spellCard.name} ({spellCard.cost}💧): {spellCard.description}", spellCard);
+                BattleUIManager.Instance.LogCombatMessage($"🔮 [{caster.playerName}] cast Spell #{spellCard.name} ({effSpellCost}💧): {spellCard.description}", spellCard);
+            }
+
+            if (!string.IsNullOrEmpty(spellCard.v2_ops_json) &&
+                V2CardMechanicsEngine.TryExecuteV2Spell(caster, target, spellCard, primaryTargetSlot))
+            {
+                CheckGameOver();
+                if (BattleUIManager.Instance != null)
+                {
+                    BattleUIManager.Instance.UpdateUI();
+                }
+                EvaluateAutoEndTurn();
+                return true;
             }
 
             int valBonus = 0;
@@ -4521,8 +4862,8 @@ namespace MonsterCardGame.Core
                 }
             }
 
-            // Cantrip: Environment cards grant +1 card draw so shifting weather never costs card advantage
-            player.DrawCard();
+            // V2 Constitution Rule #36: Shared 1-Mana Environment cards do NOT grant bonus card draw on play
+            player.cardsPlayedThisTurn++;
             if (activeEnvironment != null)
             {
                 MonsterCardGame.Audio.SoundManager.Instance?.PlayEnvironmentActivate(activeEnvironment);
@@ -4537,6 +4878,18 @@ namespace MonsterCardGame.Core
 
             EvaluateAutoEndTurn();
             return true;
+        }
+
+        public bool PlayCovenantCard(PlayerState player, CardData covCard)
+        {
+            if (player == null || covCard == null) return false;
+            bool ok = V2CardMechanicsEngine.PlayCovenantCard(player, covCard);
+            if (ok)
+            {
+                CheckGameOver();
+                EvaluateAutoEndTurn();
+            }
+            return ok;
         }
 
         public bool PlayLeaderCard(PlayerState player, CardData leaderCard)
@@ -4560,6 +4913,7 @@ namespace MonsterCardGame.Core
 
             player.currentMana -= leaderCard.cost;
             player.hand.Remove(leaderCard);
+            player.cardsPlayedThisTurn++;
 
             if (player.activeLeader != null)
             {
@@ -4583,6 +4937,7 @@ namespace MonsterCardGame.Core
             }
 
             var opponent = (player == humanPlayer) ? aiPlayer : humanPlayer;
+            V2CardMechanicsEngine.ApplyV2LeaderOnSummon(player, opponent, leaderCard);
             CommanderSpiritEffects.ApplyOnSummoned(player, opponent, leaderCard);
             CheckGameOver();
 
@@ -4802,11 +5157,25 @@ namespace MonsterCardGame.Core
             CancelAutoEndTurn();
             currentPhase = GamePhase.TurnEnd;
 
+            var activePlayer = isPlayerTurn ? humanPlayer : aiPlayer;
+            var otherPlayer = isPlayerTurn ? aiPlayer : humanPlayer;
+            V2CardMechanicsEngine.ApplyTurnEndV2Rules(activePlayer, otherPlayer, currentTurn);
+
             if (activeEnvironment != null)
             {
-                // Environment effects are permanent across rounds/turns.
-                // They do NOT expire by turn countdown; they persist until countered by another environment or downgraded.
-                activeEnvironment.TickTurn();
+                // V2 Constitution Rule: Environment durations count down (Lv1=10T, Lv2=6T, Lv3=3T)
+                if (activeEnvironment.TickTurn())
+                {
+                    string expiredName = activeEnvironment.name;
+                    activeEnvironment = null;
+                    activeEnvironmentCard = null;
+                    activeEnvironmentOwner = "";
+                    if (BattleUIManager.Instance != null)
+                    {
+                        BattleUIManager.Instance.LogCombatMessage($"☀️ Shared [{expiredName}] duration expired — battlefield returned to Neutral Weather.");
+                        BattleUIManager.Instance.UpdateEnvironmentVisuals();
+                    }
+                }
             }
 
             CheckGameOver();
@@ -4827,6 +5196,22 @@ namespace MonsterCardGame.Core
         public void CheckGameOver()
         {
             if (currentPhase == GamePhase.GameOver) return;
+
+            if (!aiPlayer.IsAlive && !humanPlayer.IsAlive)
+            {
+                // V2 Constitution Rule #8: On simultaneous double KO (e.g. Round 41+ Sudden Death), higher HP wins
+                bool playerWonTie = humanPlayer.currentHp >= aiPlayer.currentHp;
+                currentPhase = GamePhase.GameOver;
+                if (playerWonTie) MonsterCardGame.Audio.SoundManager.Instance?.PlayVictory();
+                else MonsterCardGame.Audio.SoundManager.Instance?.PlayDefeat();
+                string envName = activeEnvironment != null ? activeEnvironment.name : "Stable Weather ☀️";
+                if (BattleUIManager.Instance != null)
+                {
+                    BattleUIManager.Instance.ShowGameOverScreen(playerWonTie, currentTurn, humanPlayer.currentHp, aiPlayer.currentHp,
+                        humanPlayer.monstersSummonedTotal, playerSpellsCastCount, envName, humanPlayer.power);
+                }
+                return;
+            }
 
             if (!aiPlayer.IsAlive)
             {
@@ -4865,8 +5250,16 @@ namespace MonsterCardGame.Core
             activeEnvironment = null;
             activeEnvironmentCard = null;
             activeEnvironmentOwner = "";
-            if (humanPlayer != null) humanPlayer.activeLeader = null;
-            if (aiPlayer != null) aiPlayer.activeLeader = null;
+            if (humanPlayer != null)
+            {
+                humanPlayer.activeLeader = null;
+                humanPlayer.activeCovenant = null;
+            }
+            if (aiPlayer != null)
+            {
+                aiPlayer.activeLeader = null;
+                aiPlayer.activeCovenant = null;
+            }
 
             if (BattleUIManager.Instance != null)
             {

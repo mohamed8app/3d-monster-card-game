@@ -23,6 +23,7 @@ namespace MonsterCardGame.UI
             All,
             Monsters,
             Spells,
+            Covenants,
             Environments,
             Leaders
         }
@@ -45,10 +46,25 @@ namespace MonsterCardGame.UI
         private GameObject battleScreenRoot;
         private GameObject mainMenuOverlay;
         private GameObject galleryOverlay;
+        private GameObject modelPickerOverlay;
         private Text mainMenuStatsText;
         private Text startBtnLabelText;
         private Text opponentStatusText;
         private Text playerDeckStatusText;
+
+        // 41-Model Picker Modal state & references
+        private enum ModelPickerMode { OpponentBrainAndDeck, PlayerDeckOnly }
+        private ModelPickerMode modelPickerMode = ModelPickerMode.OpponentBrainAndDeck;
+        private string modelPickerCategoryFilter = "All";
+        private string modelPickerPreviewId = "free_01";
+        private bool pendingFreshMatchOnSelectionChange = false;
+        private Text modelPickerTitleText;
+        private Text modelPickerPreviewHeaderText;
+        private Text modelPickerPreviewSummaryText;
+        private Text modelPickerPreviewCardsText;
+        private Text modelPickerConfirmBtnText;
+        private Transform modelPickerGridContent;
+        private readonly List<ButtonHighlightPair> modelPickerCatButtons = new List<ButtonHighlightPair>();
 
         // Filter state
         private TypeFilter currentTypeFilter = TypeFilter.All;
@@ -156,6 +172,7 @@ namespace MonsterCardGame.UI
             mgr.BuildGalleryOverlay(rootObj.transform);
             mgr.BuildMainMenuOverlay(rootObj.transform);
             mgr.BuildDeckBuilderOverlay(rootObj.transform);
+            mgr.BuildModelPickerOverlay(rootObj.transform);
 
             // Start on standalone Start Screen without any battle running in the background
             mgr.ShowMainMenu();
@@ -198,6 +215,7 @@ namespace MonsterCardGame.UI
             RefreshMainMenuSummary();
             if (galleryOverlay != null) galleryOverlay.SetActive(false);
             if (deckBuilderOverlay != null) deckBuilderOverlay.SetActive(false);
+            if (modelPickerOverlay != null) modelPickerOverlay.SetActive(false);
             if (mainMenuOverlay != null)
             {
                 mainMenuOverlay.SetActive(true);
@@ -210,6 +228,7 @@ namespace MonsterCardGame.UI
             if (mainMenuOverlay != null) mainMenuOverlay.SetActive(false);
             if (galleryOverlay != null) galleryOverlay.SetActive(false);
             if (deckBuilderOverlay != null) deckBuilderOverlay.SetActive(false);
+            if (modelPickerOverlay != null) modelPickerOverlay.SetActive(false);
 
             if (battleScreenRoot != null)
             {
@@ -217,9 +236,18 @@ namespace MonsterCardGame.UI
             }
 
             var gm = GameManager.Instance;
-            if (gm != null && !gm.isMatchStarted)
+            if (gm != null)
             {
-                gm.StartGame();
+                if (!gm.isMatchStarted)
+                {
+                    pendingFreshMatchOnSelectionChange = false;
+                    gm.StartGame();
+                }
+                else if (pendingFreshMatchOnSelectionChange)
+                {
+                    pendingFreshMatchOnSelectionChange = false;
+                    gm.RestartGame();
+                }
             }
 
             if (BattleUIManager.Instance != null)
@@ -306,104 +334,135 @@ namespace MonsterCardGame.UI
                 new Vector2(540f, 275f), new Vector2(490f, 64f), 18,
                 () => OpenGallery(TypeFilter.All, ArtStatusFilter.All));
 
-            // Opponent Selection Row (Gora vs Navi)
+            // Opponent Selection Row (41 Trained Neural AI Models — Brain + 50-Card Deck)
             var oppBox = GameBootstrapper.CreateOrnatePanel(centerCard.transform, "OpponentSelectionPanel",
                 new Color(0.06f, 0.09f, 0.16f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 202f), new Vector2(1180f, 48f));
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 202f), new Vector2(1180f, 52f));
             var oppBoxOutline = oppBox.AddComponent<Outline>();
             oppBoxOutline.effectColor = new Color(0.32f, 0.52f, 0.78f, 0.85f);
 
-            GameBootstrapper.CreateBeveledButton(oppBox.transform, "BtnOppGora",
-                "🏆 CHALLENGE GORA (Aggressive)",
-                new Color(0.18f, 0.32f, 0.54f, 0.98f), Color.white,
-                new Vector2(-360f, 0f), new Vector2(280f, 36f), 12,
-                () => SetOpponentInMenu(GameManager.OpponentModel.Gora));
+            GameBootstrapper.CreateBeveledButton(oppBox.transform, "BtnOppPrev",
+                "◀ PREV AI",
+                new Color(0.16f, 0.24f, 0.38f, 0.98f), Color.white,
+                new Vector2(-515f, 0f), new Vector2(116f, 36f), 11,
+                () =>
+                {
+                    if (GameManager.Instance != null)
+                    {
+                        GameManager.Instance.CycleOpponentModel41(-1);
+                        pendingFreshMatchOnSelectionChange = true;
+                    }
+                    RefreshOpponentAndDeckBadges();
+                });
 
-            GameBootstrapper.CreateBeveledButton(oppBox.transform, "BtnOppNavi",
-                "🟣 CHALLENGE NAVI (Tactical)",
-                new Color(0.42f, 0.18f, 0.44f, 0.98f), Color.white,
-                new Vector2(360f, 0f), new Vector2(280f, 36f), 12,
-                () => SetOpponentInMenu(GameManager.OpponentModel.Navi));
+            GameBootstrapper.CreateBeveledButton(oppBox.transform, "BtnPickOpponent41",
+                "🧠 CHOOSE AI OPPONENT (41 BRAINS)",
+                new Color(0.24f, 0.18f, 0.52f, 0.98f), new Color(0.96f, 0.92f, 1f),
+                new Vector2(-305f, 0f), new Vector2(280f, 36f), 12,
+                () => OpenModelPicker(ModelPickerMode.OpponentBrainAndDeck));
 
             opponentStatusText = GameBootstrapper.CreateText(oppBox.transform, "OpponentStatusText",
-                "Active Opponent: Gora | Auto-alternation enabled per match", 12,
-                new Color(0.96f, 0.90f, 0.72f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(420f, 36f));
+                "Active AI Brain & Deck: [Free] Free_01 (Vanguard) • Neural OBS-220", 12,
+                new Color(0.96f, 0.90f, 0.72f), TextAnchor.MiddleCenter, new Vector2(140f, 0f), new Vector2(580f, 38f));
             opponentStatusText.fontStyle = FontStyle.Bold;
             GameBootstrapper.AddTextShadow(opponentStatusText);
 
-            // Player Deck Selection Panel
+            GameBootstrapper.CreateBeveledButton(oppBox.transform, "BtnOppNext",
+                "NEXT AI ▶",
+                new Color(0.16f, 0.24f, 0.38f, 0.98f), Color.white,
+                new Vector2(515f, 0f), new Vector2(116f, 36f), 11,
+                () =>
+                {
+                    if (GameManager.Instance != null)
+                    {
+                        GameManager.Instance.CycleOpponentModel41(1);
+                        pendingFreshMatchOnSelectionChange = true;
+                    }
+                    RefreshOpponentAndDeckBadges();
+                });
+
+            // Player Deck Selection Panel (Choose ANY of the 41 AI Decks, Mirror Opponent, Draft, or Custom)
             var deckBox = GameBootstrapper.CreateOrnatePanel(centerCard.transform, "PlayerDeckSelectionPanel",
                 new Color(0.05f, 0.07f, 0.12f, 0.95f),
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 120f), new Vector2(1180f, 82f));
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 120f), new Vector2(1180f, 84f));
             var deckBoxOutline = deckBox.AddComponent<Outline>();
             deckBoxOutline.effectColor = new Color(0.24f, 0.42f, 0.62f, 0.85f);
 
             var deckHeader = GameBootstrapper.CreateText(deckBox.transform, "DeckHeader",
-                "🎮 SELECT YOUR 50-CARD BATTLE DECK:", 12,
-                new Color(0.78f, 0.90f, 1f), TextAnchor.MiddleCenter, new Vector2(0f, 24f), new Vector2(1120f, 20f));
+                "🎮 SELECT YOUR 50-CARD BATTLE DECK (EVALUATE ANY OF THE 41 AI DECKS):", 12,
+                new Color(0.78f, 0.90f, 1f), TextAnchor.MiddleCenter, new Vector2(0f, 25f), new Vector2(1120f, 20f));
             deckHeader.fontStyle = FontStyle.Bold;
 
-            float[] xOffsets = { -480f, -288f, -96f, 96f, 288f, 480f };
-            float btnW = 180f;
+            GameBootstrapper.CreateBeveledButton(deckBox.transform, "BtnPickPlayerDeck41",
+                "📚 CHOOSE FROM 41 AI DECKS (50)", new Color(0.16f, 0.36f, 0.58f, 0.98f), Color.white,
+                new Vector2(-415f, -6f), new Vector2(290f, 34f), 12,
+                () => OpenModelPicker(ModelPickerMode.PlayerDeckOnly));
 
-            GameBootstrapper.CreateBeveledButton(deckBox.transform, "BtnDeckGora",
-                "🏆 GORA CORE (50)", new Color(0.16f, 0.32f, 0.48f, 0.95f), Color.white,
-                new Vector2(xOffsets[0], -8f), new Vector2(btnW, 32f), 11,
-                () => SetPlayerDeckInMenu(GameManager.PlayerDeckSelection.GoraChampion));
-
-            GameBootstrapper.CreateBeveledButton(deckBox.transform, "BtnDeckNavi",
-                "🟣 NAVI CORE (50)", new Color(0.38f, 0.18f, 0.44f, 0.95f), Color.white,
-                new Vector2(xOffsets[1], -8f), new Vector2(btnW, 32f), 11,
-                () => SetPlayerDeckInMenu(GameManager.PlayerDeckSelection.NaviChampion));
-
-            GameBootstrapper.CreateBeveledButton(deckBox.transform, "BtnDeckFire",
-                "🔥 FIRE AGGRO (50)", new Color(0.52f, 0.22f, 0.14f, 0.95f), Color.white,
-                new Vector2(xOffsets[2], -8f), new Vector2(btnW, 32f), 11,
-                () => SetPlayerDeckInMenu(GameManager.PlayerDeckSelection.FireAggro));
-
-            GameBootstrapper.CreateBeveledButton(deckBox.transform, "BtnDeckWater",
-                "💧 WATER CTRL (50)", new Color(0.14f, 0.36f, 0.48f, 0.95f), Color.white,
-                new Vector2(xOffsets[3], -8f), new Vector2(btnW, 32f), 11,
-                () => SetPlayerDeckInMenu(GameManager.PlayerDeckSelection.WaterControl));
+            GameBootstrapper.CreateBeveledButton(deckBox.transform, "BtnMirrorOppDeck",
+                "🪞 MIRROR OPPONENT DECK", new Color(0.36f, 0.22f, 0.50f, 0.98f), new Color(0.95f, 0.92f, 1f),
+                new Vector2(-120f, -6f), new Vector2(260f, 34f), 12,
+                () =>
+                {
+                    if (GameManager.Instance != null)
+                    {
+                        GameManager.Instance.SetPlayerDeckModel41(GameManager.Instance.selectedOpponentModelId);
+                        pendingFreshMatchOnSelectionChange = true;
+                    }
+                    RefreshOpponentAndDeckBadges();
+                });
 
             GameBootstrapper.CreateBeveledButton(deckBox.transform, "BtnDeckDraft",
                 "🎲 BALANCED DRAFT", new Color(0.18f, 0.38f, 0.28f, 0.95f), Color.white,
-                new Vector2(xOffsets[4], -8f), new Vector2(btnW, 32f), 11,
+                new Vector2(165f, -6f), new Vector2(240f, 34f), 12,
                 () => SetPlayerDeckInMenu(GameManager.PlayerDeckSelection.BalancedDraft));
 
             GameBootstrapper.CreateBeveledButton(deckBox.transform, "BtnDeckCustom",
                 "🛠️ CUSTOM BUILDER", new Color(0.44f, 0.26f, 0.14f, 0.95f), new Color(1f, 0.95f, 0.85f),
-                new Vector2(xOffsets[5], -8f), new Vector2(btnW, 32f), 11,
+                new Vector2(435f, -6f), new Vector2(240f, 34f), 12,
                 () => OpenDeckBuilder());
 
             playerDeckStatusText = GameBootstrapper.CreateText(deckBox.transform, "PlayerDeckStatus",
-                "Selected Deck: Balanced Draft Deck (50 Cards)", 11,
-                new Color(0.85f, 1f, 0.90f), TextAnchor.MiddleCenter, new Vector2(0f, -28f), new Vector2(1120f, 18f));
+                "Selected Deck: [Free] Free_02 (Apex) Settled Deck (50 Cards)", 11,
+                new Color(0.85f, 1f, 0.90f), TextAnchor.MiddleCenter, new Vector2(0f, -30f), new Vector2(1120f, 18f));
             GameBootstrapper.AddTextShadow(playerDeckStatusText);
 
-            // Quick Category Shortcuts Row
-            GameBootstrapper.CreateBeveledButton(centerCard.transform, "BtnQuickMissing",
-                "⚠️ MISSING ART ONLY",
-                new Color(0.52f, 0.24f, 0.12f, 0.96f), new Color(1f, 0.92f, 0.84f),
-                new Vector2(-405f, 45f), new Vector2(256f, 38f), 12,
-                () => OpenGallery(TypeFilter.All, ArtStatusFilter.MissingArt));
+            // Quick Category Shortcuts Row (5 V2 Categories incl. Covenants + Live Arena_Lab_V2 Sync!)
+            GameBootstrapper.CreateBeveledButton(centerCard.transform, "BtnSyncArenaLabLive",
+                "🔄 SYNC ARENA_LAB_V2",
+                new Color(0.12f, 0.42f, 0.30f, 0.98f), new Color(0.90f, 1f, 0.94f),
+                new Vector2(-480f, 45f), new Vector2(215f, 38f), 11,
+                () =>
+                {
+                    if (GameManager.Instance != null)
+                    {
+                        GameManager.Instance.ReloadLiveArenaLabV2();
+                        pendingFreshMatchOnSelectionChange = true;
+                    }
+                    RefreshMainMenuSummary();
+                });
 
             GameBootstrapper.CreateBeveledButton(centerCard.transform, "BtnQuickMonsters",
-                "🐺 MONSTERS GALLERY",
+                "🐺 MONSTERS (1,800)",
                 new Color(0.16f, 0.22f, 0.34f, 0.96f), new Color(0.90f, 0.95f, 1f),
-                new Vector2(-135f, 45f), new Vector2(256f, 38f), 12,
+                new Vector2(-240f, 45f), new Vector2(215f, 38f), 11,
                 () => OpenGallery(TypeFilter.Monsters, ArtStatusFilter.All));
 
             GameBootstrapper.CreateBeveledButton(centerCard.transform, "BtnQuickSpells",
-                "📜 SPELLS GALLERY",
+                "📜 SPELLS (300)",
                 new Color(0.26f, 0.16f, 0.38f, 0.96f), new Color(0.94f, 0.90f, 1f),
-                new Vector2(135f, 45f), new Vector2(256f, 38f), 12,
+                new Vector2(0f, 45f), new Vector2(215f, 38f), 11,
                 () => OpenGallery(TypeFilter.Spells, ArtStatusFilter.All));
 
+            GameBootstrapper.CreateBeveledButton(centerCard.transform, "BtnQuickCovenants",
+                "⚖️ COVENANTS (100)",
+                new Color(0.46f, 0.14f, 0.18f, 0.98f), new Color(1f, 0.92f, 0.72f),
+                new Vector2(240f, 45f), new Vector2(215f, 38f), 11,
+                () => OpenGallery(TypeFilter.Covenants, ArtStatusFilter.All));
+
             GameBootstrapper.CreateBeveledButton(centerCard.transform, "BtnQuickEnvsAndSpirits",
-                "🌋 ENVIRONMENTS & SPIRITS",
+                "🌋 ENVS & SPIRITS (70)",
                 new Color(0.12f, 0.28f, 0.32f, 0.96f), new Color(0.88f, 0.98f, 1f),
-                new Vector2(405f, 45f), new Vector2(256f, 38f), 12,
+                new Vector2(480f, 45f), new Vector2(215f, 38f), 11,
                 () => OpenGallery(TypeFilter.Environments, ArtStatusFilter.All));
 
             // Asset Completion Audit Panel
@@ -443,20 +502,12 @@ namespace MonsterCardGame.UI
                 () => Application.Quit());
         }
 
-        private void SetOpponentInMenu(GameManager.OpponentModel opp)
-        {
-            if (GameManager.Instance != null)
-            {
-                GameManager.Instance.SetOpponent(opp);
-            }
-            RefreshOpponentAndDeckBadges();
-        }
-
         private void SetPlayerDeckInMenu(GameManager.PlayerDeckSelection deck)
         {
             if (GameManager.Instance != null)
             {
                 GameManager.Instance.SetPlayerDeck(deck);
+                pendingFreshMatchOnSelectionChange = true;
             }
             RefreshOpponentAndDeckBadges();
         }
@@ -466,26 +517,391 @@ namespace MonsterCardGame.UI
             var gm = GameManager.Instance;
             if (gm == null) return;
 
+            string oppDisplay = gm.GetOpponentDisplayName();
             if (opponentStatusText != null)
             {
-                string oppName = (gm.currentOpponent == GameManager.OpponentModel.Gora)
-                    ? "🏆 Gora (Aggressive Combat AI)"
-                    : "🟣 Navi (Tactical Control AI)";
-                opponentStatusText.text = $"Active Opponent: {oppName} | Auto-alternates after each match";
+                var entry = gm.GetModelEntryById(gm.selectedOpponentModelId);
+                if (entry != null)
+                {
+                    opponentStatusText.text =
+                        $"🧠 {entry.display_name}  |  M:{entry.matches}  ELO:{entry.elo:0}  |  {gm.liveArenaSyncStatus}";
+                }
+                else
+                {
+                    opponentStatusText.text = $"Active Opponent: {oppDisplay}";
+                }
             }
 
             if (playerDeckStatusText != null)
             {
-                playerDeckStatusText.text = $"Selected Deck: {gm.GetSelectedDeckDisplayName()}";
+                playerDeckStatusText.text = $"Your 50-Card Deck: {gm.GetSelectedDeckDisplayName()}";
             }
 
             if (startBtnLabelText != null)
             {
-                string oppShort = (gm.currentOpponent == GameManager.OpponentModel.Gora) ? "Gora" : "Navi";
-                startBtnLabelText.text = gm.isMatchStarted
-                    ? $"⚔️ RESUME BATTLE VS {oppShort.ToUpper()}"
-                    : $"⚔️ START BATTLE VS {oppShort.ToUpper()}";
+                string shortName = oppDisplay;
+                int bracketIdx = shortName.IndexOf(']');
+                if (bracketIdx >= 0 && bracketIdx + 1 < shortName.Length)
+                    shortName = shortName.Substring(bracketIdx + 1).Trim();
+                if (shortName.Length > 22) shortName = shortName.Substring(0, 22);
+
+                startBtnLabelText.text = (gm.isMatchStarted && !pendingFreshMatchOnSelectionChange)
+                    ? $"⚔️ RESUME VS {shortName.ToUpper()}"
+                    : $"⚔️ BATTLE VS {shortName.ToUpper()}";
             }
+        }
+
+        // =========================================================================
+        // 1.5 FULL-SCREEN 41-MODEL NEURAL AI & DECK SELECTOR MODAL
+        // =========================================================================
+        private void BuildModelPickerOverlay(Transform parent)
+        {
+            modelPickerOverlay = GameBootstrapper.CreatePanel(parent, "ModelPicker41Overlay",
+                new Color(0.02f, 0.03f, 0.06f, 0.99f),
+                Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+
+            var modalFrame = GameBootstrapper.CreateOrnatePanel(modelPickerOverlay.transform, "ModelPickerFrame",
+                new Color(0.04f, 0.06f, 0.11f, 1f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1820f, 1000f));
+            var frameOut = modalFrame.AddComponent<Outline>();
+            frameOut.effectColor = new Color(0.42f, 0.68f, 0.96f, 0.90f);
+            frameOut.effectDistance = new Vector2(2f, 2f);
+
+            // Top Header
+            var topBar = GameBootstrapper.CreateOrnatePanel(modalFrame.transform, "ModelPickerTopBar",
+                new Color(0.08f, 0.12f, 0.22f, 0.98f),
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -44f), new Vector2(1780f, 68f));
+
+            modelPickerTitleText = GameBootstrapper.CreateText(topBar.transform, "ModelPickerTitle",
+                "🧠 SELECT AI OPPONENT (41 TRAINED NEURAL BRAINS & 50-CARD DECKS)", 22,
+                new Color(0.96f, 0.88f, 0.62f), TextAnchor.MiddleLeft, new Vector2(-120f, 0f), new Vector2(1420f, 44f));
+            modelPickerTitleText.fontStyle = FontStyle.Bold;
+            GameBootstrapper.AddTextShadow(modelPickerTitleText);
+
+            GameBootstrapper.CreateBeveledButton(topBar.transform, "BtnCloseModelPicker",
+                "✖ CLOSE",
+                new Color(0.46f, 0.16f, 0.18f, 0.98f), Color.white,
+                new Vector2(800f, 0f), new Vector2(130f, 42f), 13,
+                () => { if (modelPickerOverlay != null) modelPickerOverlay.SetActive(false); });
+
+            // Category Filter Tabs Row
+            var catBar = GameBootstrapper.CreateOrnatePanel(modalFrame.transform, "ModelPickerCategoryBar",
+                new Color(0.06f, 0.09f, 0.16f, 0.96f),
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -110f), new Vector2(1780f, 50f));
+
+            modelPickerCatButtons.Clear();
+            var catDefs = new (string key, string label, Color col)[]
+            {
+                ("All", "ALL MODELS (41)", new Color(0.20f, 0.34f, 0.56f, 0.96f)),
+                ("Free", "FREE MODELS (10)", new Color(0.18f, 0.42f, 0.34f, 0.96f)),
+                ("Playstyle", "PLAYSTYLE (10)", new Color(0.44f, 0.24f, 0.52f, 0.96f)),
+                ("Environment", "ENVIRONMENT (10)", new Color(0.52f, 0.28f, 0.16f, 0.96f)),
+                ("Tribe", "TRIBE CLANS (10)", new Color(0.20f, 0.36f, 0.48f, 0.96f)),
+                ("Anomaly", "GLITCH_41 (1)", new Color(0.58f, 0.14f, 0.22f, 0.96f)),
+            };
+            float catStartX = -715f;
+            float catStep = 286f;
+            for (int i = 0; i < catDefs.Length; i++)
+            {
+                var cd = catDefs[i];
+                var btn = GameBootstrapper.CreateBeveledButton(catBar.transform, $"BtnCat_{cd.key}",
+                    cd.label, cd.col, Color.white,
+                    new Vector2(catStartX + i * catStep, 0f), new Vector2(268f, 36f), 12,
+                    () =>
+                    {
+                        modelPickerCategoryFilter = cd.key;
+                        RefreshModelPickerGrid();
+                    });
+                var img = btn.GetComponent<Image>();
+                var ol = btn.GetComponent<Outline>() ?? btn.gameObject.AddComponent<Outline>();
+                modelPickerCatButtons.Add(new ButtonHighlightPair { key = cd.key, bg = img, outline = ol, baseColor = cd.col });
+            }
+
+            // Left Scrollable 41-Model Grid Panel
+            var leftPanel = GameBootstrapper.CreateOrnatePanel(modalFrame.transform, "ModelGridPanel",
+                new Color(0.03f, 0.05f, 0.09f, 0.98f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-290f, -68f), new Vector2(1190f, 804f));
+
+            var scrollGo = new GameObject("ModelScrollRect", typeof(RectTransform), typeof(ScrollRect), typeof(RectMask2D));
+            scrollGo.transform.SetParent(leftPanel.transform, false);
+            var scrollRt = scrollGo.GetComponent<RectTransform>();
+            scrollRt.anchorMin = Vector2.zero;
+            scrollRt.anchorMax = Vector2.one;
+            scrollRt.offsetMin = new Vector2(12f, 12f);
+            scrollRt.offsetMax = new Vector2(-12f, -12f);
+
+            var contentGo = new GameObject("Content", typeof(RectTransform), typeof(GridLayoutGroup), typeof(ContentSizeFitter));
+            contentGo.transform.SetParent(scrollGo.transform, false);
+            var contentRt = contentGo.GetComponent<RectTransform>();
+            contentRt.anchorMin = new Vector2(0f, 1f);
+            contentRt.anchorMax = new Vector2(1f, 1f);
+            contentRt.pivot = new Vector2(0.5f, 1f);
+            contentRt.anchoredPosition = Vector2.zero;
+            contentRt.sizeDelta = new Vector2(0f, 800f);
+
+            var glg = contentGo.GetComponent<GridLayoutGroup>();
+            glg.cellSize = new Vector2(368f, 76f);
+            glg.spacing = new Vector2(12f, 10f);
+            glg.padding = new RectOffset(8, 8, 8, 12);
+            glg.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            glg.constraintCount = 3;
+
+            var csf = contentGo.GetComponent<ContentSizeFitter>();
+            csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            var sr = scrollGo.GetComponent<ScrollRect>();
+            sr.content = contentRt;
+            sr.viewport = scrollRt;
+            sr.horizontal = false;
+            sr.vertical = true;
+            sr.scrollSensitivity = 36f;
+
+            modelPickerGridContent = contentGo.transform;
+
+            // Right Live 50-Card Deck Inspector Panel
+            var rightPanel = GameBootstrapper.CreateOrnatePanel(modalFrame.transform, "ModelDeckPreviewPanel",
+                new Color(0.05f, 0.08f, 0.14f, 0.98f),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(605f, -68f), new Vector2(575f, 804f));
+            var rOut = rightPanel.AddComponent<Outline>();
+            rOut.effectColor = new Color(0.86f, 0.72f, 0.34f, 0.85f);
+
+            modelPickerPreviewHeaderText = GameBootstrapper.CreateText(rightPanel.transform, "PreviewHeader",
+                "MODEL DECK INSPECTOR", 16,
+                new Color(0.98f, 0.88f, 0.56f), TextAnchor.MiddleCenter, new Vector2(0f, 368f), new Vector2(545f, 44f));
+            modelPickerPreviewHeaderText.fontStyle = FontStyle.Bold;
+            GameBootstrapper.AddTextShadow(modelPickerPreviewHeaderText);
+
+            modelPickerPreviewSummaryText = GameBootstrapper.CreateText(rightPanel.transform, "PreviewSummary",
+                "Select any model on the left to inspect its 50-card settled deck.", 12,
+                new Color(0.78f, 0.92f, 1f), TextAnchor.MiddleCenter, new Vector2(0f, 322f), new Vector2(545f, 40f));
+            GameBootstrapper.AddTextShadow(modelPickerPreviewSummaryText);
+
+            // Scrollable Card List inside Right Preview Panel
+            var deckScrollGo = new GameObject("DeckPreviewScroll", typeof(RectTransform), typeof(ScrollRect), typeof(RectMask2D));
+            deckScrollGo.transform.SetParent(rightPanel.transform, false);
+            var dsRt = deckScrollGo.GetComponent<RectTransform>();
+            dsRt.anchorMin = new Vector2(0.5f, 0.5f);
+            dsRt.anchorMax = new Vector2(0.5f, 0.5f);
+            dsRt.sizeDelta = new Vector2(545f, 590f);
+            dsRt.anchoredPosition = new Vector2(0f, -2f);
+
+            var dsContent = new GameObject("DeckTextContent", typeof(RectTransform), typeof(ContentSizeFitter));
+            dsContent.transform.SetParent(deckScrollGo.transform, false);
+            var dscRt = dsContent.GetComponent<RectTransform>();
+            dscRt.anchorMin = new Vector2(0f, 1f);
+            dscRt.anchorMax = new Vector2(1f, 1f);
+            dscRt.pivot = new Vector2(0.5f, 1f);
+            dscRt.anchoredPosition = Vector2.zero;
+            dscRt.sizeDelta = new Vector2(0f, 590f);
+            var dCsf = dsContent.GetComponent<ContentSizeFitter>();
+            dCsf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            modelPickerPreviewCardsText = dsContent.AddComponent<Text>();
+            modelPickerPreviewCardsText.font = GameBootstrapper.GetFont();
+            modelPickerPreviewCardsText.fontSize = 12;
+            modelPickerPreviewCardsText.color = new Color(0.90f, 0.95f, 1f);
+            modelPickerPreviewCardsText.alignment = TextAnchor.UpperLeft;
+            modelPickerPreviewCardsText.lineSpacing = 1.22f;
+            modelPickerPreviewCardsText.supportRichText = true;
+
+            var dSr = deckScrollGo.GetComponent<ScrollRect>();
+            dSr.content = dscRt;
+            dSr.viewport = dsRt;
+            dSr.horizontal = false;
+            dSr.vertical = true;
+            dSr.scrollSensitivity = 32f;
+
+            // Confirm Button at Bottom of Right Preview Panel
+            var confirmBtn = GameBootstrapper.CreateBeveledButton(rightPanel.transform, "BtnConfirmModelPick",
+                "✅ CONFIRM SELECTION",
+                new Color(0.14f, 0.48f, 0.26f, 0.98f), Color.white,
+                new Vector2(0f, -352f), new Vector2(520f, 56f), 16,
+                () => ConfirmModelPickerSelection());
+            modelPickerConfirmBtnText = confirmBtn.GetComponentInChildren<Text>();
+
+            modelPickerOverlay.SetActive(false);
+        }
+
+        private void OpenModelPicker(ModelPickerMode mode)
+        {
+            modelPickerMode = mode;
+            var gm = GameManager.Instance;
+            if (gm != null)
+            {
+                gm.LoadV2Roster41();
+                modelPickerPreviewId = (mode == ModelPickerMode.OpponentBrainAndDeck)
+                    ? gm.selectedOpponentModelId
+                    : (string.IsNullOrEmpty(gm.selectedPlayerModelDeckId) ? gm.selectedOpponentModelId : gm.selectedPlayerModelDeckId);
+            }
+
+            if (modelPickerTitleText != null)
+            {
+                modelPickerTitleText.text = (mode == ModelPickerMode.OpponentBrainAndDeck)
+                    ? "🧠 CHALLENGE ANY OF THE 41 TRAINED NEURAL AI MODELS (BRAIN + 50-CARD DECK)"
+                    : "📚 PICK ANY OF THE 41 AI SETTLED DECKS AS YOUR 50-CARD BATTLE DECK";
+            }
+
+            if (modelPickerOverlay != null)
+            {
+                modelPickerOverlay.SetActive(true);
+                modelPickerOverlay.transform.SetAsLastSibling();
+            }
+
+            RefreshModelPickerGrid();
+            RefreshModelPickerPreview(modelPickerPreviewId);
+        }
+
+        private static Color GetCategoryColor(string cat)
+        {
+            switch (cat)
+            {
+                case "Free": return new Color(0.14f, 0.34f, 0.28f, 0.96f);
+                case "Playstyle": return new Color(0.32f, 0.18f, 0.42f, 0.96f);
+                case "Environment": return new Color(0.42f, 0.22f, 0.14f, 0.96f);
+                case "Tribe": return new Color(0.14f, 0.28f, 0.42f, 0.96f);
+                case "Anomaly": return new Color(0.50f, 0.12f, 0.20f, 0.96f);
+                default: return new Color(0.18f, 0.24f, 0.36f, 0.96f);
+            }
+        }
+
+        private void RefreshModelPickerGrid()
+        {
+            if (modelPickerGridContent == null || GameManager.Instance == null) return;
+
+            foreach (var pair in modelPickerCatButtons)
+            {
+                bool active = string.Equals(pair.key, modelPickerCategoryFilter, StringComparison.OrdinalIgnoreCase);
+                if (pair.bg != null) pair.bg.color = active ? new Color(0.92f, 0.72f, 0.24f, 1f) : pair.baseColor;
+                if (pair.outline != null) pair.outline.effectColor = active ? Color.white : new Color(0.28f, 0.42f, 0.62f, 0.75f);
+            }
+
+            for (int i = modelPickerGridContent.childCount - 1; i >= 0; i--)
+                Destroy(modelPickerGridContent.GetChild(i).gameObject);
+
+            var allModels = GameManager.Instance.GetRoster41Models();
+            foreach (var entry in allModels)
+            {
+                if (entry == null) continue;
+                if (modelPickerCategoryFilter != "All" &&
+                    !string.Equals(entry.category, modelPickerCategoryFilter, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var localEntry = entry;
+                bool isSelected = string.Equals(localEntry.model_id, modelPickerPreviewId, StringComparison.OrdinalIgnoreCase);
+                Color bgCol = isSelected ? new Color(0.20f, 0.44f, 0.72f, 1f) : GetCategoryColor(localEntry.category);
+
+                string btnLabel = $"{localEntry.display_name}\nMatches: {localEntry.matches}  •  ELO: {localEntry.elo:0}  •  WR: {localEntry.win_rate:0.0}%";
+                var btn = GameBootstrapper.CreateBeveledButton(modelPickerGridContent, $"ModelBtn_{localEntry.model_id}",
+                    btnLabel, bgCol, Color.white, Vector2.zero, new Vector2(368f, 76f), 11,
+                    () =>
+                    {
+                        modelPickerPreviewId = localEntry.model_id;
+                        RefreshModelPickerGrid();
+                        RefreshModelPickerPreview(localEntry.model_id);
+                    });
+
+                var ol = btn.GetComponent<Outline>() ?? btn.gameObject.AddComponent<Outline>();
+                ol.effectColor = isSelected ? new Color(1f, 0.90f, 0.35f, 1f) : new Color(0.32f, 0.46f, 0.66f, 0.65f);
+                ol.effectDistance = isSelected ? new Vector2(2.5f, 2.5f) : new Vector2(1f, 1f);
+            }
+        }
+
+        private void RefreshModelPickerPreview(string modelId)
+        {
+            var gm = GameManager.Instance;
+            if (gm == null) return;
+            var entry = gm.GetModelEntryById(modelId);
+            if (entry == null) return;
+
+            if (modelPickerPreviewHeaderText != null)
+                modelPickerPreviewHeaderText.text = $"{entry.display_name}\n({entry.category} Model • Neural OBS-220)";
+
+            int monsters = 0, spells = 0, envs = 0, leaders = 0, covs = 0;
+            float manaSum = 0f;
+            var counts = new Dictionary<int, int>();
+            if (entry.card_ids != null)
+            {
+                foreach (int cid in entry.card_ids)
+                {
+                    counts[cid] = (counts.TryGetValue(cid, out int cur) ? cur : 0) + 1;
+                    if (gm.masterCardIndex.TryGetValue(cid, out var c) && c != null)
+                    {
+                        manaSum += c.cost;
+                        if (c.cardType == CardType.Monster) monsters++;
+                        else if (c.cardType == CardType.Spell) spells++;
+                        else if (c.cardType == CardType.Environment) envs++;
+                        else if (c.cardType == CardType.Leader) leaders++;
+                        else if (c.cardType == CardType.Covenant) covs++;
+                    }
+                }
+            }
+
+            int total = entry.card_ids != null ? entry.card_ids.Length : 0;
+            float avgMana = total > 0 ? manaSum / total : 0f;
+
+            if (modelPickerPreviewSummaryText != null)
+            {
+                modelPickerPreviewSummaryText.text =
+                    $"50-Card Settled Deck | Avg Mana: {avgMana:0.00} | Unique: {counts.Count}\n" +
+                    $"Monsters: {monsters} • Spells: {spells} • Envs: {envs} • Leaders: {leaders} • Covenants: {covs}";
+            }
+
+            if (modelPickerPreviewCardsText != null)
+            {
+                var uniqueIds = new List<int>(counts.Keys);
+                uniqueIds.Sort((a, b) =>
+                {
+                    gm.masterCardIndex.TryGetValue(a, out var ca);
+                    gm.masterCardIndex.TryGetValue(b, out var cb);
+                    int ta = ca != null ? (int)ca.cardType : 9;
+                    int tb = cb != null ? (int)cb.cardType : 9;
+                    if (ta != tb) return ta.CompareTo(tb);
+                    int ma = ca != null ? ca.cost : 0;
+                    int mb = cb != null ? cb.cost : 0;
+                    if (ma != mb) return ma.CompareTo(mb);
+                    return a.CompareTo(b);
+                });
+
+                var sb = new System.Text.StringBuilder();
+                foreach (int cid in uniqueIds)
+                {
+                    int qty = counts[cid];
+                    if (gm.masterCardIndex.TryGetValue(cid, out var c) && c != null)
+                    {
+                        string stats = c.cardType == CardType.Monster ? $" [{c.atk}/{c.def}]" : "";
+                        string tag = c.cardType.ToString().ToUpper();
+                        sb.AppendLine($"  <b>x{qty}</b>  [{c.cost}M] <color=#FDE68A>{c.name}</color>{stats}  <color=#94A3B8>({tag} #{cid})</color>");
+                    }
+                    else
+                    {
+                        sb.AppendLine($"  <b>x{qty}</b>  Card #{cid}");
+                    }
+                }
+                modelPickerPreviewCardsText.text = sb.ToString();
+            }
+
+            if (modelPickerConfirmBtnText != null)
+            {
+                modelPickerConfirmBtnText.text = (modelPickerMode == ModelPickerMode.OpponentBrainAndDeck)
+                    ? $"⚔️ CHALLENGE {entry.display_name.ToUpper()}"
+                    : $"🎴 PLAY WITH {entry.display_name.ToUpper()} DECK";
+            }
+        }
+
+        private void ConfirmModelPickerSelection()
+        {
+            var gm = GameManager.Instance;
+            if (gm != null && !string.IsNullOrEmpty(modelPickerPreviewId))
+            {
+                if (modelPickerMode == ModelPickerMode.OpponentBrainAndDeck)
+                    gm.SetOpponentModel41(modelPickerPreviewId);
+                else
+                    gm.SetPlayerDeckModel41(modelPickerPreviewId);
+
+                pendingFreshMatchOnSelectionChange = true;
+            }
+            if (modelPickerOverlay != null) modelPickerOverlay.SetActive(false);
+            RefreshOpponentAndDeckBadges();
         }
 
         private void RefreshMainMenuSummary()
@@ -498,6 +914,7 @@ namespace MonsterCardGame.UI
             int sTotal = 0, sArt = 0;
             int eTotal = 0, eArt = 0;
             int lTotal = 0, lArt = 0;
+            int cTotal = 0, cArt = 0;
 
             foreach (var c in masterCatalog)
             {
@@ -524,6 +941,11 @@ namespace MonsterCardGame.UI
                     lTotal++;
                     if (hasArt) lArt++;
                 }
+                else if (c.cardType == CardType.Covenant)
+                {
+                    cTotal++;
+                    if (hasArt) cArt++;
+                }
             }
 
             string[] elems = { "Fire", "Water", "Ice", "Electric", "Earth", "Nature", "Air", "Light", "Dark", "Desert" };
@@ -540,16 +962,17 @@ namespace MonsterCardGame.UI
                 if (MonsterArtLoader.GetClanEmblemSprite(tr) != null) clanEmblemsReady++;
             }
 
-            int totalCards = mTotal + sTotal + eTotal + lTotal;
-            int totalArt = mArt + sArt + eArt + lArt;
+            int totalCards = mTotal + sTotal + eTotal + lTotal + cTotal;
+            int totalArt = mArt + sArt + eArt + lArt + cArt;
             int totalMissing = Mathf.Max(0, totalCards - totalArt);
 
             mainMenuStatsText.text =
-                $"TOTAL CARDS IN CATALOG: {totalCards}   |   ✅ COMPLETED ART: {totalArt}   |   ⚠️ MISSING ART: {totalMissing}\n\n" +
+                $"TOTAL CARDS IN V2 CATALOG: {totalCards}   |   ✅ COMPLETED ART: {totalArt}   |   ⚠️ MISSING ART: {totalMissing}\n\n" +
                 $"• 🐺 Monsters: Total {mTotal}   |   ✅ Has Art: {mArt}   |   ⚠️ Missing Art: {mTotal - mArt}   |   🎬 2.5D Standby Ready: {m25D}\n" +
                 $"• 📜 Spells: Total {sTotal}   |   ✅ Has Art: {sArt}   |   ⚠️ Missing Art: {sTotal - sArt}\n" +
+                $"• ⚖️ Altar Covenants: Total {cTotal}   |   ✅ Has Art: {cArt}   |   ⚠️ Missing Art: {cTotal - cArt}\n" +
                 $"• 🌋 Environments (10 Elements): Total {eTotal}   |   ✅ Ground Art Ready: {eArt}   |   ⚠️ Missing: {eTotal - eArt}\n" +
-                $"• 👑 Commander Spirits: Total {lTotal}   |   ✅ Has Art: {lTotal} / {lArt}   |   ⚠️ Missing Art: {lTotal - lArt}\n\n" +
+                $"• 👑 Commander Spirits: Total {lTotal}   |   ✅ Has Art: {lArt}   |   ⚠️ Missing Art: {lTotal - lArt}\n\n" +
                 $"• 🖼️ Elemental Card Frames: {elemFramesReady} / 10 Ready ✅     |     🛡️ Top-Left Clan Emblems: {clanEmblemsReady} / 10 Ready ✅";
         }
 
@@ -593,11 +1016,12 @@ namespace MonsterCardGame.UI
                 new Color(0.05f, 0.07f, 0.12f, 0.96f),
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 468f), new Vector2(1896f, 36f));
 
-            AddTypeFilterButton(filterRow1.transform, "All", "ALL TYPES", new Vector2(-890f, 0f), new Vector2(88f, 28f), TypeFilter.All);
-            AddTypeFilterButton(filterRow1.transform, "Monsters", "🐺 MONSTERS", new Vector2(-790f, 0f), new Vector2(102f, 28f), TypeFilter.Monsters);
-            AddTypeFilterButton(filterRow1.transform, "Spells", "📜 SPELLS", new Vector2(-680f, 0f), new Vector2(96f, 28f), TypeFilter.Spells);
-            AddTypeFilterButton(filterRow1.transform, "Environments", "🌋 ENVIRONMENTS", new Vector2(-566f, 0f), new Vector2(116f, 28f), TypeFilter.Environments);
-            AddTypeFilterButton(filterRow1.transform, "Leaders", "👑 SPIRITS", new Vector2(-446f, 0f), new Vector2(96f, 28f), TypeFilter.Leaders);
+            AddTypeFilterButton(filterRow1.transform, "All", "ALL TYPES", new Vector2(-894f, 0f), new Vector2(82f, 28f), TypeFilter.All);
+            AddTypeFilterButton(filterRow1.transform, "Monsters", "🐺 MONSTERS", new Vector2(-800f, 0f), new Vector2(96f, 28f), TypeFilter.Monsters);
+            AddTypeFilterButton(filterRow1.transform, "Spells", "📜 SPELLS", new Vector2(-700f, 0f), new Vector2(88f, 28f), TypeFilter.Spells);
+            AddTypeFilterButton(filterRow1.transform, "Covenants", "⚖️ COVENANTS", new Vector2(-598f, 0f), new Vector2(106f, 28f), TypeFilter.Covenants);
+            AddTypeFilterButton(filterRow1.transform, "Environments", "🌋 ENVS", new Vector2(-498f, 0f), new Vector2(82f, 28f), TypeFilter.Environments);
+            AddTypeFilterButton(filterRow1.transform, "Leaders", "👑 SPIRITS", new Vector2(-406f, 0f), new Vector2(90f, 28f), TypeFilter.Leaders);
 
             // Status filter buttons (to see what's done vs what's missing!)
             AddStatusFilterButton(filterRow1.transform, "All", "ALL STATUS", new Vector2(-318f, 0f), new Vector2(98f, 28f), ArtStatusFilter.All, new Color(0.14f, 0.18f, 0.26f));
@@ -818,11 +1242,12 @@ namespace MonsterCardGame.UI
                 new Color(0.05f, 0.08f, 0.14f, 0.98f),
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 408f), new Vector2(1240f, 32f));
 
-            AddDeckBuilderTypeButton(typeBar.transform, TypeFilter.Monsters, "🐺 MONSTERS (240)", new Vector2(-460f, 0f), new Vector2(190f, 26f));
-            AddDeckBuilderTypeButton(typeBar.transform, TypeFilter.Spells, "📜 SPELLS (200)", new Vector2(-255f, 0f), new Vector2(170f, 26f));
-            AddDeckBuilderTypeButton(typeBar.transform, TypeFilter.Environments, "🌋 ENVIRONMENTS (10)", new Vector2(-65f, 0f), new Vector2(180f, 26f));
-            AddDeckBuilderTypeButton(typeBar.transform, TypeFilter.Leaders, "👑 SPIRITS (10)", new Vector2(120f, 0f), new Vector2(150f, 26f));
-            AddDeckBuilderTypeButton(typeBar.transform, TypeFilter.All, "🎴 ALL CARDS (460)", new Vector2(300f, 0f), new Vector2(170f, 26f));
+            AddDeckBuilderTypeButton(typeBar.transform, TypeFilter.Monsters, "🐺 MONSTERS (1800)", new Vector2(-525f, 0f), new Vector2(168f, 26f));
+            AddDeckBuilderTypeButton(typeBar.transform, TypeFilter.Spells, "📜 SPELLS (300)", new Vector2(-358f, 0f), new Vector2(150f, 26f));
+            AddDeckBuilderTypeButton(typeBar.transform, TypeFilter.Covenants, "⚖️ COVENANTS (100)", new Vector2(-192f, 0f), new Vector2(168f, 26f));
+            AddDeckBuilderTypeButton(typeBar.transform, TypeFilter.Environments, "🌋 ENVS (10)", new Vector2(-46f, 0f), new Vector2(112f, 26f));
+            AddDeckBuilderTypeButton(typeBar.transform, TypeFilter.Leaders, "👑 SPIRITS (60)", new Vector2(88f, 0f), new Vector2(140f, 26f));
+            AddDeckBuilderTypeButton(typeBar.transform, TypeFilter.All, "🎴 ALL (2270)", new Vector2(226f, 0f), new Vector2(124f, 26f));
 
             deckBuilderFilterCountText = GameBootstrapper.CreateText(typeBar.transform, "FilterCountText",
                 "Showing 240 Monsters", 11,
@@ -1168,16 +1593,17 @@ namespace MonsterCardGame.UI
                 if (c == null) continue;
                 if (deckBuilderTypeFilter == TypeFilter.Monsters && c.cardType != CardType.Monster) continue;
                 if (deckBuilderTypeFilter == TypeFilter.Spells && c.cardType != CardType.Spell) continue;
+                if (deckBuilderTypeFilter == TypeFilter.Covenants && c.cardType != CardType.Covenant) continue;
                 if (deckBuilderTypeFilter == TypeFilter.Environments && c.cardType != CardType.Environment) continue;
                 if (deckBuilderTypeFilter == TypeFilter.Leaders && c.cardType != CardType.Leader) continue;
 
-                if (deckBuilderElementFilter != "All" && deckBuilderTypeFilter != TypeFilter.Leaders)
+                if (deckBuilderElementFilter != "All" && deckBuilderTypeFilter != TypeFilter.Leaders && deckBuilderTypeFilter != TypeFilter.Covenants)
                 {
                     if (string.IsNullOrEmpty(c.element) || !c.element.Equals(deckBuilderElementFilter, StringComparison.OrdinalIgnoreCase))
                         continue;
                 }
 
-                if (deckBuilderTribeFilter != "All")
+                if (deckBuilderTribeFilter != "All" && deckBuilderTypeFilter != TypeFilter.Covenants)
                 {
                     if (string.IsNullOrEmpty(c.tribe) || !c.tribe.Equals(deckBuilderTribeFilter, StringComparison.OrdinalIgnoreCase))
                         continue;
@@ -1192,6 +1618,7 @@ namespace MonsterCardGame.UI
                 {
                     TypeFilter.Monsters => "Monsters",
                     TypeFilter.Spells => "Spells",
+                    TypeFilter.Covenants => "Altar Covenants",
                     TypeFilter.Environments => "Environments",
                     TypeFilter.Leaders => "Commander Spirits",
                     _ => "Total Cards"
@@ -1732,6 +2159,17 @@ namespace MonsterCardGame.UI
                     if (l != null) masterCatalog.Add(l);
                 }
             }
+
+            // 5. Right-Wing Altar Covenants (100 cards, IDs 71..170)
+            if (gm != null && gm.allCovenants != null && gm.allCovenants.Count > 0)
+            {
+                var covCopy = new List<CardData>(gm.allCovenants);
+                covCopy.Sort((a, b) => (a?.id ?? 0).CompareTo(b?.id ?? 0));
+                foreach (var cov in covCopy)
+                {
+                    if (cov != null) masterCatalog.Add(cov);
+                }
+            }
         }
 
         public static bool HasCardArtwork(CardData card)
@@ -1759,18 +2197,19 @@ namespace MonsterCardGame.UI
                 // Type filter
                 if (currentTypeFilter == TypeFilter.Monsters && c.cardType != CardType.Monster) continue;
                 if (currentTypeFilter == TypeFilter.Spells && c.cardType != CardType.Spell) continue;
+                if (currentTypeFilter == TypeFilter.Covenants && c.cardType != CardType.Covenant) continue;
                 if (currentTypeFilter == TypeFilter.Environments && c.cardType != CardType.Environment) continue;
                 if (currentTypeFilter == TypeFilter.Leaders && c.cardType != CardType.Leader) continue;
 
-                // Element filter (Leaders have NO element association; ignore element filter if browsing Leaders tab)
-                if (currentElementFilter != "All" && currentTypeFilter != TypeFilter.Leaders)
+                // Element filter (Leaders & Covenants have NO element association)
+                if (currentElementFilter != "All" && currentTypeFilter != TypeFilter.Leaders && currentTypeFilter != TypeFilter.Covenants)
                 {
                     if (string.IsNullOrEmpty(c.element) || !c.element.Equals(currentElementFilter, StringComparison.OrdinalIgnoreCase))
                         continue;
                 }
 
-                // Tribe filter
-                if (currentTribeFilter != "All")
+                // Tribe filter (Covenants have NO tribe association)
+                if (currentTribeFilter != "All" && currentTypeFilter != TypeFilter.Covenants)
                 {
                     if (string.IsNullOrEmpty(c.tribe) || !c.tribe.Equals(currentTribeFilter, StringComparison.OrdinalIgnoreCase))
                         continue;

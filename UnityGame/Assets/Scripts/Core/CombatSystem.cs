@@ -2971,6 +2971,15 @@ namespace MonsterCardGame.Core
                 if (MonsterCardGame.Audio.SoundManager.Instance != null)
                     MonsterCardGame.Audio.SoundManager.Instance.PlayCardHit();
 
+                // V2.1 Armor Pierce / Bypass Passive (deals strict integer-rounded % of hit straight to enemy Commander)
+                int piercePct = V2CardMechanicsEngine.GetUnitPiercePct(attackerMonster);
+                if (piercePct > 0 && dealtM > 0 && defender != null)
+                {
+                    int pierceDmg = Mathf.Max(1, V2CardMechanicsEngine.StrictRoundPct(dealtM, piercePct));
+                    defender.TakeLeaderDamage(pierceDmg);
+                    BattleUIManager.Instance?.LogCombatMessage($"🗡️ [{attackerMonster.data.name}] pierced {piercePct}% armor for {pierceDmg} Commander damage!");
+                }
+
                 // On-Hit Attacker Passives
                 if (attackerMonster.HasPassiveSubstr("Ember Fangs") != null || attackerMonster.HasPassiveSubstr("Eternal Flame") != null)
                     attackerMonster.bonusAtk += 2;

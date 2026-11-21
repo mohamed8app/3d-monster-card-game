@@ -29,15 +29,26 @@ namespace MonsterCardGame.Core
         public readonly Dictionary<int, int> discountedCardIds = new Dictionary<int, int>();
 
         public const int DefaultMaxHandSize = 7;
+        public const int MaxCopiesPerCard = 2;
 
         [Header("Card Collections")]
         public int maxHandSize = DefaultMaxHandSize;
+        public List<CardData> baseDeck = new List<CardData>();
         public List<CardData> deck = new List<CardData>();
         public List<CardData> hand = new List<CardData>();
         public List<CardData> graveyard = new List<CardData>();
+        public int deckCycleCount = 1;
 
-        [Header("Side Leader Slot")]
+        [Header("Side Leader & Right-Wing Covenant Altar Slots")]
         public CardData activeLeader = null;
+        public CardData activeCovenant = null;
+        public bool leaderExorcised = false;
+        public int leaderBetrayedTurns = 0;
+        public int leaderMutedTurns = 0;
+        public bool covenantDestroyed = false;
+        public int covenantMutedTurns = 0;
+        public int cardsPlayedThisTurn = 0;
+        public int monstersSummonedThisTurn = 0;
 
         [Header("6 Board Slots")]
         public BoardSlot[] slots = new BoardSlot[6];
@@ -82,6 +93,7 @@ namespace MonsterCardGame.Core
 
         public void InitializeDeck(List<CardData> initialDeck)
         {
+            baseDeck = new List<CardData>();
             deck = new List<CardData>();
             cardTurnsWaiting.Clear();
             drawnCardIdsThisMatch.Clear();
@@ -92,24 +104,39 @@ namespace MonsterCardGame.Core
             consecutiveMonsterDraws = 0;
             lastDrawnElement = "";
             waveNumber = 1;
+            deckCycleCount = 1;
 
-            var uniqueIds = new HashSet<int>();
+            var copyCounts = new Dictionary<int, int>();
             if (initialDeck != null)
             {
                 foreach (var c in initialDeck)
                 {
-                    if (c != null && (c.cardType == CardType.Environment || uniqueIds.Add(c.id)))
+                    if (c == null) continue;
+                    int curCopies = copyCounts.TryGetValue(c.id, out int cnt) ? cnt : 0;
+                    // V2 Constitution Rule #3: Max 2 Copies of any card in the 50-card deck
+                    if (curCopies < MaxCopiesPerCard)
                     {
+                        copyCounts[c.id] = curCopies + 1;
+                        baseDeck.Add(c);
                         deck.Add(c);
                         cardTurnsWaiting[c.id] = 0;
                     }
                 }
             }
 
-            ShuffleDeck();
+            ShuffleDeckAntiClump();
             hand.Clear();
             graveyard.Clear();
             activeLeader = null;
+            activeCovenant = null;
+            leaderExorcised = false;
+            leaderBetrayedTurns = 0;
+            leaderMutedTurns = 0;
+            covenantDestroyed = false;
+            covenantMutedTurns = 0;
+            cardsPlayedThisTurn = 0;
+            monstersSummonedThisTurn = 0;
+            maxHp = 500;
             currentHp = maxHp;
             shield = 0;
             power = 0;
@@ -128,16 +155,23 @@ namespace MonsterCardGame.Core
         {
             if (refillCards == null || refillCards.Count == 0) return;
 
-            var existingInDeck = new HashSet<int>();
+            var copyCounts = new Dictionary<int, int>();
             foreach (var c in deck)
             {
-                if (c != null) existingInDeck.Add(c.id);
+                if (c != null)
+                    copyCounts[c.id] = (copyCounts.TryGetValue(c.id, out int ec) ? ec : 0) + 1;
             }
 
             foreach (var c in refillCards)
             {
-                if (c != null && (c.cardType == CardType.Environment || existingInDeck.Add(c.id)))
+                if (c == null) continue;
+                // Omit already-active Leader or Covenant on Cycle 2+ refills
+                if (activeLeader != null && c.id == activeLeader.id) continue;
+                if (activeCovenant != null && c.id == activeCovenant.id) continue;
+                int cur = copyCounts.TryGetValue(c.id, out int cc) ? cc : 0;
+                if (cur < MaxCopiesPerCard)
                 {
+                    copyCounts[c.id] = cur + 1;
                     deck.Add(c);
                     if (!cardTurnsWaiting.ContainsKey(c.id))
                     {
@@ -145,10 +179,15 @@ namespace MonsterCardGame.Core
                     }
                 }
             }
-            ShuffleDeck();
+            ShuffleDeckAntiClump();
         }
 
         public void ShuffleDeck()
+        {
+            ShuffleDeckAntiClump();
+        }
+
+        public void ShuffleDeckAntiClump()
         {
             for (int i = 0; i < deck.Count; i++)
             {
@@ -157,13 +196,32 @@ namespace MonsterCardGame.Core
                 deck[i] = deck[rnd];
                 deck[rnd] = temp;
             }
+            // V2 Anti-Clump Golden Spacing: separate identical 2x copies by at least 4 cards
+            for (int i = 0; i < deck.Count - 1; i++)
+            {
+                if (deck[i] != null && deck[i + 1] != null && deck[i].id == deck[i + 1].id)
+                {
+                    int swapIdx = (i + 5) % deck.Count;
+                    var tmp = deck[i + 1];
+                    deck[i + 1] = deck[swapIdx];
+                    deck[swapIdx] = tmp;
+                }
+            }
         }
 
         public void StartTurn(int turnNumber, bool skipDraw = false)
         {
-            // 1. Gain turn Mana equal to permanent Power (Unlimited ∞)
+            // 1. Gain turn Mana equal to permanent Power (capped by Covenant max_mana_self if active)
+            int manaCap = V2CardMechanicsEngine.GetPlayerManaCap(this);
+            if (power > manaCap) power = manaCap;
             currentMana = power;
             hasSacrificedThisTurn = false;
+            cardsPlayedThisTurn = 0;
+            monstersSummonedThisTurn = 0;
+
+            if (leaderBetrayedTurns > 0) leaderBetrayedTurns--;
+            if (leaderMutedTurns > 0) leaderMutedTurns--;
+            if (covenantMutedTurns > 0) covenantMutedTurns--;
 
             // 2. Check Total Eclipse effect (denies draw & sacrifice for 1 turn) or explicit Turn-1 skip
             if (denyDrawSacTurns > 0)
@@ -216,10 +274,18 @@ namespace MonsterCardGame.Core
 
         public bool DrawCard()
         {
-            if (deck.Count == 0 && onDeckExhaustedRefill != null)
+            if (deck.Count == 0)
             {
-                var refill = onDeckExhaustedRefill.Invoke(this);
-                AddRefillCardsToDeck(refill);
+                deckCycleCount++;
+                if (baseDeck != null && baseDeck.Count > 0)
+                {
+                    AddRefillCardsToDeck(baseDeck);
+                }
+                else if (onDeckExhaustedRefill != null)
+                {
+                    var refill = onDeckExhaustedRefill.Invoke(this);
+                    AddRefillCardsToDeck(refill);
+                }
             }
 
             if (deck.Count > 0)
@@ -273,17 +339,12 @@ namespace MonsterCardGame.Core
                 {
                     MonsterCardGame.UI.BattleUIManager.Instance.LogCombatMessage($"🔥💀 [{playerName}] Comeback Draw! Fallen Monster #{card.name} returned for a rematch!", card);
                 }
-                Debug.Log($"[{playerName}] drew card #{card.name} ({card.cardType}) | Hand: {hand.Count}/{maxHandSize} | Deck left: {deck.Count}");
+                Debug.Log($"[{playerName}] drew card #{card.name} ({card.cardType}) | Hand: {hand.Count}/{maxHandSize} | Deck left: {deck.Count} (Cycle #{deckCycleCount})");
                 return true;
             }
-            else
-            {
-                fatigueCount++;
-                int fatigueDmg = fatigueCount * 30;
-                TakeLeaderDamage(fatigueDmg);
-                Debug.LogWarning($"[{playerName}] Out of cards! Took {fatigueDmg} HP fatigue damage.");
-                return false;
-            }
+
+            // V2 Constitution Rule #8 & #9: Infinite Shuffle-Bag — ZERO Deck-Out or Fatigue Damage!
+            return false;
         }
 
         public CardData DrawSpecificFromDeck(Func<CardData, bool> predicate, Action<CardData> adjustBeforeAdd = null)
@@ -431,7 +492,8 @@ namespace MonsterCardGame.Core
         {
             if (card == null) return 0;
             int disc = (card.cardType == CardType.Monster && discountedCardIds.TryGetValue(card.id, out int charges) && charges > 0) ? 1 : 0;
-            return Mathf.Max(0, card.cost - disc);
+            int covDelta = V2CardMechanicsEngine.GetCardCostDelta(this, card);
+            return Mathf.Max(0, card.cost - disc + covDelta);
         }
 
         public bool SummonMonster(CardData card, int targetSlotIndex, int currentTurn)
@@ -442,6 +504,12 @@ namespace MonsterCardGame.Core
             if (slots[targetSlotIndex].IsOccupied)
             {
                 Debug.LogWarning($"Slot {targetSlotIndex} is already occupied!");
+                return false;
+            }
+
+            if (!V2CardMechanicsEngine.CanPlayerSummonMonster(this, card, out string covReason))
+            {
+                Debug.LogWarning(covReason);
                 return false;
             }
 
@@ -460,6 +528,8 @@ namespace MonsterCardGame.Core
             }
             hand.Remove(card);
             monstersSummonedTotal++;
+            monstersSummonedThisTurn++;
+            cardsPlayedThisTurn++;
 
             var instance = new MonsterInstance(card, currentTurn);
             slots[targetSlotIndex].PlaceMonster(instance);
@@ -467,6 +537,7 @@ namespace MonsterCardGame.Core
             if (GameManager.Instance != null)
             {
                 var opponent = (this == GameManager.Instance.humanPlayer) ? GameManager.Instance.aiPlayer : GameManager.Instance.humanPlayer;
+                V2CardMechanicsEngine.ApplyV2OnMonsterSummoned(this, opponent, targetSlotIndex, instance);
                 if (CombatSystem.Instance != null)
                 {
                     CombatSystem.Instance.ApplyOnSummonPassives(this, opponent, targetSlotIndex, instance);
@@ -496,13 +567,8 @@ namespace MonsterCardGame.Core
             }
             if (damage <= 0) return;
 
-            bool hadShield = shield > 0;
-            if (shield > 0)
-            {
-                int absorbed = Mathf.Min(shield, damage);
-                shield -= absorbed;
-                damage -= absorbed;
-            }
+            // V2 Constitution Rule #20: Shield/Bubble/Armor are eliminated; all Commander damage applies directly to HP
+            shield = 0;
 
             if (damage > 0)
             {
@@ -515,15 +581,12 @@ namespace MonsterCardGame.Core
                     GameManager.Instance?.CheckGameOver();
                 }
             }
-            else if (hadShield)
-            {
-                MonsterCardGame.Audio.SoundManager.Instance?.PlayCardShieldBlock();
-            }
         }
 
         public void HealLeader(int healAmount, PlayerState opponent = null)
         {
             if (healAmount <= 0) return;
+            if (V2CardMechanicsEngine.IsSelfHealBanned(this)) return;
 
             if (opponent != null)
             {

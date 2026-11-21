@@ -66,6 +66,13 @@ namespace MonsterCardGame.Data
         {
             if (spell == null || spell.cardType != CardType.Spell) return;
 
+            if (!string.IsNullOrEmpty(spell.v2_ops_json))
+            {
+                // V2 Master Database Spell (IDs 171..470): spellTargetMode and spellPower are already exported accurately!
+                spell.spellType = (SpellType)spell.id;
+                return;
+            }
+
             if (spell.id >= 241 && spell.id <= 440)
             {
                 spell.spellType = (SpellType)spell.id;
@@ -176,10 +183,11 @@ namespace MonsterCardGame.Data
             var clone = new CardData
             {
                 id = proto.id,
-                name = proto.id.ToString(),
+                name = string.IsNullOrEmpty(proto.name) ? proto.id.ToString() : proto.name,
                 cardType = CardType.Spell,
                 card_type = "spell",
                 element = proto.element,
+                playstyle = proto.playstyle,
                 group = proto.group,
                 tribe = proto.tribe,
                 role = proto.role,
@@ -191,6 +199,7 @@ namespace MonsterCardGame.Data
                 spellType = proto.spellType,
                 spellTargetMode = proto.spellTargetMode,
                 spellPower = proto.spellPower,
+                v2_ops_json = proto.v2_ops_json,
                 active_skill = proto.active_skill,
                 description = proto.description
             };
