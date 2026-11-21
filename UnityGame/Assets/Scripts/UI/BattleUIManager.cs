@@ -572,22 +572,6 @@ namespace MonsterCardGame.UI
             {
                 ToggleFullScreen();
             }
-            else if (Input.GetKeyDown(KeyCode.E))
-            {
-                OnTestCycleEnvironmentClicked();
-            }
-            else if (Input.GetKeyDown(KeyCode.L))
-            {
-                OnTestCycleEnvLevelClicked();
-            }
-            else if (Input.GetKeyDown(KeyCode.P))
-            {
-                OnTestCycleSpiritClicked();
-            }
-            else if (Input.GetKeyDown(KeyCode.O))
-            {
-                OnTestCycleEnemySpiritClicked();
-            }
 
             // Safety check: if player hand has cards but UI container is empty, refresh immediately
             var gm = GameManager.Instance;

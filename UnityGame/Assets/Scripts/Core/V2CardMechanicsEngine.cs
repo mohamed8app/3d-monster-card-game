@@ -23,15 +23,40 @@ namespace MonsterCardGame.Core
             public int v2 = 0;
             public int pct = 0;
             public int cnt = 1;
+            public int count = 1;
             public int cap = 99;
+            public int max_cost = 99;
             public int draw = 0;
             public int dmg = 0;
             public int burn = 0;
             public int weaken = 0;
+            public int atk = 0;
+            public int deff = 0;
+            public int hp = 0;
+            public int heal = 0;
+            public int heal_hp = 0;
+            public int self_def = 0;
+            public int self_dmg = 0;
+            public int leech = 0;
+            public int reflect = 0;
+            public int ev = 0;
+            public int mana = 0;
+            public int dur = 1;
+            public int exec_below = 0;
+            public int disc = 0;
+            public int buff = 0;
+            public string fx = "";
             public bool perm = false;
             public bool cleanse = false;
             public bool root = false;
             public bool dbl = false;
+            public bool haste = false;
+            public bool taunt = false;
+            public bool stealth = false;
+            public bool imm = false;
+            public bool double_burn = false;
+            public bool enemy_only = false;
+            public bool to_board = false;
         }
 
         [Serializable]
@@ -170,6 +195,15 @@ namespace MonsterCardGame.Core
             {
                 return null;
             }
+        }
+
+        public static V2OpItem GetV2ActiveOp(MonsterInstance unit, int skillIndex)
+        {
+            if (unit == null || unit.data == null || skillIndex < 0) return null;
+            var mops = GetMonsterOps(unit.data);
+            if (mops == null || mops.actives == null || skillIndex >= mops.actives.Count) return null;
+            var op = mops.actives[skillIndex];
+            return (op != null && !string.IsNullOrEmpty(op.kind)) ? op : null;
         }
 
         public static V2LeaderOps GetLeaderOps(CardData card)

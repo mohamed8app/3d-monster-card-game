@@ -24,6 +24,7 @@ namespace MonsterCardGame.Core
         public List<string> passives = new List<string>();
         public List<string> actives = new List<string>();
         public List<bool> activeUsedThisTurn = new List<bool>();
+        public List<int> activeUseCountsThisTurn = new List<int>();
         public bool hasUsedActiveThisTurn = false;
         public int skillsUsedThisTurn = 0;
         public bool doubleSkillOneTurn = false;
@@ -58,34 +59,76 @@ namespace MonsterCardGame.Core
             return actives != null && skillIndex >= 0 && skillIndex < actives.Count && !string.IsNullOrEmpty(actives[skillIndex]);
         }
 
-        public bool IsActiveSkillUsed(int skillIndex)
+        public int GetMaxUsesPerSkill(PlayerState owner = null)
         {
-            if (IsBarrier) return true;
-            int maxUses = doubleSkillOneTurn ? 2 : 1;
-            if (skillsUsedThisTurn >= maxUses) return true;
-            if (!doubleSkillOneTurn && activeUsedThisTurn != null && skillIndex >= 0 && skillIndex < activeUsedThisTurn.Count)
+            if (doubleSkillOneTurn) return 2;
+            if (owner != null && V2CardMechanicsEngine.IsCovenantActiveForPlayer(owner))
             {
-                return activeUsedThisTurn[skillIndex];
+                var cov = V2CardMechanicsEngine.GetCovenantOps(owner.activeCovenant);
+                if (cov != null && cov.rew_double_skill) return 2;
             }
-            return hasUsedActiveThisTurn;
+            return 1;
         }
 
-        public void MarkActiveSkillUsed(int skillIndex)
+        public int GetActiveSkillUses(int skillIndex)
         {
-            skillsUsedThisTurn++;
-            int maxUses = doubleSkillOneTurn ? 2 : 1;
-            if (activeUsedThisTurn == null) activeUsedThisTurn = new List<bool>();
-            int count = actives != null ? actives.Count : 0;
-            while (activeUsedThisTurn.Count < Mathf.Max(count, skillIndex + 1))
-            {
-                activeUsedThisTurn.Add(false);
-            }
-            if (skillIndex >= 0 && skillIndex < activeUsedThisTurn.Count && skillsUsedThisTurn >= maxUses)
-            {
-                activeUsedThisTurn[skillIndex] = true;
-            }
+            if (activeUseCountsThisTurn != null && skillIndex >= 0 && skillIndex < activeUseCountsThisTurn.Count)
+                return activeUseCountsThisTurn[skillIndex];
+            if (activeUsedThisTurn != null && skillIndex >= 0 && skillIndex < activeUsedThisTurn.Count)
+                return activeUsedThisTurn[skillIndex] ? 1 : 0;
+            return 0;
+        }
 
-            hasUsedActiveThisTurn = (skillsUsedThisTurn >= maxUses);
+        public bool IsActiveSkillUsed(int skillIndex, PlayerState owner = null)
+        {
+            if (IsBarrier || !HasActiveSkillAt(skillIndex)) return true;
+            int maxPerSkill = GetMaxUsesPerSkill(owner);
+            return GetActiveSkillUses(skillIndex) >= maxPerSkill;
+        }
+
+        public bool AreAllActiveSkillsUsed(PlayerState owner = null)
+        {
+            if (!HasActiveSkill) return true;
+            for (int i = 0; i < ActiveSkillCount; i++)
+            {
+                if (!IsActiveSkillUsed(i, owner)) return false;
+            }
+            return true;
+        }
+
+        public void MarkActiveSkillUsed(int skillIndex, PlayerState owner = null)
+        {
+            if (skillIndex < 0) return;
+            skillsUsedThisTurn++;
+            int maxPerSkill = GetMaxUsesPerSkill(owner);
+            if (activeUsedThisTurn == null) activeUsedThisTurn = new List<bool>();
+            if (activeUseCountsThisTurn == null) activeUseCountsThisTurn = new List<int>();
+            int count = actives != null ? actives.Count : 0;
+            int targetLen = Mathf.Max(count, skillIndex + 1);
+            while (activeUsedThisTurn.Count < targetLen)
+                activeUsedThisTurn.Add(false);
+            while (activeUseCountsThisTurn.Count < targetLen)
+                activeUseCountsThisTurn.Add(0);
+
+            activeUseCountsThisTurn[skillIndex]++;
+            activeUsedThisTurn[skillIndex] = (activeUseCountsThisTurn[skillIndex] >= maxPerSkill);
+            hasUsedActiveThisTurn = (skillsUsedThisTurn > 0);
+        }
+
+        public void ResetActiveSkillsUsage()
+        {
+            hasUsedActiveThisTurn = false;
+            skillsUsedThisTurn = 0;
+            if (activeUsedThisTurn != null)
+            {
+                for (int i = 0; i < activeUsedThisTurn.Count; i++)
+                    activeUsedThisTurn[i] = false;
+            }
+            if (activeUseCountsThisTurn != null)
+            {
+                for (int i = 0; i < activeUseCountsThisTurn.Count; i++)
+                    activeUseCountsThisTurn[i] = 0;
+            }
         }
 
         public MonsterInstance(CardData monsterData, int currentTurn)
@@ -131,9 +174,11 @@ namespace MonsterCardGame.Core
             }
 
             activeUsedThisTurn = new List<bool>();
+            activeUseCountsThisTurn = new List<int>();
             for (int i = 0; i < actives.Count; i++)
             {
                 activeUsedThisTurn.Add(false);
+                activeUseCountsThisTurn.Add(0);
             }
         }
 
@@ -330,20 +375,12 @@ namespace MonsterCardGame.Core
         {
             if (IsAlive)
             {
-                hasUsedActiveThisTurn = false;
-                skillsUsedThisTurn = 0;
+                ResetActiveSkillsUsage();
                 doubleSkillOneTurn = false; // V2 Constitution Rule #36: Double Skill lasts 1 turn only!
                 tempTurnAtk = 0;
                 cycloneDiveUsed = false;
                 doubleStrike = HasPassiveSubstr("Twin Strike") != null;
                 if (rootedTurns > 0) rootedTurns--;
-                if (activeUsedThisTurn != null)
-                {
-                    for (int i = 0; i < activeUsedThisTurn.Count; i++)
-                    {
-                        activeUsedThisTurn[i] = false;
-                    }
-                }
                 if (!IsBarrier && currentTurn > summonedTurn && frozenTurns <= 0)
                 {
                     canAttack = true;

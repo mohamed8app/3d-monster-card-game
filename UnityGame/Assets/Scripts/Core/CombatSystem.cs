@@ -781,6 +781,22 @@ namespace MonsterCardGame.Core
         {
             if (string.IsNullOrEmpty(act)) return AbilityTargetMode.None;
 
+            // V2 Structured Active Skill targeting by formatted label
+            if (act.Contains("Fortify Ally") || act.Contains("Overclock Spark") ||
+                act.Contains("Windfury Blessing") || act.Contains("Tactical Recall (Ally)") ||
+                act.Contains("Buff Ally"))
+            {
+                return AbilityTargetMode.SingleAlly;
+            }
+            if (act.Contains("Precision Strike") || act.Contains("Sweeping Cleave") ||
+                act.Contains("Banish Recall") || act.Contains("Puppeteer Strings") ||
+                act.Contains("Abyssal Devour") || act.Contains("Chain Pull Hook") ||
+                act.Contains("Shifting Curse") || act.Contains("Dmg Single") ||
+                act.Contains("Cleave Enemy") || act.Contains("Recall Enemy"))
+            {
+                return AbilityTargetMode.SingleEnemy;
+            }
+
             // 1. Single-Ally Targeted Skills (14)
             if (act.Contains("Purging Flame") ||
                 act.Contains("Healing Stream") ||
@@ -1042,28 +1058,99 @@ namespace MonsterCardGame.Core
             }
         }
 
-        public int GetActiveSkillCost(PlayerState player, PlayerState opponent, int slotIndex, string act)
+        public static AbilityTargetMode GetV2OpTargetMode(V2CardMechanicsEngine.V2OpItem op)
+        {
+            if (op == null || string.IsNullOrEmpty(op.kind)) return AbilityTargetMode.None;
+            switch (op.kind)
+            {
+                case "buff_ally":
+                case "double_skill_1t":
+                case "grant_double_strike":
+                case "recall_ally":
+                    return AbilityTargetMode.SingleAlly;
+                case "dmg_single":
+                case "cleave_enemy":
+                case "recall_enemy":
+                case "mind_control_temp":
+                case "devour_3":
+                case "pull_hook":
+                case "shifting_curse":
+                    return AbilityTargetMode.SingleEnemy;
+                default:
+                    return AbilityTargetMode.None;
+            }
+        }
+
+        public static bool V2OpRequiresEnemyMonster(V2CardMechanicsEngine.V2OpItem op)
+        {
+            if (op == null || string.IsNullOrEmpty(op.kind)) return false;
+            switch (op.kind)
+            {
+                case "cleave_enemy":
+                case "aoe_enemy":
+                case "recall_enemy":
+                case "mind_control_temp":
+                case "devour_3":
+                case "pull_hook":
+                case "shifting_curse":
+                case "detonate_dots":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        public int GetActiveSkillCost(PlayerState player, PlayerState opponent, int slotIndex, string act, int skillIndex = -1)
         {
             if (string.IsNullOrEmpty(act)) return 0;
-            bool hasPowerConditionOnly = GetParsedPermanentPowerCost(act) > 0 && !act.ToLowerInvariant().Contains("mana");
-            int baseSkillCost = hasPowerConditionOnly ? 0 :
-                ((act.Contains("(Cost 3 Mana)") || act.Contains("(Cost 3 Power)")) ? 3 :
-                ((act.Contains("(Cost 2 Mana)") || act.Contains("(Cost 2 Power)")) ? 2 : 1));
+            var mySlot = (player != null && slotIndex >= 0 && slotIndex < 6) ? player.slots[slotIndex] : null;
+            var myM = (mySlot != null && mySlot.IsOccupied) ? mySlot.currentMonster : null;
+
+            // V2 Exact Structured Cost (from v2_ops_json or "[X Mana]" prefix)
+            int baseSkillCost = -1;
+            if (myM != null)
+            {
+                int resolvedIdx = skillIndex;
+                if (resolvedIdx < 0 && myM.actives != null) resolvedIdx = myM.actives.IndexOf(act);
+                var v2op = V2CardMechanicsEngine.GetV2ActiveOp(myM, resolvedIdx);
+                if (v2op != null) baseSkillCost = Mathf.Max(0, v2op.cost);
+            }
+            if (baseSkillCost < 0)
+            {
+                if (act.StartsWith("[0 Mana]")) baseSkillCost = 0;
+                else if (act.StartsWith("[1 Mana]")) baseSkillCost = 1;
+                else if (act.StartsWith("[2 Mana]")) baseSkillCost = 2;
+                else if (act.StartsWith("[3 Mana]")) baseSkillCost = 3;
+                else if (act.StartsWith("[4 Mana]")) baseSkillCost = 4;
+                else
+                {
+                    bool hasPowerConditionOnly = GetParsedPermanentPowerCost(act) > 0 && !act.ToLowerInvariant().Contains("mana");
+                    baseSkillCost = hasPowerConditionOnly ? 0 :
+                        ((act.Contains("(Cost 3 Mana)") || act.Contains("(Cost 3 Power)")) ? 3 :
+                        ((act.Contains("(Cost 2 Mana)") || act.Contains("(Cost 2 Power)")) ? 2 : 1));
+                }
+            }
             if (player != null && player.freeSkillManaZero) return 0;
             if (baseSkillCost <= 0) return 0;
 
             var oppSlot = (opponent != null && slotIndex >= 0 && slotIndex < 6) ? opponent.slots[slotIndex] : null;
             var oppM = (oppSlot != null && oppSlot.IsOccupied) ? oppSlot.currentMonster : null;
-            var mySlot = (player != null && slotIndex >= 0 && slotIndex < 6) ? player.slots[slotIndex] : null;
-            var myM = (mySlot != null && mySlot.IsOccupied) ? mySlot.currentMonster : null;
             var activeEnv = GameManager.Instance != null ? GameManager.Instance.activeEnvironment : null;
 
             int extraCost = (oppM != null && oppM.HasPassiveSubstr("Frost Aura") != null) ? 1 : 0;
+            int covDisc = 0;
+            if (V2CardMechanicsEngine.IsCovenantActiveForPlayer(player))
+            {
+                var cov = V2CardMechanicsEngine.GetCovenantOps(player.activeCovenant);
+                if (cov != null) covDisc = cov.rew_skill_disc;
+            }
+            int envDisc = (activeEnv != null && IsEnvElement(activeEnv, "Electric")) ? (activeEnv.level >= 3 ? 2 : 1) : 0;
             int discount = ((player != null && player.freeSkillBonus > 0) ? 1 : 0)
                 + CommanderSpiritEffects.GetSkillManaDiscount(player, myM)
-                + ((myM != null && myM.HasPassiveSubstr("Runic Conduit") != null) ? 1 : 0)
-                + ((IsEnvElement(activeEnv, "Electric") && myM != null && myM.data != null && myM.data.element == "Electric") ? 1 : 0);
-            return Mathf.Max(1, baseSkillCost + extraCost - discount);
+                + covDisc
+                + envDisc
+                + ((myM != null && myM.HasPassiveSubstr("Runic Conduit") != null) ? 1 : 0);
+            return Mathf.Max(0, baseSkillCost + extraCost - discount);
         }
 
         private static int GetParsedPermanentPowerCost(string act)
@@ -1164,7 +1251,8 @@ namespace MonsterCardGame.Core
 
             string act = m.actives[skillIndex];
             string shortName = GetShortSkillName(act);
-            int manaCost = GetActiveSkillCost(owner, opponent, slotIndex, act);
+            var v2op = V2CardMechanicsEngine.GetV2ActiveOp(m, skillIndex);
+            int manaCost = GetActiveSkillCost(owner, opponent, slotIndex, act, skillIndex);
             int pwrCost = GetActiveSkillPowerCost(m, act);
             totalCost = pwrCost > 0 ? pwrCost : manaCost;
 
@@ -1180,7 +1268,7 @@ namespace MonsterCardGame.Core
                 return AbilityReadyState.Frozen;
             }
 
-            if (m.IsActiveSkillUsed(skillIndex))
+            if (m.IsActiveSkillUsed(skillIndex, owner))
             {
                 reason = $"✓ [{m.data.name}] already used [{shortName}] this turn.";
                 return AbilityReadyState.AlreadyUsed;
@@ -1197,13 +1285,15 @@ namespace MonsterCardGame.Core
                 }
             }
 
-            if (SkillRequiresEnemyMonster(act) && GetAliveSlots(opponent).Count == 0)
+            bool reqEnemy = v2op != null ? V2OpRequiresEnemyMonster(v2op) : SkillRequiresEnemyMonster(act);
+            if (reqEnemy && GetAliveSlots(opponent).Count == 0)
             {
                 reason = $"🎯 [{shortName}] requires at least 1 enemy monster on the battlefield!";
                 return AbilityReadyState.NoValidTarget;
             }
 
-            if (GetSkillTargetMode(act, owner, opponent) == AbilityTargetMode.SingleEnemy && GetTargetableEnemySlots(opponent, act).Count == 0)
+            var targetModeCheck = v2op != null ? GetV2OpTargetMode(v2op) : GetSkillTargetMode(act, owner, opponent);
+            if (targetModeCheck == AbilityTargetMode.SingleEnemy && GetAliveSlots(opponent).Count > 0 && GetTargetableEnemySlots(opponent, act).Count == 0)
             {
                 reason = $"🌫️ [{shortName}] cannot target enemies protected by Night Stealth!";
                 return AbilityReadyState.NoValidTarget;
@@ -1264,8 +1354,9 @@ namespace MonsterCardGame.Core
             var m = player.slots[slotIndex].currentMonster;
             string act = m.actives[skillIndex];
             string shortName = GetShortSkillName(act);
+            var v2op = V2CardMechanicsEngine.GetV2ActiveOp(m, skillIndex);
 
-            var targetMode = GetSkillTargetMode(act, player, opponent);
+            var targetMode = v2op != null ? GetV2OpTargetMode(v2op) : GetSkillTargetMode(act, player, opponent);
             if (targetSlotIndex >= 0)
             {
                 if (targetMode == AbilityTargetMode.SingleEnemy)
@@ -1292,7 +1383,7 @@ namespace MonsterCardGame.Core
                 }
             }
 
-            int actCost = GetActiveSkillCost(player, opponent, slotIndex, act);
+            int actCost = GetActiveSkillCost(player, opponent, slotIndex, act, skillIndex);
             int actPowerCost = GetActiveSkillPowerCost(m, act);
             if (player.currentMana < actCost || player.power < actPowerCost)
             {
@@ -1302,7 +1393,7 @@ namespace MonsterCardGame.Core
 
             player.currentMana -= actCost;
             if (actPowerCost > 0) player.power -= actPowerCost;
-            m.MarkActiveSkillUsed(skillIndex);
+            m.MarkActiveSkillUsed(skillIndex, player);
 
             int bonusEff = player.freeSkillBonus;
             player.freeSkillBonus = 0;
@@ -1335,7 +1426,7 @@ namespace MonsterCardGame.Core
             int repeats = (m.HasPassiveSubstr("Spell Multiplier") != null && UnityEngine.Random.value < 0.50f) ? 2 : 1;
             for (int r = 0; r < repeats; r++)
             {
-                ResolveSingleActive(act, slotIndex, m, player, opponent, bonusEff, showVfx: true, explicitTargetSlot: targetSlotIndex);
+                ResolveSingleActive(act, slotIndex, m, player, opponent, bonusEff, showVfx: true, explicitTargetSlot: targetSlotIndex, skillIndex: skillIndex);
             }
 
             string colorBadge = skillIndex == 0 ? "🔵" : "🔴";
@@ -1530,7 +1621,7 @@ namespace MonsterCardGame.Core
                         yield break;
 
                     if (pSlot.currentMonster == null || !m.IsAlive) break;
-                    if (m.IsActiveSkillUsed(sIdx)) continue;
+                    if (m.IsActiveSkillUsed(sIdx, player)) continue;
 
                     string actText = m.actives[sIdx];
                     int targetSlot = ChooseSmartSkillTargetSlot(actText, slot, m, player, opponent, player.freeSkillBonus);
@@ -1571,7 +1662,7 @@ namespace MonsterCardGame.Core
             bool anyActivated = false;
             for (int sIdx = 0; sIdx < m.ActiveSkillCount; sIdx++)
             {
-                if (m.IsActiveSkillUsed(sIdx)) continue;
+                if (m.IsActiveSkillUsed(sIdx, player)) continue;
                 string actText = m.actives[sIdx];
                 int targetSlot = ChooseSmartSkillTargetSlot(actText, slot, m, player, opponent, player.freeSkillBonus);
                 if (ActivateMonsterAbility(player, opponent, slot, sIdx, targetSlot, out string msg))
@@ -1728,8 +1819,632 @@ namespace MonsterCardGame.Core
             return spawned;
         }
 
-        private void ResolveSingleActive(string act, int slot, MonsterInstance m, PlayerState player, PlayerState opponent, int bonusEff, bool showVfx = true, int explicitTargetSlot = -1)
+        private void ApplyV2SkillStatusFx(MonsterInstance target, string fx, int val, int dur, bool targetIsHuman, int slotIdx, bool showVfx)
         {
+            if (target == null || !target.IsAlive || string.IsNullOrEmpty(fx)) return;
+            switch (fx)
+            {
+                case "burn":
+                    target.burnDmg += Mathf.Max(2, val);
+                    if (showVfx) SpawnSlotStatusVfx(targetIsHuman, slotIdx, $"🔥 BURN +{Mathf.Max(2, val)}", new Color(1f, 0.45f, 0.15f));
+                    break;
+                case "poison":
+                    target.poisonDmg += Mathf.Max(2, val);
+                    if (showVfx) SpawnSlotStatusVfx(targetIsHuman, slotIdx, $"☠️ POISON +{Mathf.Max(2, val)}", new Color(0.45f, 0.92f, 0.30f));
+                    break;
+                case "bleed":
+                    target.bleedDmg += Mathf.Max(2, val);
+                    if (showVfx) SpawnSlotStatusVfx(targetIsHuman, slotIdx, $"🩸 BLEED +{Mathf.Max(2, val)}", new Color(0.95f, 0.22f, 0.28f));
+                    break;
+                case "freeze":
+                    target.frozenTurns = Mathf.Max(target.frozenTurns, Mathf.Max(1, dur));
+                    if (showVfx) SpawnSlotStatusVfx(targetIsHuman, slotIdx, "❄️ FROZEN!", new Color(0.55f, 0.88f, 1f));
+                    break;
+                case "silence":
+                    target.silencedTurns = Mathf.Max(target.silencedTurns, Mathf.Max(1, dur));
+                    if (showVfx) SpawnSlotStatusVfx(targetIsHuman, slotIdx, "🔇 SILENCED!", new Color(0.75f, 0.65f, 0.95f));
+                    break;
+                case "root":
+                    target.rootedTurns = Mathf.Max(target.rootedTurns, Mathf.Max(1, dur));
+                    if (showVfx) SpawnSlotStatusVfx(targetIsHuman, slotIdx, "🌿 ROOTED!", new Color(0.35f, 0.85f, 0.45f));
+                    break;
+                case "weaken":
+                    target.weakenedAtkFlat += Mathf.Max(2, val);
+                    if (showVfx) SpawnSlotStatusVfx(targetIsHuman, slotIdx, $"⬇️ -{Mathf.Max(2, val)} ATK", new Color(0.88f, 0.65f, 0.35f));
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Executes ALL 25 Arena_Lab_V2 structured monster active skills 1-to-1 with `battle_engine.py::_use_active_skill()`.
+        /// Returns true if the monster has a V2 structured active skill so it NEVER falls back to legacy +5/+15!
+        /// </summary>
+        private bool TryResolveV2ActiveSkill(
+            V2CardMechanicsEngine.V2OpItem op,
+            int slot,
+            MonsterInstance m,
+            PlayerState player,
+            PlayerState opponent,
+            int bonusEff,
+            bool showVfx,
+            int explicitTargetSlot)
+        {
+            if (op == null || string.IsNullOrEmpty(op.kind)) return false;
+
+            var enemies = GetAliveSlots(opponent);
+            var allies = GetAliveSlots(player);
+            bool playerIsHuman = GameManager.Instance != null && (player == GameManager.Instance.humanPlayer);
+            bool oppIsHuman = !playerIsHuman;
+            int turn = GameManager.Instance != null ? GameManager.Instance.currentTurn : 1;
+
+            int covSkillBonus = 0;
+            if (V2CardMechanicsEngine.IsCovenantActiveForPlayer(player))
+            {
+                var cov = V2CardMechanicsEngine.GetCovenantOps(player.activeCovenant);
+                if (cov != null) covSkillBonus = cov.rew_skill_power;
+            }
+            var activeEnv = GameManager.Instance != null ? GameManager.Instance.activeEnvironment : null;
+            int envSkillBonus = (activeEnv != null && IsEnvElement(activeEnv, "Desert"))
+                ? (activeEnv.level >= 3 ? 6 : (activeEnv.level == 2 ? 4 : 2))
+                : 0;
+            int bonus = bonusEff + covSkillBonus + envSkillBonus;
+            int v1 = op.v1;
+            int v2 = op.v2;
+
+            switch (op.kind)
+            {
+                case "dmg_single":
+                {
+                    int dmg = Mathf.Max(1, v1 + bonus);
+                    var ts = GetEnemyTarget(slot, enemies, opponent, false, explicitTargetSlot);
+                    if (ts != null && ts.currentMonster != null && ts.currentMonster.IsAlive)
+                    {
+                        var tm = ts.currentMonster;
+                        int preDef = tm.currentDef;
+                        DealSpellOrSkillDamage(ts.slotIndex, tm, dmg, m, opponent, player, true, showVfx);
+                        int dealt = Mathf.Max(0, preDef - (tm.IsAlive ? tm.currentDef : 0));
+                        if (op.exec_below > 0 && tm.IsAlive && tm.currentDef <= op.exec_below)
+                        {
+                            if (showVfx) SpawnSlotStatusVfx(oppIsHuman, ts.slotIndex, "💀 EXECUTED!", new Color(1f, 0.25f, 0.25f));
+                            tm.currentDef = 0;
+                            HandleMonsterDeath(opponent, player, ts.slotIndex, tm, m);
+                        }
+                        if (op.leech > 0 && dealt > 0)
+                        {
+                            int lh = V2CardMechanicsEngine.StrictRoundPct(dealt, op.leech);
+                            if (lh > 0)
+                            {
+                                player.HealLeader(lh, opponent);
+                                if (showVfx) SpawnLeaderStatusVfx(playerIsHuman, $"+{lh} HP", Color.green, true, lh);
+                            }
+                        }
+                        if (!string.IsNullOrEmpty(op.fx) && tm.IsAlive)
+                            ApplyV2SkillStatusFx(tm, op.fx, v2, op.dur, oppIsHuman, ts.slotIndex, showVfx);
+                    }
+                    else
+                    {
+                        opponent.TakeLeaderDamage(dmg);
+                        if (showVfx) SpawnLeaderStatusVfx(oppIsHuman, $"-{dmg} HP", new Color(1f, 0.35f, 0.25f));
+                    }
+                    if (op.heal_hp > 0)
+                    {
+                        player.HealLeader(op.heal_hp, opponent);
+                        if (showVfx) SpawnLeaderStatusVfx(playerIsHuman, $"+{op.heal_hp} HP", Color.green, true, op.heal_hp);
+                    }
+                    if (op.self_def > 0)
+                    {
+                        m.ApplyPermBuff(0, op.self_def);
+                        if (showVfx) SpawnSlotStatusVfx(playerIsHuman, slot, $"+{op.self_def} DEF", Color.cyan);
+                    }
+                    return true;
+                }
+
+                case "aoe_enemy":
+                {
+                    int dmg = Mathf.Max(1, v1 + bonus);
+                    foreach (var es in new List<BoardSlot>(enemies))
+                    {
+                        if (es == null || !es.IsOccupied || es.currentMonster == null || !es.currentMonster.IsAlive) continue;
+                        var em = es.currentMonster;
+                        int preDef = em.currentDef;
+                        DealSpellOrSkillDamage(es.slotIndex, em, dmg, m, opponent, player, true, showVfx);
+                        int dealt = Mathf.Max(0, preDef - (em.IsAlive ? em.currentDef : 0));
+                        if (op.leech > 0 && dealt > 0)
+                        {
+                            int lh = V2CardMechanicsEngine.StrictRoundPct(dealt, op.leech);
+                            if (lh > 0) player.HealLeader(lh, opponent);
+                        }
+                        if (!string.IsNullOrEmpty(op.fx) && em.IsAlive)
+                            ApplyV2SkillStatusFx(em, op.fx, v2, op.dur, oppIsHuman, es.slotIndex, showVfx);
+                    }
+                    if (op.cleanse)
+                    {
+                        m.burnDmg = 0; m.poisonDmg = 0; m.bleedDmg = 0; m.frozenTurns = 0; m.silencedTurns = 0; m.weakenedTurns = 0;
+                    }
+                    return true;
+                }
+
+                case "cleave_enemy":
+                {
+                    var ts = GetEnemyTarget(slot, enemies, opponent, false, explicitTargetSlot);
+                    if (ts != null)
+                    {
+                        int dmg = Mathf.Max(1, v1 + bonus);
+                        for (int sl = ts.slotIndex - 1; sl <= ts.slotIndex + 1; sl++)
+                        {
+                            if (sl < 0 || sl >= 6 || opponent.slots[sl] == null || !opponent.slots[sl].IsOccupied) continue;
+                            var em = opponent.slots[sl].currentMonster;
+                            if (em == null || !em.IsAlive) continue;
+                            DealSpellOrSkillDamage(sl, em, dmg, m, opponent, player, true, showVfx);
+                            if (!string.IsNullOrEmpty(op.fx) && em.IsAlive)
+                                ApplyV2SkillStatusFx(em, op.fx, v2, op.dur, oppIsHuman, sl, showVfx);
+                        }
+                    }
+                    if (op.heal_hp > 0)
+                    {
+                        player.HealLeader(op.heal_hp, opponent);
+                        if (showVfx) SpawnLeaderStatusVfx(playerIsHuman, $"+{op.heal_hp} HP", Color.green, true, op.heal_hp);
+                    }
+                    if (op.self_def > 0)
+                    {
+                        m.ApplyPermBuff(0, op.self_def);
+                        if (showVfx) SpawnSlotStatusVfx(playerIsHuman, slot, $"+{op.self_def} DEF", Color.cyan);
+                    }
+                    return true;
+                }
+
+                case "buff_ally":
+                {
+                    MonsterInstance targetAlly = m;
+                    int tSlot = slot;
+                    if (explicitTargetSlot >= 0 && explicitTargetSlot < 6 && player.slots[explicitTargetSlot] != null && player.slots[explicitTargetSlot].IsOccupied)
+                    {
+                        targetAlly = player.slots[explicitTargetSlot].currentMonster;
+                        tSlot = explicitTargetSlot;
+                    }
+                    int addAtk = op.atk;
+                    int addDef = op.deff + (op.deff > 0 ? bonus : 0);
+                    if (addAtk > 0 || addDef > 0) targetAlly.ApplyPermBuff(addAtk, addDef);
+                    if (op.cleanse)
+                    {
+                        targetAlly.burnDmg = 0; targetAlly.poisonDmg = 0; targetAlly.bleedDmg = 0;
+                        targetAlly.frozenTurns = 0; targetAlly.silencedTurns = 0; targetAlly.weakenedTurns = 0;
+                    }
+                    if (op.haste && !targetAlly.IsBarrier) targetAlly.canAttack = true;
+                    if (op.self_dmg > 0) player.TakeLeaderDamage(op.self_dmg);
+                    if (showVfx)
+                    {
+                        string lbl = (addAtk > 0 && addDef > 0) ? $"+{addAtk} ATK / +{addDef} DEF"
+                            : (addAtk > 0 ? $"+{addAtk} ATK" : (addDef > 0 ? $"+{addDef} DEF" : "✨ BUFFED!"));
+                        if (op.haste) lbl += " ⚡BLITZ";
+                        if (op.cleanse) lbl += " ✨CLEANSE";
+                        SpawnSlotStatusVfx(playerIsHuman, tSlot, lbl, new Color(0.45f, 1f, 0.65f));
+                    }
+                    return true;
+                }
+
+                case "aoe_ally":
+                {
+                    int addAtk = op.atk;
+                    int addDef = op.deff + (op.deff > 0 ? bonus : 0);
+                    foreach (var aslot in allies)
+                    {
+                        var au = aslot.currentMonster;
+                        if (au == null || !au.IsAlive) continue;
+                        if (addAtk > 0 || addDef > 0) au.ApplyPermBuff(addAtk, addDef);
+                        if (op.cleanse)
+                        {
+                            au.burnDmg = 0; au.poisonDmg = 0; au.bleedDmg = 0;
+                            au.frozenTurns = 0; au.silencedTurns = 0; au.weakenedTurns = 0;
+                        }
+                        if (op.haste && !au.IsBarrier) au.canAttack = true;
+                        if (showVfx)
+                        {
+                            string lbl = (addAtk > 0 && addDef > 0) ? $"+{addAtk}/+{addDef}"
+                                : (addAtk > 0 ? $"+{addAtk} ATK" : (addDef > 0 ? $"+{addDef} DEF" : "✨ CLEANSE"));
+                            SpawnSlotStatusVfx(playerIsHuman, aslot.slotIndex, lbl, new Color(0.45f, 1f, 0.72f));
+                        }
+                    }
+                    if (op.hp > 0)
+                    {
+                        int hAmt = op.hp + bonus;
+                        player.HealLeader(hAmt, opponent);
+                        if (showVfx) SpawnLeaderStatusVfx(playerIsHuman, $"+{hAmt} HP", Color.green, true, hAmt);
+                    }
+                    return true;
+                }
+
+                case "heal_leader":
+                {
+                    int hAmt = Mathf.Max(1, v1 + bonus);
+                    player.HealLeader(hAmt, opponent);
+                    if (showVfx) SpawnLeaderStatusVfx(playerIsHuman, $"+{hAmt} HP", Color.green, true, hAmt);
+                    if (v2 > 0)
+                    {
+                        m.ApplyPermBuff(0, v2);
+                        if (showVfx) SpawnSlotStatusVfx(playerIsHuman, slot, $"+{v2} DEF", Color.cyan);
+                    }
+                    if (op.cleanse)
+                    {
+                        m.burnDmg = 0; m.poisonDmg = 0; m.bleedDmg = 0; m.frozenTurns = 0; m.silencedTurns = 0;
+                    }
+                    return true;
+                }
+
+                case "dmg_leader":
+                {
+                    int dmg = Mathf.Max(1, v1 + bonus);
+                    opponent.TakeLeaderDamage(dmg);
+                    if (showVfx) SpawnLeaderStatusVfx(oppIsHuman, $"-{dmg} HP 🔥", new Color(1f, 0.35f, 0.20f));
+                    if (op.heal > 0)
+                    {
+                        player.HealLeader(op.heal, opponent);
+                        if (showVfx) SpawnLeaderStatusVfx(playerIsHuman, $"+{op.heal} HP", Color.green, true, op.heal);
+                    }
+                    if (op.double_burn)
+                    {
+                        foreach (var es in enemies)
+                            if (es.currentMonster.burnDmg > 0)
+                                es.currentMonster.burnDmg = Mathf.Min(30, es.currentMonster.burnDmg * 2);
+                    }
+                    return true;
+                }
+
+                case "spawn_token":
+                {
+                    int cnt = Mathf.Max(1, op.count > 0 ? op.count : 1);
+                    int tAtk = Mathf.Max(2, v1);
+                    int tDef = Mathf.Max(2, v2 > 0 ? v2 : v1);
+                    int spawned = 0;
+                    for (int s = 0; s < 6 && spawned < cnt; s++)
+                    {
+                        if (player.slots[s] != null && !player.slots[s].IsOccupied)
+                        {
+                            var tokData = CreateTokenData(9500 + s, m.data.element, m.data.tribe, "Attacker", 1, 1, tAtk, tDef, "", "Summoned Swarm Token");
+                            tokData.name = "Swarm Token";
+                            var tok = new MonsterInstance(tokData, turn) { canAttack = op.haste };
+                            player.slots[s].PlaceMonster(tok);
+                            if (showVfx) SpawnSlotStatusVfx(playerIsHuman, s, $"✨ TOKEN {tAtk}/{tDef}", Color.yellow);
+                            spawned++;
+                        }
+                    }
+                    return true;
+                }
+
+                case "gain_temp_mana":
+                {
+                    int gain = Mathf.Max(1, v1);
+                    player.currentMana += gain;
+                    if (showVfx) SpawnSlotStatusVfx(playerIsHuman, slot, $"+{gain} 💧 MANA", new Color(0.35f, 0.80f, 1f));
+                    if (v2 > 0)
+                    {
+                        player.HealLeader(v2, opponent);
+                        if (showVfx) SpawnLeaderStatusVfx(playerIsHuman, $"+{v2} HP", Color.green, true, v2);
+                    }
+                    return true;
+                }
+
+                case "drain_enemy_mana":
+                {
+                    int drain = Mathf.Max(1, v1);
+                    opponent.currentMana = Mathf.Max(0, opponent.currentMana - drain);
+                    if (v2 > 0)
+                    {
+                        int d = v2 + bonus;
+                        opponent.TakeLeaderDamage(d);
+                        if (showVfx) SpawnLeaderStatusVfx(oppIsHuman, $"-{drain} MANA / -{d} HP", new Color(0.75f, 0.35f, 1f));
+                    }
+                    else if (showVfx)
+                    {
+                        SpawnLeaderStatusVfx(oppIsHuman, $"-{drain} 💧 MANA", new Color(0.75f, 0.35f, 1f));
+                    }
+                    return true;
+                }
+
+                case "detonate_dots":
+                {
+                    foreach (var es in new List<BoardSlot>(enemies))
+                    {
+                        var em = es.currentMonster;
+                        if (em == null || !em.IsAlive) continue;
+                        int dotSum = em.burnDmg + em.poisonDmg + em.bleedDmg;
+                        if (dotSum > 0 || v1 > 0)
+                        {
+                            int burst = dotSum + Mathf.Max(0, v1 + bonus);
+                            if (showVfx) SpawnSlotStatusVfx(oppIsHuman, es.slotIndex, $"💥 DETONATE -{burst}", new Color(1f, 0.40f, 0.15f));
+                            DealSpellOrSkillDamage(es.slotIndex, em, burst, m, opponent, player, true, showVfx);
+                        }
+                    }
+                    return true;
+                }
+
+                case "recall_enemy":
+                {
+                    var ts = GetEnemyTarget(slot, enemies, opponent, false, explicitTargetSlot);
+                    if (ts != null && ts.currentMonster != null)
+                    {
+                        var em = ts.currentMonster;
+                        if (v1 > 0) DealSpellOrSkillDamage(ts.slotIndex, em, v1 + bonus, m, opponent, player, true, showVfx);
+                        if (em.IsAlive && !em.IsLocked && (op.cap <= 0 || em.data.cost <= op.cap))
+                        {
+                            if (opponent.hand.Count < opponent.maxHandSize) opponent.hand.Add(em.data);
+                            ts.ClearSlot();
+                            if (showVfx) SpawnSlotStatusVfx(oppIsHuman, ts.slotIndex, "↩️ RECALLED!", new Color(0.70f, 0.90f, 1f));
+                        }
+                    }
+                    return true;
+                }
+
+                case "recall_ally":
+                {
+                    int tSlot = (explicitTargetSlot >= 0 && explicitTargetSlot < 6 && player.slots[explicitTargetSlot] != null && player.slots[explicitTargetSlot].IsOccupied)
+                        ? explicitTargetSlot : slot;
+                    var aSlot = player.slots[tSlot];
+                    if (aSlot != null && aSlot.IsOccupied && aSlot.currentMonster != null)
+                    {
+                        var au = aSlot.currentMonster;
+                        if (player.hand.Count < player.maxHandSize) player.hand.Add(au.data);
+                        aSlot.ClearSlot();
+                        if (v1 > 0) player.HealLeader(v1, opponent);
+                        if (op.mana > 0) player.currentMana += op.mana;
+                        if (showVfx) SpawnSlotStatusVfx(playerIsHuman, tSlot, "↩️ RETURNED TO HAND", Color.cyan);
+                    }
+                    return true;
+                }
+
+                case "double_skill_1t":
+                {
+                    int tSlot = (explicitTargetSlot >= 0 && explicitTargetSlot < 6 && player.slots[explicitTargetSlot] != null && player.slots[explicitTargetSlot].IsOccupied)
+                        ? explicitTargetSlot : slot;
+                    var au = player.slots[tSlot].currentMonster;
+                    if (au != null && !au.IsBarrier) au.doubleSkillOneTurn = true;
+                    if (v1 > 0) player.freeSkillBonus += v1;
+                    if (showVfx) SpawnSlotStatusVfx(playerIsHuman, tSlot, "⚡ 2x SKILL THIS TURN!", Color.yellow);
+                    return true;
+                }
+
+                case "grant_double_strike":
+                {
+                    int tSlot = (explicitTargetSlot >= 0 && explicitTargetSlot < 6 && player.slots[explicitTargetSlot] != null && player.slots[explicitTargetSlot].IsOccupied)
+                        ? explicitTargetSlot : slot;
+                    var au = player.slots[tSlot].currentMonster;
+                    if (au != null && !au.IsBarrier)
+                    {
+                        au.doubleStrike = true;
+                        if (v1 > 0 && !au.IsAllAttack) au.tempTurnAtk += v1;
+                    }
+                    if (showVfx) SpawnSlotStatusVfx(playerIsHuman, tSlot, $"⚔️ DOUBLE STRIKE (+{v1})", Color.yellow);
+                    return true;
+                }
+
+                case "revive_board":
+                {
+                    BoardSlot emptySl = null;
+                    for (int s = 0; s < 6; s++) if (player.slots[s] != null && !player.slots[s].IsOccupied) { emptySl = player.slots[s]; break; }
+                    if (emptySl != null && player.graveyard != null)
+                    {
+                        CardData bestDead = null;
+                        for (int gi = player.graveyard.Count - 1; gi >= 0; gi--)
+                        {
+                            var g = player.graveyard[gi];
+                            if (g != null && g.cardType == CardType.Monster && (op.cap <= 0 || g.cost <= op.cap))
+                            {
+                                if (bestDead == null || g.cost > bestDead.cost) bestDead = g;
+                            }
+                        }
+                        if (bestDead != null)
+                        {
+                            player.graveyard.Remove(bestDead);
+                            var rev = new MonsterInstance(bestDead, turn);
+                            if (v1 > 0) rev.ApplyPermBuff(v1, 0);
+                            emptySl.PlaceMonster(rev);
+                            if (showVfx) SpawnSlotStatusVfx(playerIsHuman, emptySl.slotIndex, "💀 REVIVED!", new Color(0.80f, 0.45f, 1f));
+                        }
+                    }
+                    return true;
+                }
+
+                case "grave_to_hand":
+                {
+                    if (player.graveyard != null && player.hand.Count < player.maxHandSize)
+                    {
+                        CardData bestDead = null;
+                        for (int gi = player.graveyard.Count - 1; gi >= 0; gi--)
+                        {
+                            var g = player.graveyard[gi];
+                            if (g != null && (op.cap <= 0 || g.cost <= op.cap))
+                            {
+                                if (bestDead == null || g.cost > bestDead.cost) bestDead = g;
+                            }
+                        }
+                        if (bestDead != null)
+                        {
+                            player.graveyard.Remove(bestDead);
+                            player.hand.Add(bestDead);
+                            player.discountedCardIds[bestDead.id] = 1;
+                            if (showVfx) SpawnSlotStatusVfx(playerIsHuman, slot, $"🪦 RECOVERED {bestDead.name}", new Color(0.80f, 0.55f, 1f));
+                        }
+                    }
+                    return true;
+                }
+
+                case "copy_enemy_hand":
+                {
+                    if (opponent.hand != null && opponent.hand.Count > 0 && player.hand.Count < player.maxHandSize && GameManager.Instance != null)
+                    {
+                        var pick = opponent.hand[UnityEngine.Random.Range(0, opponent.hand.Count)];
+                        var clone = GameManager.Instance.CloneCardById(pick.id);
+                        if (clone != null)
+                        {
+                            player.hand.Add(clone);
+                            player.discountedCardIds[clone.id] = 1;
+                        }
+                    }
+                    if (v1 > 0) m.ApplyPermBuff(0, v1);
+                    if (showVfx) SpawnSlotStatusVfx(playerIsHuman, slot, "🪞 COPIED ENEMY CARD!", Color.magenta);
+                    return true;
+                }
+
+                case "discount_hand_spells":
+                {
+                    foreach (var hc in player.hand)
+                    {
+                        if (hc != null && hc.cardType == CardType.Spell)
+                        {
+                            int cur = player.discountedCardIds.TryGetValue(hc.id, out int cv) ? cv : 0;
+                            player.discountedCardIds[hc.id] = Mathf.Min(4, cur + 1);
+                        }
+                    }
+                    if (v2 > 0) player.HealLeader(v2, opponent);
+                    if (showVfx) SpawnSlotStatusVfx(playerIsHuman, slot, "🔮 SPELLS -1 MANA!", new Color(0.65f, 0.75f, 1f));
+                    return true;
+                }
+
+                case "buff_center":
+                {
+                    foreach (int cs in new[] { 2, 3 })
+                    {
+                        if (player.slots[cs] != null && player.slots[cs].IsOccupied && player.slots[cs].currentMonster != null)
+                        {
+                            player.slots[cs].currentMonster.ApplyPermBuff(0, v1);
+                            if (showVfx) SpawnSlotStatusVfx(playerIsHuman, cs, $"+{v1} DEF", Color.cyan);
+                        }
+                    }
+                    if (v2 > 0)
+                    {
+                        int hAmt = v2 + bonus;
+                        player.HealLeader(hAmt, opponent);
+                        if (showVfx) SpawnLeaderStatusVfx(playerIsHuman, $"+{hAmt} HP", Color.green, true, hAmt);
+                    }
+                    return true;
+                }
+
+                case "warrior_call":
+                {
+                    CardData found = null;
+                    if (player.deck != null)
+                    {
+                        for (int di = 0; di < player.deck.Count; di++)
+                        {
+                            var dc = player.deck[di];
+                            if (dc != null && dc.cardType == CardType.Monster && (op.cap <= 0 || dc.cost <= op.cap))
+                            {
+                                found = dc;
+                                player.deck.RemoveAt(di);
+                                break;
+                            }
+                        }
+                    }
+                    if (found != null)
+                    {
+                        bool placed = false;
+                        if (op.to_board)
+                        {
+                            for (int s = 0; s < 6; s++)
+                            {
+                                if (player.slots[s] != null && !player.slots[s].IsOccupied)
+                                {
+                                    var unit = new MonsterInstance(found, turn);
+                                    if (op.buff > 0) unit.ApplyPermBuff(op.buff, op.buff);
+                                    player.slots[s].PlaceMonster(unit);
+                                    if (showVfx) SpawnSlotStatusVfx(playerIsHuman, s, $"📯 CALLED {found.name}", Color.yellow);
+                                    placed = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!placed && player.hand.Count < player.maxHandSize)
+                        {
+                            player.hand.Add(found);
+                            if (op.disc > 0) player.discountedCardIds[found.id] = op.disc;
+                            if (showVfx) SpawnSlotStatusVfx(playerIsHuman, slot, $"📯 DREW {found.name}", Color.yellow);
+                        }
+                    }
+                    return true;
+                }
+
+                case "devour_3":
+                {
+                    var ts = GetEnemyTarget(slot, enemies, opponent, false, explicitTargetSlot);
+                    if (ts != null && ts.currentMonster != null && ts.currentMonster.IsAlive && (op.max_cost <= 0 || ts.currentMonster.data.cost <= op.max_cost))
+                    {
+                        var victim = ts.currentMonster;
+                        int pct = op.pct > 0 ? op.pct : 50;
+                        int gAtk = victim.IsBarrier ? 0 : V2CardMechanicsEngine.StrictRoundPct(victim.baseAtk + victim.bonusAtk, pct);
+                        int gDef = V2CardMechanicsEngine.StrictRoundPct(victim.currentDef, pct);
+                        victim.currentDef = 0;
+                        HandleMonsterDeath(opponent, player, ts.slotIndex, victim, m);
+                        m.ApplyPermBuff(gAtk, gDef);
+                        if (showVfx) SpawnSlotStatusVfx(playerIsHuman, slot, $"🩸 DEVOUR +{gAtk}/+{gDef}", new Color(0.95f, 0.25f, 0.45f));
+                    }
+                    return true;
+                }
+
+                case "mind_control_temp":
+                {
+                    var ts = GetEnemyTarget(slot, enemies, opponent, false, explicitTargetSlot);
+                    BoardSlot emptyAlly = null;
+                    for (int s = 0; s < 6; s++) if (player.slots[s] != null && !player.slots[s].IsOccupied) { emptyAlly = player.slots[s]; break; }
+                    if (ts != null && ts.currentMonster != null && emptyAlly != null && (op.cap <= 0 || ts.currentMonster.data.cost <= op.cap))
+                    {
+                        var stolen = ts.currentMonster;
+                        ts.ClearSlot();
+                        emptyAlly.PlaceMonster(stolen);
+                        if (!stolen.IsBarrier)
+                        {
+                            stolen.canAttack = true;
+                            if (v1 > 0 && !stolen.IsAllAttack) stolen.tempTurnAtk += v1;
+                        }
+                        if (showVfx) SpawnSlotStatusVfx(playerIsHuman, emptyAlly.slotIndex, "🎭 MIND CONTROLLED!", Color.magenta);
+                    }
+                    return true;
+                }
+
+                case "pull_hook":
+                {
+                    var ts = GetEnemyTarget(slot, enemies, opponent, false, explicitTargetSlot);
+                    if (ts != null && ts.currentMonster != null && ts.currentMonster.IsAlive)
+                    {
+                        var targetM = ts.currentMonster;
+                        int dmg = Mathf.Max(1, v1 + bonus);
+                        DealSpellOrSkillDamage(ts.slotIndex, targetM, dmg, m, opponent, player, true, showVfx);
+                        if (targetM.IsAlive && !targetM.IsLocked && ts.slotIndex != slot && opponent.slots[slot] != null && !opponent.slots[slot].IsOccupied)
+                        {
+                            ts.ClearSlot();
+                            opponent.slots[slot].PlaceMonster(targetM);
+                            if (showVfx) SpawnSlotStatusVfx(oppIsHuman, slot, "⛓️ PULLED!", Color.yellow);
+                        }
+                    }
+                    return true;
+                }
+
+                case "shifting_curse":
+                {
+                    var ts = GetEnemyTarget(slot, enemies, opponent, false, explicitTargetSlot);
+                    if (ts != null && ts.currentMonster != null && ts.currentMonster.IsAlive)
+                    {
+                        int cDmg = Mathf.Max(3, v1 + bonus);
+                        ts.currentMonster.burnDmg += cDmg;
+                        ts.currentMonster.weakenedAtkFlat += Mathf.Max(2, cDmg / 2);
+                        if (showVfx) SpawnSlotStatusVfx(oppIsHuman, ts.slotIndex, $"☠️ CURSED -{cDmg}/T", new Color(0.75f, 0.25f, 0.85f));
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private void ResolveSingleActive(string act, int slot, MonsterInstance m, PlayerState player, PlayerState opponent, int bonusEff, bool showVfx = true, int explicitTargetSlot = -1, int skillIndex = -1)
+        {
+            // PRIORITY 1: Execute exact Arena_Lab_V2 structured active skill (all 25 V2 mechanics!)
+            int resolvedIdx = skillIndex;
+            if (resolvedIdx < 0 && m != null && m.actives != null) resolvedIdx = m.actives.IndexOf(act);
+            var v2op = V2CardMechanicsEngine.GetV2ActiveOp(m, resolvedIdx);
+            if (v2op != null && TryResolveV2ActiveSkill(v2op, slot, m, player, opponent, bonusEff, showVfx, explicitTargetSlot))
+            {
+                return;
+            }
+
             var enemies = GetAliveSlots(opponent);
             var allies = GetAliveSlots(player);
             bool playerIsHuman = GameManager.Instance != null && (player == GameManager.Instance.humanPlayer);

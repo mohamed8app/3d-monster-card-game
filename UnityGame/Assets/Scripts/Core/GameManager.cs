@@ -862,12 +862,11 @@ namespace MonsterCardGame.Core
             currentTurn = 1;
             activeEnvironment = null;
 
-            // Pre-slot test Commander Spirits for visual verification in Right Wing Altar
-            if (allLeaders != null && allLeaders.Count > 0)
-            {
-                humanPlayer.activeLeader = allLeaders.Find(l => l.id == 451) ?? allLeaders[0];
-                aiPlayer.activeLeader = allLeaders.Find(l => l.id == 452) ?? (allLeaders.Count > 1 ? allLeaders[1] : allLeaders[0]);
-            }
+            // True match rules: both Commander Spirit & Altar Covenant slots begin strictly EMPTY until played from hand!
+            humanPlayer.activeLeader = null;
+            aiPlayer.activeLeader = null;
+            humanPlayer.activeCovenant = null;
+            aiPlayer.activeCovenant = null;
 
             // V1 Fair Starting Rule: Both players begin at 0 Power and 0 Mana (Player 2 receives +1 temp Mana once on Turn 2)
             humanPlayer.power = 0;
@@ -2593,11 +2592,7 @@ namespace MonsterCardGame.Core
                     var al = ResolveTargetAllySlot(caster, target, 284, explicitSlot);
                     if (al != null && al.IsOccupied)
                     {
-                        al.currentMonster.hasUsedActiveThisTurn = false;
-                        for (int idxU = 0; idxU < al.currentMonster.activeUsedThisTurn.Count; idxU++)
-                        {
-                            al.currentMonster.activeUsedThisTurn[idxU] = false;
-                        }
+                        al.currentMonster.ResetActiveSkillsUsage();
                         caster.freeSkillManaZero = true;
                     }
                     break;
@@ -2609,8 +2604,7 @@ namespace MonsterCardGame.Core
                     caster.freeSkillBonus += 8 + valBonus;
                     if (al != null && al.IsOccupied)
                     {
-                        al.currentMonster.hasUsedActiveThisTurn = false;
-                        if (al.currentMonster.activeUsedThisTurn.Count > 0) al.currentMonster.activeUsedThisTurn[0] = false;
+                        al.currentMonster.ResetActiveSkillsUsage();
                     }
                     break;
                 }

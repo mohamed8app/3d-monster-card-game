@@ -324,8 +324,10 @@ namespace MonsterCardGame.UI
             EnsureSkillCastBadgeCreated();
             if (skillCastBadgeObj == null) return;
 
-            bool used0 = currentMonsterInstance.IsActiveSkillUsed(0);
-            bool used1 = currentMonsterInstance.ActiveSkillCount >= 2 && currentMonsterInstance.IsActiveSkillUsed(1);
+            var gm = GameManager.Instance;
+            var ownerPlayer = gm != null ? (isPlayerSide ? gm.humanPlayer : gm.aiPlayer) : null;
+            bool used0 = currentMonsterInstance.IsActiveSkillUsed(0, ownerPlayer);
+            bool used1 = currentMonsterInstance.ActiveSkillCount >= 2 && currentMonsterInstance.IsActiveSkillUsed(1, ownerPlayer);
             if (!used0 && !used1)
             {
                 skillCastBadgeObj.SetActive(false);

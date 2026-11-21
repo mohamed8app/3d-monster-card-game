@@ -656,7 +656,7 @@ namespace MonsterCardGame.Core
                 var mops = V2CardMechanicsEngine.GetMonsterOps(m.data);
                 for (int k = 0; k < Mathf.Min(2, m.ActiveSkillCount); k++)
                 {
-                    if (m.IsActiveSkillUsed(k)) continue;
+                    if (m.IsActiveSkillUsed(k, p)) continue;
                     int skillCost = 1;
                     if (mops != null && mops.actives != null && k < mops.actives.Count && mops.actives[k] != null)
                         skillCost = Mathf.Max(0, mops.actives[k].cost);

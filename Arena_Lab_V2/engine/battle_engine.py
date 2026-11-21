@@ -65,7 +65,8 @@ class BattleEngine:
         self._turn_highlights: int = 0
         self._lead_side: int = -1
         self._max_deficit: List[int] = [0, 0]
-        self._turn_events: List[Tuple[int, int, int, int, int]] = []
+        self._turn_events: List[Tuple[int, ...]] = []
+        self._dmg_cause: str = "passive"
 
     def _add_highlight(self, side: int, tag: str) -> None:
         if side in (0, 1):
@@ -109,6 +110,8 @@ class BattleEngine:
         self._lead_side = -1
         self._max_deficit = [0, 0]
         self._turn_events = []
+        self._dmg_cause = "passive"
+        self.players[self.active].telemetry.went_first = True
 
         # Opening hands: first player draws 4, second player draws 5
         for side in (0, 1):
@@ -265,7 +268,11 @@ class BattleEngine:
         self._turn_start_hand = len(p.hand)
 
         # Refresh own board units
+        self._dmg_cause = "passive"
         for u in p.board_units():
+            if self.turn > u.last_own_turn:
+                u.own_turns_survived += 1
+                u.last_own_turn = self.turn
             u.prev_turn_def = u.deff
             u.temp_atk_buff = 0
             if u.temp_def_buff > 0:
@@ -274,6 +281,7 @@ class BattleEngine:
                 u.temp_def_buff = 0
             u.attacked_this_turn = False
             u.skills_used_this_turn = 0
+            u.skill_uses_this_turn = [0, 0]
             u.double_skill_1t = False
             u.double_strike_temp = False
             u.can_attack = u.can_ever_attack() and (u.frozen <= 0)
@@ -589,10 +597,10 @@ class BattleEngine:
             u = p.board[slot]
             if u is None or u.is_barrier or u.is_spy or u.is_silenced() or u.frozen > 0:
                 continue
-            max_uses = 2 if (u.double_skill_1t or (cov and cov.get("rew_double_skill"))) else 1
-            if u.skills_used_this_turn >= max_uses:
-                continue
+            max_per_skill = 2 if (u.double_skill_1t or (cov and cov.get("rew_double_skill"))) else 1
             for k, op in enumerate(u.actives[:2]):
+                if u.skill_uses_this_turn[k] >= max_per_skill:
+                    continue
                 sc = self._effective_skill_cost(s, u, op)
                 if ban_skill_gt1 and sc > 1:
                     continue
@@ -671,13 +679,17 @@ class BattleEngine:
         p.telemetry.cards_played_ids.append(card.id)
 
         if card.type == "environment":
+            self._dmg_cause = "passive"
             self._play_environment(side, card.env_id)
             p.graveyard.append(card.id)
         elif card.type == "leader":
+            self._dmg_cause = "passive"
             self._play_leader(side, card)
         elif card.type == "covenant":
+            self._dmg_cause = "passive"
             self._play_covenant(side, card)
         elif card.type == "spell":
+            self._dmg_cause = "spell"
             p.telemetry.spells_cast += 1
             echo = p.echo_next_spell
             p.echo_next_spell = False
@@ -696,6 +708,7 @@ class BattleEngine:
                 if self._leader_aura_on(side) and p.leader_ops and p.leader_ops.get("aura_spell_ping", 0) > 0:
                     self._damage_commander(1 - side, int(p.leader_ops["aura_spell_ping"]), source_side=side)
         elif card.type == "monster":
+            self._dmg_cause = "passive"
             if p.board[slot] is None and p.board_count() < p.board_limit():
                 p.summons_turn += 1
                 self._summon_monster(side, card, slot)
@@ -1309,7 +1322,11 @@ class BattleEngine:
         u = p.board[slot]
         if u is None or u.is_barrier or u.is_spy or u.is_silenced() or u.frozen > 0:
             return
-        if skill_idx >= len(u.actives):
+        if skill_idx < 0 or skill_idx >= len(u.actives) or skill_idx >= 2:
+            return
+        cov = p.covenant_ops if p.covenant_active else None
+        max_per_skill = 2 if (u.double_skill_1t or (cov and cov.get("rew_double_skill"))) else 1
+        if u.skill_uses_this_turn[skill_idx] >= max_per_skill:
             return
         op = u.actives[skill_idx]
         cost = self._effective_skill_cost(side, u, op)
@@ -1317,9 +1334,11 @@ class BattleEngine:
             return
 
         self._spend_mana(side, cost)
+        u.skill_uses_this_turn[skill_idx] += 1
         u.skills_used_this_turn += 1
         u.stealth = False
         p.telemetry.actives_used += 1
+        self._dmg_cause = "active"
 
         # Trigger on-skill passives
         for ally in p.board_units():
@@ -1971,6 +1990,7 @@ class BattleEngine:
             if op.get("refresh"):
                 for au in p.board_units():
                     au.skills_used_this_turn = 0
+                    au.skill_uses_this_turn = [0, 0]
         elif k == "echo_next_spell":
             p.echo_next_spell = True
             p.spell_power_temp += int(op.get("v1", 0))
@@ -2084,6 +2104,7 @@ class BattleEngine:
 
                 strikes = 2 if ((u.double_strike and not u.is_silenced()) or u.double_strike_temp) else 1
                 u.attacked_this_turn = True
+                u.attacks_made += 1
                 u.stealth = False
 
                 for _ in range(strikes):
@@ -2295,6 +2316,7 @@ class BattleEngine:
             red = (5, 8, 12)[el_idx] if defender.element == 4 else (1, 2, 3)[el_idx]
             dmg = max(1, dmg - red)
 
+        self._dmg_cause = "attack"
         dealt = self._damage_unit(opp_side, defender, dmg, source_side=side, killer_unit=attacker)
 
         # Ice Arena elemental resonance: Ice attackers have 35%/50%/70% Freeze on hit
@@ -2323,6 +2345,7 @@ class BattleEngine:
                         self._damage_unit(opp_side, opp.board[adj], cdmg, source_side=side)
 
         # Reflect / Thorns retaliation (automatic, works even on Barriers!)
+        self._dmg_cause = "counter"
         r_flat, r_pct = self._effective_reflect(opp_side, defender)
         ref_dmg = r_flat + (pct_of(dmg, r_pct) if r_pct > 0 else 0)
         if ref_dmg > 0 and attacker.deff > 0:
@@ -2388,14 +2411,28 @@ class BattleEngine:
             dealt = min(u.deff, amt)
             u.deff -= dealt
 
+        cause = "dot" if is_dot else self._dmg_cause
         if source_side in (0, 1) and source_side != owner_side:
-            self.players[source_side].telemetry.dmg_to_monsters += dealt
+            st = self.players[source_side].telemetry
+            st.dmg_to_monsters += dealt
             self._turn_dmg += dealt
             if is_dot:
-                self.players[source_side].telemetry.dot_dmg_dealt += dealt
+                st.dot_dmg_dealt += dealt
+            if cause == "active":
+                st.dmg_m_by_active += dealt
+            elif cause == "attack":
+                st.dmg_m_by_attack += dealt
+            elif cause == "spell":
+                st.dmg_m_by_spell += dealt
+            elif cause == "counter":
+                st.dmg_m_by_counter += dealt
+            elif cause == "dot":
+                st.dmg_m_by_dot += dealt
+            else:
+                st.dmg_m_by_passive += dealt
 
         if u.deff <= 0:
-            self._destroy_unit(owner_side, u, killer_side=source_side, killer_unit=killer_unit)
+            self._destroy_unit(owner_side, u, killer_side=source_side, killer_unit=killer_unit, cause=cause)
             return dealt
 
         # Survived hit -> Enrage activation & Hydra Split check
@@ -2423,6 +2460,7 @@ class BattleEngine:
         u: MonsterUnit,
         killer_side: int = -1,
         killer_unit: Optional[MonsterUnit] = None,
+        cause: Optional[str] = None,
     ) -> None:
         p = self.players[owner_side]
         if 0 <= u.slot < BOARD_SLOTS and p.board[u.slot] is u:
@@ -2431,9 +2469,44 @@ class BattleEngine:
         if not u.is_token and not u.is_spy and u.card_id > 0:
             p.graveyard.append(u.card_id)
 
+        c_tag = cause or self._dmg_cause
+
+        # Track monster board lifespan & survival buckets (non-token, non-spy units)
+        if not u.is_token and not u.is_spy:
+            ot = p.telemetry
+            ot.units_died_count += 1
+            rnds = u.own_turns_survived
+            ot.units_died_rounds_sum += rnds
+            if rnds <= 0:
+                ot.units_died_0rnd += 1
+            elif rnds == 1:
+                ot.units_died_1rnd += 1
+            elif rnds == 2:
+                ot.units_died_2rnd += 1
+            else:
+                ot.units_died_3p_rnd += 1
+            if not u.is_barrier:
+                ot.combat_died_count += 1
+                if u.attacks_made == 0:
+                    ot.combat_died_0atk += 1
+
         if killer_side in (0, 1) and killer_side != owner_side:
-            self.players[killer_side].telemetry.monsters_killed += 1
+            kt = self.players[killer_side].telemetry
+            kt.monsters_killed += 1
             self._turn_kills += 1
+            if not u.is_token and not u.is_spy:
+                if c_tag == "active":
+                    kt.kills_by_active += 1
+                elif c_tag == "attack":
+                    kt.kills_by_attack += 1
+                elif c_tag == "spell":
+                    kt.kills_by_spell += 1
+                elif c_tag == "counter":
+                    kt.kills_by_counter += 1
+                elif c_tag == "dot":
+                    kt.kills_by_dot += 1
+                else:
+                    kt.kills_by_passive += 1
 
         # Killer unit Ascend kill check
         if killer_unit is not None and killer_unit.deff > 0 and not killer_unit.ascended and not killer_unit.is_silenced():
@@ -2455,9 +2528,12 @@ class BattleEngine:
                 nxt.shifting_curse_dmg = max(nxt.shifting_curse_dmg, u.shifting_curse_dmg)
                 nxt.shifting_curse_enemy_only = u.shifting_curse_enemy_only
 
-        # Last Breath triggers
+        # Last Breath triggers (isolate cause tag so LB deaths credit 'passive'!)
         if not u.is_silenced():
+            _prev_cause = self._dmg_cause
+            self._dmg_cause = "passive"
             self._trigger_last_breath(owner_side, u)
+            self._dmg_cause = _prev_cause
 
         # Leader Owner-Only death-ping aura & board on-death passives
         if self._leader_aura_on(owner_side) and p.leader_ops:
@@ -2855,12 +2931,27 @@ class BattleEngine:
             self._lead_side = new_leader
 
         end_hand = len(p.hand)
+        board_cnt = p.board_count()
         t.hand_sum_end += end_hand
+        t.board_units_turn_sum += board_cnt
         if end_hand == 0:
             t.empty_hand_turns += 1
         if self.turn <= 30:
             start_h = getattr(self, "_turn_start_hand", end_hand)
-            self._turn_events.append((self.turn, self._turn_dmg, self._turn_kills, lead_swing, self._turn_highlights, start_h, end_hand))
+            # Per-turn Excitement Index (0..100) for real Turn 1 -> Endgame excitement curve!
+            min_hp = min(self.players[0].hp, self.players[1].hp)
+            hp_gap = abs(self.players[0].hp - self.players[1].hp)
+            dmg_pts = min(38, int(round(self._turn_dmg * 0.45)))
+            kill_pts = min(24, self._turn_kills * 9)
+            swing_pts = 22 if lead_swing else 0
+            hi_pts = min(16, self._turn_highlights * 7)
+            if hp_gap <= 110:
+                tension_pts = min(20, max(0, int((LEADER_HP - min_hp) // 24)))
+            else:
+                tension_pts = min(10, max(0, int((LEADER_HP - min_hp) // 55)))
+            board_pts = min(8, (self.players[0].board_count() + self.players[1].board_count()))
+            turn_exc = max(6, min(100, 6 + dmg_pts + kill_pts + swing_pts + hi_pts + tension_pts + board_pts))
+            self._turn_events.append((self.turn, self._turn_dmg, self._turn_kills, lead_swing, self._turn_highlights, start_h, end_hand, turn_exc, board_cnt))
 
     def _finish(self, winner: int, reason: str) -> None:
         if not self.done:
@@ -2873,6 +2964,10 @@ class BattleEngine:
             t = p.telemetry
             t.final_hp = p.hp
             t.max_hp_end = p.max_hp
+            for su in p.board_units():
+                if not su.is_token and not su.is_spy:
+                    t.units_survived_end += 1
+                    t.units_survived_rounds_sum += su.own_turns_survived
             if winner == s:
                 t.comeback_deficit = self._max_deficit[s]
                 t.clutch_win = (0 < p.hp <= 75)

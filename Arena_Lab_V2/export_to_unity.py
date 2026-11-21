@@ -120,39 +120,120 @@ def format_passive_item(p: Dict[str, Any]) -> str:
 
 
 def format_active_item(a: Dict[str, Any]) -> str:
-    k = str(a.get("kind", "skill"))
+    k = str(a.get("kind", "dmg_single"))
     cost = int(a.get("cost", 1))
     v1 = int(a.get("v1", 0))
     v2 = int(a.get("v2", 0))
     pct = int(a.get("pct", 0))
-    mapping = {
-        "snipe_enemy": f"[{cost} Mana] Precision Snipe: Deal {v1} direct skill damage to an enemy monster.",
-        "aoe_enemy": f"[{cost} Mana] Tempest Wave: Deal {v1} damage to all enemy monsters.",
-        "face_strike": f"[{cost} Mana] Commander Bolt: Deal {v1} direct damage to the enemy Commander.",
-        "heal_leader": f"[{cost} Mana] Sovereign Mend: Restore +{v1} HP to your Commander.",
-        "heal_ally_def": f"[{cost} Mana] Fortify Ally: Restore +{v1} DEF to a friendly monster and cleanse it.",
-        "self_buff": f"[{cost} Mana] Battle Focus: Gain +{v1} ATK and +{v2} DEF (respecting +10/+15 permanent cap).",
-        "team_buff": f"[{cost} Mana] War Cry: Grant all friendly monsters +{v1} ATK and +{v2} DEF.",
-        "apply_burn": f"[{cost} Mana] Flame Sear: Inflict {v1} Burn damage per turn on an enemy monster.",
-        "apply_poison": f"[{cost} Mana] Venom Injection: Inflict {v1} Poison stacks on an enemy monster.",
-        "apply_bleed": f"[{cost} Mana] Crimson Slash: Inflict {v1} kinetic Bleed on an enemy monster.",
-        "freeze_enemy": f"[{cost} Mana] Glacial Prison: Freeze an enemy monster for 1 turn and deal {v1} damage.",
-        "silence_enemy": f"[{cost} Mana] Runic Gag: Silence an enemy monster for 1 turn and weaken it by -{v1} ATK.",
-        "spawn_token": f"[{cost} Mana] Brood Spawn: Summon a {max(4, v1)}/{max(4, v2 or v1)} Token in an empty slot.",
-        "revive_ally": f"[{cost} Mana] Necro Call: Resurrect a fallen monster from your Graveyard at {pct or 60}% stats.",
-        "clone_ally": f"[{cost} Mana] Mirage Projection: Summon a {pct or 60}% stat clone of an allied or enemy monster.",
-        "mind_control_temp": f"[{cost} Mana] Puppeteer Strings: Seize control of an enemy monster for 1 turn (+{v1} Temp ATK).",
-        "stat_flip": f"[{cost} Mana] Scale Reversal: Swap a non-Barrier monster's current ATK and DEF.",
-        "double_skill_1t": f"[{cost} Mana] Overclock Spark: Allow an allied monster to trigger its Active Skill twice this turn.",
-        "grant_double_strike": f"[{cost} Mana] Windfury Blessing: Grant an allied monster Double Strike this turn.",
-        "mana_surge": f"[{cost} Mana] Astral Battery: Gain +{max(1, v1)} temporary Mana this turn.",
-        "draw_card": f"[{cost} Mana] Arcane Study: Draw {max(1, v1)} card(s).",
-        "devour_3": f"[{cost} Mana] Abyssal Devour: Consume an enemy monster with DEF <= {max(12, v1)} and absorb its stats.",
-    }
-    if k in mapping:
-        return mapping[k]
+    fx = str(a.get("fx", "") or "")
+    atk_b = int(a.get("atk", 0))
+    def_b = int(a.get("deff", 0))
+    hp_b = int(a.get("hp", 0))
+    cap = int(a.get("cap", 0))
+
+    fx_label = ""
+    if fx:
+        if fx in ("burn", "poison", "bleed", "weaken"):
+            fx_label = f" + {max(2, v2)} {fx.title()}"
+        else:
+            fx_label = f" + {fx.title()} ({max(1, int(a.get('dur', 1)))}T)"
+
+    if k == "dmg_single":
+        extra = fx_label
+        if int(a.get("exec_below", 0)) > 0:
+            extra += f" (Execute if DEF <= {a['exec_below']})"
+        if int(a.get("leech", 0)) > 0:
+            extra += f", {a['leech']}% Leech"
+        if int(a.get("heal_hp", 0)) > 0:
+            extra += f", Heal +{a['heal_hp']} HP"
+        if int(a.get("self_def", 0)) > 0:
+            extra += f", Self +{a['self_def']} DEF"
+        return f"[{cost} Mana] Precision Strike: Deal {v1} damage to target enemy{extra}."
+    if k == "aoe_enemy":
+        extra = fx_label
+        if int(a.get("leech", 0)) > 0:
+            extra += f", {a['leech']}% Leech"
+        if a.get("cleanse"):
+            extra += " + Cleanse self"
+        return f"[{cost} Mana] Tempest Wave: Deal {v1} AoE damage to all enemies{extra}."
+    if k == "cleave_enemy":
+        extra = fx_label
+        if int(a.get("heal_hp", 0)) > 0:
+            extra += f", Heal +{a['heal_hp']} HP"
+        if int(a.get("self_def", 0)) > 0:
+            extra += f", Self +{a['self_def']} DEF"
+        return f"[{cost} Mana] Sweeping Cleave: Deal {v1} damage to target enemy and adjacent foes{extra}."
+    if k == "buff_ally":
+        parts = []
+        if atk_b > 0: parts.append(f"+{atk_b} ATK")
+        if def_b > 0: parts.append(f"+{def_b} DEF")
+        if a.get("haste"): parts.append("Blitz Rush")
+        if a.get("cleanse"): parts.append("Cleanse")
+        if a.get("taunt"): parts.append("Taunt")
+        if a.get("stealth"): parts.append("Stealth")
+        if int(a.get("reflect", 0)) > 0: parts.append(f"+{a['reflect']} Reflect")
+        return f"[{cost} Mana] Fortify Ally: Grant an ally {', '.join(parts) or '+Stats'}."
+    if k == "aoe_ally":
+        parts = []
+        if atk_b > 0: parts.append(f"+{atk_b} ATK")
+        if def_b > 0: parts.append(f"+{def_b} DEF")
+        if a.get("haste"): parts.append("Blitz Rush")
+        if a.get("cleanse"): parts.append("Cleanse")
+        if hp_b > 0: parts.append(f"Heal Commander +{hp_b} HP")
+        return f"[{cost} Mana] War Cry: Grant all allies {', '.join(parts) or '+Stats'}."
+    if k == "heal_leader":
+        extra = f" + Self +{v2} DEF" if v2 > 0 else ""
+        if a.get("cleanse"): extra += " + Cleanse"
+        return f"[{cost} Mana] Sovereign Mend: Restore +{v1} Commander HP{extra}."
+    if k == "dmg_leader":
+        extra = f" & Heal +{a['heal']} HP" if int(a.get("heal", 0)) > 0 else ""
+        if a.get("double_burn"): extra += " & Double Enemy Burn"
+        return f"[{cost} Mana] Commander Bolt: Deal {v1} direct damage to enemy Commander{extra}."
+    if k == "spawn_token":
+        cnt = max(1, int(a.get("count", 1)))
+        return f"[{cost} Mana] Brood Spawn: Summon {cnt} Token(s) ({max(2, v1)}/{max(2, v2 or v1)}{' Blitz' if a.get('haste') else ''})."
+    if k == "gain_temp_mana":
+        extra = f" & Heal +{v2} HP" if v2 > 0 else ""
+        return f"[{cost} Mana] Astral Battery: Gain +{max(1, v1)} temporary Mana{extra}."
+    if k == "drain_enemy_mana":
+        extra = f" & deal {v2} Commander damage" if v2 > 0 else ""
+        return f"[{cost} Mana] Mana Siphon: Lock {max(1, v1)} enemy Mana{extra}."
+    if k == "detonate_dots":
+        return f"[{cost} Mana] Cataclysm Detonate: Trigger all Burn/Poison/Bleed on enemies (+{v1} bonus damage)."
+    if k == "recall_enemy":
+        cap_s = f" (Cost <= {cap})" if cap > 0 else ""
+        return f"[{cost} Mana] Banish Recall: Deal {v1} dmg and return enemy{cap_s} to hand."
+    if k == "recall_ally":
+        return f"[{cost} Mana] Tactical Recall (Ally): Return an ally to hand & heal +{v1} HP."
+    if k == "double_skill_1t":
+        return f"[{cost} Mana] Overclock Spark: Grant an ally Double Active Skill this turn (+{v1} Skill Power)."
+    if k == "grant_double_strike":
+        return f"[{cost} Mana] Windfury Blessing: Grant an ally Double Strike (+{v1} Temp ATK) this turn."
+    if k == "revive_board":
+        cap_s = f" (Cost <= {cap})" if cap > 0 else ""
+        return f"[{cost} Mana] Necro Call: Resurrect a fallen monster{cap_s} from Graveyard (+{v1} ATK)."
+    if k == "grave_to_hand":
+        return f"[{cost} Mana] Soul Recovery: Return a card from Graveyard to hand (-1 Mana cost)."
+    if k == "copy_enemy_hand":
+        return f"[{cost} Mana] Mirage Theft: Copy a random card from enemy hand (-1 Mana cost, +{v1} DEF)."
+    if k == "discount_hand_spells":
+        return f"[{cost} Mana] Arcane Discount: Reduce Mana cost of Spells in hand by 1 (Heal +{v2} HP)."
+    if k == "buff_center":
+        return f"[{cost} Mana] Vanguard Shield: Grant Center allies +{v1} DEF & heal +{v2} Commander HP."
+    if k == "warrior_call":
+        mode = "summon directly to board" if a.get("to_board") else "draw to hand"
+        return f"[{cost} Mana] Warrior Call: Tutor a monster (Cost <= {cap or 7}) from deck and {mode}."
+    if k == "devour_3":
+        return f"[{cost} Mana] Abyssal Devour: Consume an enemy (Cost <= {a.get('max_cost', 3)}) and absorb {pct or 40}% stats."
+    if k == "mind_control_temp":
+        return f"[{cost} Mana] Puppeteer Strings: Seize control of an enemy (Cost <= {cap or 4}) with +{v1} Temp ATK."
+    if k == "pull_hook":
+        return f"[{cost} Mana] Chain Pull Hook: Deal {v1} damage and drag target enemy into this lane."
+    if k == "shifting_curse":
+        return f"[{cost} Mana] Shifting Curse: Inflict a spreading {v1}-damage Curse on target enemy."
+
     clean_k = k.replace("_", " ").title()
-    return f"[{cost} Mana] {clean_k}: Tactical Power {v1 or pct or 10}."
+    return f"[{cost} Mana] {clean_k}: Power {v1 or pct or 10}."
 
 
 def format_leader_description(card: Dict[str, Any]) -> str:

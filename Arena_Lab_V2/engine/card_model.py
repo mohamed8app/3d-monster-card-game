@@ -161,8 +161,9 @@ class MonsterUnit:
         "perm_atk_buff", "perm_def_buff", "temp_atk_buff", "temp_def_buff",
         "is_barrier", "atk_locked", "is_all_attack", "is_spy", "spy_dmg", "spy_poison",
         "is_token", "is_clone", "is_resurrected", "summoned_turn",
-        "can_attack", "attacked_this_turn", "skills_used_this_turn",
+        "can_attack", "attacked_this_turn", "skills_used_this_turn", "skill_uses_this_turn",
         "double_skill_1t", "double_strike_temp",
+        "own_turns_survived", "last_own_turn", "attacks_made",
         "burn", "poison", "bleed", "frozen", "silenced", "rooted", "weakened",
         "stealth", "taunt", "haste", "double_strike", "evasion_pct", "life_leech_pct",
         "reflect_flat", "reflect_pct", "cleave_pct", "bypass_pct",
@@ -240,9 +241,13 @@ class MonsterUnit:
         self.temp_def_buff: int = 0
 
         self.summoned_turn: int = int(summoned_turn)
+        self.own_turns_survived: int = 0
+        self.last_own_turn: int = int(summoned_turn)
+        self.attacks_made: int = 0
         self.can_attack: bool = False
         self.attacked_this_turn: bool = False
         self.skills_used_this_turn: int = 0
+        self.skill_uses_this_turn: List[int] = [0, 0]
         self.double_skill_1t: bool = False
         self.double_strike_temp: bool = False
 
@@ -388,6 +393,15 @@ class MatchTelemetry:
         "multi_kill_turns", "highlight_triggers", "comeback_deficit",
         "lead_swings", "clutch_win", "excitement_score", "highlight_tags",
         "hand_sum_start", "hand_sum_end", "hand_turns", "empty_hand_turns",
+        "went_first",
+        "units_died_count", "units_died_rounds_sum",
+        "units_died_0rnd", "units_died_1rnd", "units_died_2rnd", "units_died_3p_rnd",
+        "combat_died_count", "combat_died_0atk",
+        "units_survived_end", "units_survived_rounds_sum", "board_units_turn_sum",
+        "kills_by_active", "kills_by_attack", "kills_by_spell",
+        "kills_by_counter", "kills_by_dot", "kills_by_passive",
+        "dmg_m_by_active", "dmg_m_by_attack", "dmg_m_by_spell",
+        "dmg_m_by_counter", "dmg_m_by_dot", "dmg_m_by_passive",
     )
 
     def __init__(self) -> None:
@@ -431,6 +445,32 @@ class MatchTelemetry:
         self.hand_sum_end: int = 0
         self.hand_turns: int = 0
         self.empty_hand_turns: int = 0
+        self.went_first: bool = False
+        # Monster board lifespan & survival telemetry
+        self.units_died_count: int = 0
+        self.units_died_rounds_sum: int = 0
+        self.units_died_0rnd: int = 0
+        self.units_died_1rnd: int = 0
+        self.units_died_2rnd: int = 0
+        self.units_died_3p_rnd: int = 0
+        self.combat_died_count: int = 0
+        self.combat_died_0atk: int = 0
+        self.units_survived_end: int = 0
+        self.units_survived_rounds_sum: int = 0
+        self.board_units_turn_sum: int = 0
+        # Kill & monster damage source telemetry
+        self.kills_by_active: int = 0
+        self.kills_by_attack: int = 0
+        self.kills_by_spell: int = 0
+        self.kills_by_counter: int = 0
+        self.kills_by_dot: int = 0
+        self.kills_by_passive: int = 0
+        self.dmg_m_by_active: int = 0
+        self.dmg_m_by_attack: int = 0
+        self.dmg_m_by_spell: int = 0
+        self.dmg_m_by_counter: int = 0
+        self.dmg_m_by_dot: int = 0
+        self.dmg_m_by_passive: int = 0
 
 
 class PlayerState:

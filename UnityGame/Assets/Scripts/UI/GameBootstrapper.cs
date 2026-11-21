@@ -521,9 +521,6 @@ namespace MonsterCardGame.UI
             // 10.2 Center Seam Astral Hourglass Medallion (integrated on BottomArenaSeamDivider at x = 0, y = -288)
             BuildAstralHourglassMedallion(screenRoot.transform, ui);
 
-            // 10.3 Quick Testing Toolbar (Dev controls for Spirits & Environments)
-            BuildBattleTestingToolbar(screenRoot.transform, ui);
-
             // 10.5 Top-Level Overlay for Card Flight Animations (Deck -> Hand, Hand -> Board/Env/Leader)
             var flightLayerObj = new GameObject("CardFlightLayer");
             flightLayerObj.transform.SetParent(screenRoot.transform, false);

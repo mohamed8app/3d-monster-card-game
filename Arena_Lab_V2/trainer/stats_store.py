@@ -95,6 +95,9 @@ def _default_model_record(model_id: str) -> Dict[str, Any]:
         "avg_hand_start": 0.0,
         "avg_hand_end": 0.0,
         "empty_hand_pct": 0.0,
+        "avg_unit_lifespan": 0.0,
+        "died_0atk_pct": 0.0,
+        "avg_board_units": 0.0,
         "comeback_wins": 0,
         "clutch_wins": 0,
         "max_burst_dmg": 0,
@@ -111,6 +114,9 @@ def _default_excitement_data() -> Dict[str, Any]:
         "avg_hand_start": 0.0,
         "avg_hand_end": 0.0,
         "empty_hand_pct": 0.0,
+        "avg_unit_lifespan": 0.0,
+        "died_0atk_pct": 0.0,
+        "avg_board_units": 0.0,
         "comeback_wins": 0,
         "clutch_wins": 0,
         "total_lead_swings": 0,
@@ -162,9 +168,16 @@ class StatsStore:
         raw_ex = _read_json(self.excitement_path, {})
         self.excitement = _default_excitement_data()
         if isinstance(raw_ex, dict):
-            for k in ("total_matches", "avg_excitement", "comeback_wins", "clutch_wins", "total_lead_swings", "highlights", "anomalies"):
+            for k in (
+                "total_matches", "total_turns_sum", "p1_games", "p1_wins",
+                "avg_excitement", "avg_hand_start", "avg_hand_end", "empty_hand_pct",
+                "comeback_wins", "clutch_wins", "total_lead_swings", "highlights", "anomalies",
+            ):
                 if k in raw_ex:
                     self.excitement[k] = raw_ex[k]
+            for dict_key in ("match_len_bins", "monster_survival", "kill_causes", "dmg_sources"):
+                if dict_key in raw_ex and isinstance(raw_ex[dict_key], dict):
+                    self.excitement[dict_key].update(raw_ex[dict_key])
             if "turn_curve" in raw_ex and isinstance(raw_ex["turn_curve"], dict):
                 for tk_str, tv in raw_ex["turn_curve"].items():
                     if tk_str in self.excitement["turn_curve"] and isinstance(tv, dict):
@@ -535,6 +548,15 @@ class StatsStore:
             rec["avg_hand_start"] = round((rec.get("avg_hand_start", 0.0) * m_prev + tel.hand_sum_start / ht) * inv_n, 2)
             rec["avg_hand_end"] = round((rec.get("avg_hand_end", 0.0) * m_prev + tel.hand_sum_end / ht) * inv_n, 2)
             rec["empty_hand_pct"] = round((rec.get("empty_hand_pct", 0.0) * m_prev + 100.0 * tel.empty_hand_turns / ht) * inv_n, 1)
+            rec["avg_board_units"] = round((rec.get("avg_board_units", 0.0) * m_prev + tel.board_units_turn_sum / ht) * inv_n, 2)
+            if tel.units_died_count > 0:
+                u_life = tel.units_died_rounds_sum / tel.units_died_count
+                prev_life = float(rec.get("avg_unit_lifespan", 0.0))
+                rec["avg_unit_lifespan"] = round(((prev_life * m_prev + u_life) * inv_n) if prev_life > 0 else u_life, 2)
+            if tel.combat_died_count > 0:
+                z_pct = 100.0 * tel.combat_died_0atk / tel.combat_died_count
+                prev_z = float(rec.get("died_0atk_pct", 0.0))
+                rec["died_0atk_pct"] = round(((prev_z * m_prev + z_pct) * inv_n) if prev_z > 0 else z_pct, 1)
             if tel.max_turn_dmg > int(rec.get("max_burst_dmg", 0)):
                 rec["max_burst_dmg"] = int(tel.max_turn_dmg)
             if result.winner == side:
@@ -696,29 +718,4 @@ class StatsStore:
             "winner": model_a_id if result.winner == 0 else (model_b_id if result.winner == 1 else "DRAW"),
             "turns": result.turns,
             "reason": result.win_reason,
-            "hp_a": result.final_hp[0],
-            "hp_b": result.final_hp[1],
-            "style_a": round(style_scores[0], 3),
-            "style_b": round(style_scores[1], 3),
-        }
-        pending_history.append(json.dumps(hist_row, ensure_ascii=False))
-
-    def flush_history(self, lines: List[str], max_lines_keep: int = 250000) -> None:
-        if not lines:
-            return
-        os.makedirs(self.logs_dir, exist_ok=True)
-        with open(self.history_path, "a", encoding="utf-8") as f:
-            for ln in lines:
-                f.write(ln + "\n")
-        lines.clear()
-        # Keep up to 250,000 matches (~55 MB) in match_history.jsonl so full overnight runs stay 100% intact
-        try:
-            if os.path.getsize(self.history_path) > 55_000_000:
-                with open(self.history_path, "r", encoding="utf-8") as rf:
-                    tail = rf.readlines()[-max_lines_keep:]
-                tmp = self.history_path + ".tmp"
-                with open(tmp, "w", encoding="utf-8") as wf:
-                    wf.writelines(tail)
-                os.replace(tmp, self.history_path)
-        except Exception:
-            pass
+            "hp_a": result

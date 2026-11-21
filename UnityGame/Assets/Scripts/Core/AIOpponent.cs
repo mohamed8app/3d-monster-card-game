@@ -242,7 +242,7 @@ namespace MonsterCardGame.Core
                     int skillIdx = (act - 50) % 2;
                     var pSlot = (slot >= 0 && slot < 6) ? aiPlayer.slots[slot] : null;
                     var m = (pSlot != null && pSlot.IsOccupied) ? pSlot.currentMonster : null;
-                    if (m != null && m.IsAlive && m.HasActiveSkillAt(skillIdx) && !m.IsActiveSkillUsed(skillIdx))
+                    if (m != null && m.IsAlive && m.HasActiveSkillAt(skillIdx) && !m.IsActiveSkillUsed(skillIdx, aiPlayer))
                     {
                         string actText = m.actives[skillIdx];
                         int targetSlot = CombatSystem.Instance.ChooseSmartSkillTargetSlot(actText, slot, m, aiPlayer, humanPlayer, aiPlayer.freeSkillBonus);
@@ -705,7 +705,7 @@ namespace MonsterCardGame.Core
             }
             if (cid == 285)
             {
-                foreach (var a in allies) if (a.currentMonster.silencedTurns <= 0 && a.currentMonster.actives != null && a.currentMonster.actives.Count > 0 && !a.currentMonster.hasUsedActiveThisTurn) return true;
+                foreach (var a in allies) if (a.currentMonster.silencedTurns <= 0 && a.currentMonster.actives != null && a.currentMonster.actives.Count > 0 && !a.currentMonster.AreAllActiveSkillsUsed(aiPlayer)) return true;
                 return false;
             }
             if (cid == 287)
