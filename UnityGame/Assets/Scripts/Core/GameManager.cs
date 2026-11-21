@@ -83,6 +83,14 @@ namespace MonsterCardGame.Core
     }
 
     [Serializable]
+    public class V2SettledDeckFile
+    {
+        public string model_id;
+        public int matches_trained;
+        public int[] deck_50_ids;
+    }
+
+    [Serializable]
     public class V2ModelEntry
     {
         public string model_id;
@@ -109,24 +117,18 @@ namespace MonsterCardGame.Core
     {
         public static GameManager Instance { get; private set; }
 
-        public enum OpponentModel { Gora, Navi }
         public enum PlayerDeckSelection
         {
+            ModelRoster41,
             BalancedDraft,
-            GoraChampion,
-            NaviChampion,
-            FireAggro,
-            WaterControl,
-            CustomJson,
-            ModelRoster41
+            CustomJson
         }
 
-        [Header("Arena_Lab_V2 41-Model Neural AI & Deck Setup")]
-        public bool useV2RosterOpponent = true;
+        [Header("Arena_Lab_V2 41-Model Neural AI & Live Sync")]
         public string selectedOpponentModelId = "free_01";
         public string selectedPlayerModelDeckId = "free_02";
-        public OpponentModel currentOpponent = OpponentModel.Gora;
         public PlayerDeckSelection selectedPlayerDeck = PlayerDeckSelection.ModelRoster41;
+        public string liveArenaSyncStatus = "Loading Arena_Lab_V2...";
         public int matchCounter = 0;
         public readonly Dictionary<int, CardData> masterCardIndex = new Dictionary<int, CardData>();
         private ChampionDecksWrapper cachedChampionDecks = null;
@@ -191,7 +193,8 @@ namespace MonsterCardGame.Core
             LoadMonsterDatabase();
             BuildCatalogIdIndex();
             LoadCardPityStats();
-            // Match does NOT start automatically on launch; waits for player to click START GAME on the Main Menu.
+            LoadV2Roster41(forceReload: true);
+            // Match does NOT start automatically on launch; waits for player to click START BATTLE on the Main Menu.
         }
 
         private void LoadMonsterDatabase()
@@ -415,26 +418,6 @@ namespace MonsterCardGame.Core
             return cachedChampionDecks;
         }
 
-        public List<int> GetGoraCardIds()
-        {
-            var c = LoadChampionDecksDatabase();
-            if (c != null && c.gora != null && c.gora.card_ids != null && c.gora.card_ids.Length > 0)
-            {
-                return new List<int>(c.gora.card_ids);
-            }
-            return null;
-        }
-
-        public List<int> GetNaviCardIds()
-        {
-            var c = LoadChampionDecksDatabase();
-            if (c != null && c.navi != null && c.navi.card_ids != null && c.navi.card_ids.Length > 0)
-            {
-                return new List<int>(c.navi.card_ids);
-            }
-            return null;
-        }
-
         public List<int> GetArchetypeCardIds(string key)
         {
             var c = LoadChampionDecksDatabase();
@@ -546,7 +529,57 @@ namespace MonsterCardGame.Core
             {
                 Debug.LogWarning($"Could not load custom_deck.json: {e.Message}");
             }
-            return GetGoraCardIds();
+            var fallback = GetModelEntryById(selectedPlayerModelDeckId);
+            if (fallback != null && fallback.card_ids != null && fallback.card_ids.Length > 0)
+                return new List<int>(fallback.card_ids);
+            return new List<int>();
+        }
+
+        public void ReloadLiveArenaLabV2()
+        {
+            V2NeuralBrain.ClearCache();
+            LoadV2Roster41(forceReload: true);
+        }
+
+        private static void OverlayLiveRosterStatsJson(V2Roster41Wrapper roster, string rosterStatsPath)
+        {
+            if (roster == null || roster.models == null || !System.IO.File.Exists(rosterStatsPath)) return;
+            try
+            {
+                string raw = System.IO.File.ReadAllText(rosterStatsPath, System.Text.Encoding.UTF8);
+                if (string.IsNullOrEmpty(raw)) return;
+
+                foreach (var entry in roster.models)
+                {
+                    if (entry == null || string.IsNullOrEmpty(entry.model_id)) continue;
+                    string marker = $"\"{entry.model_id}\":";
+                    int startIdx = raw.IndexOf(marker, StringComparison.Ordinal);
+                    if (startIdx < 0) continue;
+                    int objStart = raw.IndexOf('{', startIdx);
+                    if (objStart < 0) continue;
+                    int objEnd = raw.IndexOf("\n  }", objStart, StringComparison.Ordinal);
+                    if (objEnd < 0) objEnd = Math.Min(raw.Length, objStart + 3500);
+                    string block = raw.Substring(objStart, objEnd - objStart);
+
+                    var mMatch = System.Text.RegularExpressions.Regex.Match(block, "\"matches\"\\s*:\\s*(\\d+)");
+                    var wMatch = System.Text.RegularExpressions.Regex.Match(block, "\"wins\"\\s*:\\s*(\\d+)");
+                    var eMatch = System.Text.RegularExpressions.Regex.Match(block, "\"elo\"\\s*:\\s*([0-9.]+)");
+                    if (mMatch.Success && int.TryParse(mMatch.Groups[1].Value, out int mVal) && mVal > 0)
+                    {
+                        entry.matches = Math.Max(entry.matches, mVal);
+                        if (wMatch.Success && int.TryParse(wMatch.Groups[1].Value, out int wVal))
+                            entry.win_rate = (float)Math.Round(100.0 * wVal / mVal, 1);
+                    }
+                    if (eMatch.Success && float.TryParse(eMatch.Groups[1].Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float eloVal))
+                    {
+                        entry.elo = (float)Math.Round(eloVal, 1);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"⚠️ Could not parse live roster_stats.json: {ex.Message}");
+            }
         }
 
         public V2Roster41Wrapper LoadV2Roster41(bool forceReload = false)
@@ -576,12 +609,56 @@ namespace MonsterCardGame.Core
                 try
                 {
                     cachedRoster41 = JsonUtility.FromJson<V2Roster41Wrapper>(jsonText);
-                    if (cachedRoster41 != null && cachedRoster41.models != null)
-                        Debug.Log($"🧠 Loaded Arena_Lab_V2 41-Model Neural Roster ({cachedRoster41.models.Length} models, OBS={cachedRoster41.obs_dim})!");
                 }
                 catch (Exception e)
                 {
                     Debug.LogError($"Error parsing v2_roster_41.json: {e.Message}");
+                }
+            }
+
+            // LIVE OVERLAY: Pull each of the 41 models' latest settled_deck.json, brain_unity.bytes status, and roster_stats.json straight from Arena_Lab_V2!
+            if (cachedRoster41 != null && cachedRoster41.models != null)
+            {
+                string liveDir = V2NeuralBrain.FindLiveArenaLabV2Directory();
+                if (!string.IsNullOrEmpty(liveDir))
+                {
+                    int liveDecksLoaded = 0;
+                    int liveBrainsFound = 0;
+                    string savedDir = System.IO.Path.Combine(liveDir, "saved_models");
+
+                    foreach (var entry in cachedRoster41.models)
+                    {
+                        if (entry == null || string.IsNullOrEmpty(entry.model_id)) continue;
+                        string mDir = System.IO.Path.Combine(savedDir, entry.model_id);
+                        string deckFile = System.IO.Path.Combine(mDir, "settled_deck.json");
+                        if (System.IO.File.Exists(deckFile))
+                        {
+                            try
+                            {
+                                string dtxt = System.IO.File.ReadAllText(deckFile, System.Text.Encoding.UTF8);
+                                var parsedDeck = JsonUtility.FromJson<V2SettledDeckFile>(dtxt);
+                                if (parsedDeck != null && parsedDeck.deck_50_ids != null && parsedDeck.deck_50_ids.Length == 50)
+                                {
+                                    entry.card_ids = parsedDeck.deck_50_ids;
+                                    if (parsedDeck.matches_trained > entry.matches)
+                                        entry.matches = parsedDeck.matches_trained;
+                                    liveDecksLoaded++;
+                                }
+                            }
+                            catch { }
+                        }
+                        string brainFile = System.IO.Path.Combine(mDir, "brain_unity.bytes");
+                        if (System.IO.File.Exists(brainFile)) liveBrainsFound++;
+                    }
+
+                    string statsFile = System.IO.Path.Combine(liveDir, "logs", "roster_stats.json");
+                    OverlayLiveRosterStatsJson(cachedRoster41, statsFile);
+                    liveArenaSyncStatus = $"🟢 LIVE Arena_Lab_V2 ({liveBrainsFound}/41 Brains, {liveDecksLoaded}/41 Decks)";
+                    Debug.Log($"🔗 {liveArenaSyncStatus} loaded from: {liveDir}");
+                }
+                else
+                {
+                    liveArenaSyncStatus = "📦 Embedded Snapshot (41 Brains)";
                 }
             }
             return cachedRoster41;
@@ -611,9 +688,8 @@ namespace MonsterCardGame.Core
         public void SetOpponentModel41(string modelId)
         {
             if (string.IsNullOrEmpty(modelId)) return;
-            useV2RosterOpponent = true;
             selectedOpponentModelId = modelId;
-            Debug.Log($"🧠 AI Opponent locked to V2 Neural Model: {modelId}");
+            Debug.Log($"🧠 AI Opponent set to V2 Neural Model: {modelId}");
         }
 
         public void CycleOpponentModel41(int delta)
@@ -644,14 +720,9 @@ namespace MonsterCardGame.Core
 
         public string GetOpponentDisplayName()
         {
-            if (useV2RosterOpponent)
-            {
-                var entry = GetModelEntryById(selectedOpponentModelId);
-                if (entry != null) return entry.display_name;
-            }
-            return (currentOpponent == OpponentModel.Gora)
-                ? "Gora (Aggressive Combat AI)"
-                : "Navi (Tactical Control AI)";
+            var entry = GetModelEntryById(selectedOpponentModelId);
+            if (entry != null) return entry.display_name;
+            return "[Free] Free_01 (Vanguard)";
         }
 
         public List<CardData> BuildPlayerSelectedDeck()
@@ -664,13 +735,12 @@ namespace MonsterCardGame.Core
                     if (mEntry != null && mEntry.card_ids != null && mEntry.card_ids.Length > 0)
                         ids = new List<int>(mEntry.card_ids);
                     break;
-                case PlayerDeckSelection.GoraChampion: ids = GetGoraCardIds(); break;
-                case PlayerDeckSelection.NaviChampion: ids = GetNaviCardIds(); break;
-                case PlayerDeckSelection.FireAggro: ids = GetArchetypeCardIds("fire_aggro"); break;
-                case PlayerDeckSelection.WaterControl: ids = GetArchetypeCardIds("water_control"); break;
-                case PlayerDeckSelection.CustomJson: ids = GetCustomDeckCardIds(); break;
+                case PlayerDeckSelection.CustomJson:
+                    ids = GetCustomDeckCardIds();
+                    break;
                 case PlayerDeckSelection.BalancedDraft:
-                default: return GenerateDeck(defaultDeckSize);
+                default:
+                    return GenerateDeck(defaultDeckSize);
             }
 
             if (ids != null && ids.Count > 0)
@@ -686,19 +756,10 @@ namespace MonsterCardGame.Core
 
         public List<CardData> BuildAIOpponentDeck()
         {
-            List<int> ids = null;
-            if (useV2RosterOpponent)
+            var oppEntry = GetModelEntryById(selectedOpponentModelId);
+            if (oppEntry != null && oppEntry.card_ids != null && oppEntry.card_ids.Length > 0)
             {
-                var oppEntry = GetModelEntryById(selectedOpponentModelId);
-                if (oppEntry != null && oppEntry.card_ids != null && oppEntry.card_ids.Length > 0)
-                    ids = new List<int>(oppEntry.card_ids);
-            }
-            if (ids == null || ids.Count == 0)
-                ids = (currentOpponent == OpponentModel.Gora) ? GetGoraCardIds() : GetNaviCardIds();
-
-            if (ids != null && ids.Count > 0)
-            {
-                var deck = BuildDeckFromIds(ids);
+                var deck = BuildDeckFromIds(oppEntry.card_ids);
                 if (deck.Count >= defaultDeckSize) return deck;
                 var topUp = GenerateDeck(defaultDeckSize - deck.Count);
                 deck.AddRange(topUp);
@@ -709,21 +770,8 @@ namespace MonsterCardGame.Core
 
         public void AdvanceToNextOpponent()
         {
-            if (useV2RosterOpponent)
-            {
-                // Keep the player's manually selected 41-Model Opponent locked so they can evaluate & rematch it freely!
-                Debug.Log($"🧠 Retaining selected 41-Model Opponent for rematch: {GetOpponentDisplayName()}");
-                return;
-            }
-            currentOpponent = (currentOpponent == OpponentModel.Gora) ? OpponentModel.Navi : OpponentModel.Gora;
-            Debug.Log($"🔄 Next Opponent switched to: {currentOpponent}");
-        }
-
-        public void SetOpponent(OpponentModel opp)
-        {
-            useV2RosterOpponent = false;
-            currentOpponent = opp;
-            Debug.Log($"🎯 Opponent manually set to: {currentOpponent}");
+            // Keep the player's selected 41-Model Opponent locked so they can evaluate & rematch it freely!
+            Debug.Log($"🧠 Retaining selected 41-Model Opponent for rematch: {GetOpponentDisplayName()}");
         }
 
         public void SetPlayerDeck(PlayerDeckSelection sel)
@@ -741,13 +789,11 @@ namespace MonsterCardGame.Core
                     if (mEntry != null)
                         return $"🧠 {mEntry.display_name} Settled Deck (50 Cards)";
                     return "🧠 Selected 41-Model Settled Deck (50 Cards)";
-                case PlayerDeckSelection.GoraChampion: return "🏆 Gora Core Settled Deck (50 Cards)";
-                case PlayerDeckSelection.NaviChampion: return "🟣 Navi Tactical Settled Deck (50 Cards)";
-                case PlayerDeckSelection.FireAggro: return "🔥 Fire Aggro Assault Deck (50 Cards)";
-                case PlayerDeckSelection.WaterControl: return "💧 Water & Ice Control Deck (50 Cards)";
-                case PlayerDeckSelection.CustomJson: return $"🛠️ Player Custom Deck ({GetCustomDeckCardIds().Count} Cards)";
+                case PlayerDeckSelection.CustomJson:
+                    return $"🛠️ Player Custom Deck ({GetCustomDeckCardIds().Count} Cards)";
                 case PlayerDeckSelection.BalancedDraft:
-                default: return "🎲 Balanced Draft Deck (50 Cards)";
+                default:
+                    return "🎲 Balanced Draft Deck (50 Cards)";
             }
         }
 
@@ -762,39 +808,21 @@ namespace MonsterCardGame.Core
             isMatchStarted = true;
             matchCounter++;
 
-            LoadChampionDecksDatabase();
-            LoadV2Roster41();
+            LoadV2Roster41(forceReload: true);
 
             var deckA = BuildPlayerSelectedDeck();
             var deckB = BuildAIOpponentDeck();
 
-            if (useV2RosterOpponent && GetModelEntryById(selectedOpponentModelId) != null)
+            var oppEntry = GetModelEntryById(selectedOpponentModelId);
+            string oppId = oppEntry != null ? oppEntry.model_id : "free_01";
+            string oppName = oppEntry != null ? oppEntry.display_name : "[Free] Free_01 (Vanguard)";
+
+            aiPlayer.playerName = $"{oppName} [Neural AI]";
+            if (aiOpponent != null)
             {
-                var oppEntry = GetModelEntryById(selectedOpponentModelId);
-                aiPlayer.playerName = $"{oppEntry.display_name} [Neural AI]";
-                if (aiOpponent != null)
-                {
-                    aiOpponent.useNeuralBrain = true;
-                    aiOpponent.SetNeuralModel(oppEntry.model_id, oppEntry.display_name);
-                }
-            }
-            else if (currentOpponent == OpponentModel.Gora)
-            {
-                aiPlayer.playerName = "Gora (Aggressive Combat AI)";
-                if (aiOpponent != null)
-                {
-                    aiOpponent.useNeuralBrain = false;
-                    aiOpponent.combatStyle = AICombatStyle.GoraAggressive;
-                }
-            }
-            else
-            {
-                aiPlayer.playerName = "Navi (Tactical Control AI)";
-                if (aiOpponent != null)
-                {
-                    aiOpponent.useNeuralBrain = false;
-                    aiOpponent.combatStyle = AICombatStyle.NaviTactical;
-                }
+                aiOpponent.useNeuralBrain = true;
+                aiOpponent.combatStyle = AICombatStyle.Neural41;
+                aiOpponent.SetNeuralModel(oppId, oppName);
             }
 
             humanPlayer.InitializeDeck(deckA);
@@ -5273,7 +5301,7 @@ namespace MonsterCardGame.Core
                 BattleUIManager.Instance.ClearBoardSelection();
             }
 
-            AdvanceToNextOpponent(); // Automatically alternate between Gora and Navi after each game!
+            AdvanceToNextOpponent();
             StartGame();
         }
     }

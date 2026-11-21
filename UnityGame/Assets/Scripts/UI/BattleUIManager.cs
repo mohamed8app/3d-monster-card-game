@@ -2031,17 +2031,32 @@ namespace MonsterCardGame.UI
 
                 if (customArt == null)
                 {
-                    var idCenterTxt = GameBootstrapper.CreateText(cardObj.transform, "MonsterIdCenter", card.name, 30,
-                        elemColor, TextAnchor.MiddleCenter, new Vector2(0, 12), new Vector2(126, 60));
+                    var nameBg = GameBootstrapper.CreatePanel(cardObj.transform, "MonsterNameBg", new Color(0.04f, 0.05f, 0.09f, 0.72f),
+                        new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 10f), new Vector2(106f, 54f));
+                    nameBg.GetComponent<Image>().raycastTarget = false;
+
+                    var idCenterTxt = GameBootstrapper.CreateText(nameBg.transform, "MonsterIdCenter", card.name, 12,
+                        Color.Lerp(elemColor, Color.white, 0.45f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(98f, 48f));
                     idCenterTxt.fontStyle = FontStyle.Bold;
+                    idCenterTxt.resizeTextForBestFit = true;
+                    idCenterTxt.resizeTextMinSize = 8;
+                    idCenterTxt.resizeTextMaxSize = 12;
+                    idCenterTxt.horizontalOverflow = HorizontalWrapMode.Wrap;
+                    idCenterTxt.verticalOverflow = VerticalWrapMode.Truncate;
                     idCenterTxt.raycastTarget = false;
+                    GameBootstrapper.AddTextShadow(idCenterTxt);
 
                     string elemEmoji = MonsterArtLoader.GetElementEmoji(card.element);
                     string tribeEmoji = MonsterArtLoader.GetTribeEmoji(card.tribe);
-                    var tierBadgeTxt = GameBootstrapper.CreateText(cardObj.transform, "TierBadge", $"{elemEmoji}{tribeEmoji} T{Mathf.Max(1, card.tier_num)}", 13,
-                        new Color(0.9f, 0.92f, 0.96f), TextAnchor.MiddleCenter, new Vector2(0, -24), new Vector2(120, 24));
+                    var tierBadgeTxt = GameBootstrapper.CreateText(cardObj.transform, "TierBadge", $"{elemEmoji}{tribeEmoji} T{Mathf.Max(1, card.tier_num)}", 10,
+                        new Color(0.92f, 0.94f, 0.98f), TextAnchor.MiddleCenter, new Vector2(0, -30), new Vector2(100, 18));
                     tierBadgeTxt.fontStyle = FontStyle.Bold;
+                    tierBadgeTxt.resizeTextForBestFit = true;
+                    tierBadgeTxt.resizeTextMinSize = 7;
+                    tierBadgeTxt.resizeTextMaxSize = 10;
+                    tierBadgeTxt.verticalOverflow = VerticalWrapMode.Truncate;
                     tierBadgeTxt.raycastTarget = false;
+                    GameBootstrapper.AddTextShadow(tierBadgeTxt);
                 }
 
                 // Classic Hand-Crafted Frame Overlay
@@ -2153,24 +2168,37 @@ namespace MonsterCardGame.UI
                     }
                     else
                     {
-                        var runeTxt = GameBootstrapper.CreateText(cardObj.transform, "SpellIdCenter", $"🔮\n#{card.id}", 20,
-                            new Color(0.24f, 0.14f, 0.34f), TextAnchor.MiddleCenter, new Vector2(0f, 10f), new Vector2(94f, 64f));
+                        var runeTxt = GameBootstrapper.CreateText(cardObj.transform, "SpellIdCenter", $"🔮\n#{card.id}", 15,
+                            new Color(0.24f, 0.14f, 0.34f), TextAnchor.MiddleCenter, new Vector2(0f, 16f), new Vector2(88f, 48f));
                         runeTxt.fontStyle = FontStyle.Bold;
+                        runeTxt.resizeTextForBestFit = true;
+                        runeTxt.resizeTextMinSize = 10;
+                        runeTxt.resizeTextMaxSize = 16;
+                        runeTxt.verticalOverflow = VerticalWrapMode.Truncate;
                         runeTxt.raycastTarget = false;
 
                         // Fallback text only when no art is assigned (Localization-safe: hidden when art exists)
                         string spellDisplayName = string.IsNullOrEmpty(card.name) || card.name == card.id.ToString() ? $"Spell #{card.id}" : card.name;
-                        var txtName = GameBootstrapper.CreateText(cardObj.transform, "NameText", $"{spellDisplayName} • T{Mathf.Max(1, card.tier_num)}", 10,
-                            new Color(0.20f, 0.10f, 0.04f), TextAnchor.MiddleCenter, new Vector2(0f, -57f), new Vector2(94f, 13f));
+                        var txtName = GameBootstrapper.CreateText(cardObj.transform, "NameText", spellDisplayName, 9,
+                            new Color(0.20f, 0.10f, 0.04f), TextAnchor.MiddleCenter, new Vector2(0f, -34f), new Vector2(90f, 26f));
                         txtName.fontStyle = FontStyle.Bold;
+                        txtName.resizeTextForBestFit = true;
+                        txtName.resizeTextMinSize = 7;
+                        txtName.resizeTextMaxSize = 9;
+                        txtName.horizontalOverflow = HorizontalWrapMode.Wrap;
+                        txtName.verticalOverflow = VerticalWrapMode.Truncate;
                         txtName.raycastTarget = false;
 
                         string shortRole = string.IsNullOrEmpty(card.role)
-                            ? "Tactical Spell"
-                            : card.role.Replace(" Spell", "").Trim();
-                        var txtAction = GameBootstrapper.CreateText(cardObj.transform, "ActionText", shortRole, 9,
-                            new Color(0.32f, 0.16f, 0.07f), TextAnchor.MiddleCenter, new Vector2(0f, -65.5f), new Vector2(94f, 12f));
+                            ? $"T{Mathf.Max(1, card.tier_num)} Spell"
+                            : $"{card.role.Replace(" Spell", "").Trim()} • T{Mathf.Max(1, card.tier_num)}";
+                        var txtAction = GameBootstrapper.CreateText(cardObj.transform, "ActionText", shortRole, 8,
+                            new Color(0.32f, 0.16f, 0.07f), TextAnchor.MiddleCenter, new Vector2(0f, -58f), new Vector2(90f, 14f));
                         txtAction.fontStyle = FontStyle.Bold;
+                        txtAction.resizeTextForBestFit = true;
+                        txtAction.resizeTextMinSize = 6;
+                        txtAction.resizeTextMaxSize = 8;
+                        txtAction.verticalOverflow = VerticalWrapMode.Truncate;
                         txtAction.raycastTarget = false;
                     }
                 }
@@ -2196,31 +2224,47 @@ namespace MonsterCardGame.UI
                     var costOutline = costCircle.AddComponent<Outline>();
                     costOutline.effectColor = new Color(0.45f, 0.56f, 0.72f, 1f);
                     costOutline.effectDistance = new Vector2(1.5f, 1.5f);
-                    var txtCost = GameBootstrapper.CreateText(costCircle.transform, "CostText", card.cost.ToString(), 16,
+                    var txtCost = GameBootstrapper.CreateText(costCircle.transform, "CostText", card.cost.ToString(), 15,
                         new Color(0.92f, 0.95f, 1f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(32, 32));
                     txtCost.fontStyle = FontStyle.Bold;
                     txtCost.raycastTarget = false;
 
                     if (customArt == null)
                     {
-                        var iconObj = GameBootstrapper.CreateText(cardObj.transform, "SpellIdCenter", card.name, 26,
-                            new Color(0.84f, 0.88f, 0.96f), TextAnchor.MiddleCenter, new Vector2(0, 26), new Vector2(124, 42));
+                        var iconObj = GameBootstrapper.CreateText(cardObj.transform, "SpellIdCenter", $"🔮 #{card.id}", 14,
+                            new Color(0.84f, 0.88f, 0.96f), TextAnchor.MiddleCenter, new Vector2(0, 32), new Vector2(116, 32));
                         iconObj.fontStyle = FontStyle.Bold;
+                        iconObj.resizeTextForBestFit = true;
+                        iconObj.resizeTextMinSize = 9;
+                        iconObj.resizeTextMaxSize = 14;
+                        iconObj.verticalOverflow = VerticalWrapMode.Truncate;
                         iconObj.raycastTarget = false;
                     }
 
                     var namePanel = GameBootstrapper.CreatePanel(cardObj.transform, "NamePlate", new Color(0.18f, 0.12f, 0.28f, 0.92f),
-                        new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -10), new Vector2(130, 22));
-                    var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", $"{card.name} • T{Mathf.Max(1, card.tier_num)}", 12,
-                        new Color(0.88f, 0.92f, 0.98f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(126, 22));
+                        new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -10), new Vector2(130, 24));
+                    var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", $"{card.name} • T{Mathf.Max(1, card.tier_num)}", 10,
+                        new Color(0.88f, 0.92f, 0.98f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(124, 22));
                     txtName.fontStyle = FontStyle.Bold;
+                    txtName.resizeTextForBestFit = true;
+                    txtName.resizeTextMinSize = 7;
+                    txtName.resizeTextMaxSize = 10;
+                    txtName.horizontalOverflow = HorizontalWrapMode.Wrap;
+                    txtName.verticalOverflow = VerticalWrapMode.Truncate;
                     txtName.raycastTarget = false;
 
                     var descPanel = GameBootstrapper.CreatePanel(cardObj.transform, "DescPanel", new Color(0.06f, 0.05f, 0.10f, 0.85f),
                         new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -44), new Vector2(130, 42));
-                    var txtDesc = GameBootstrapper.CreateText(descPanel.transform, "DescText", card.description, 11,
-                        new Color(0.92f, 0.92f, 0.96f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(126, 40));
-                    txtDesc.fontStyle = FontStyle.Bold;
+                    string compactDesc = (!string.IsNullOrEmpty(card.description) && card.description.Length > 72)
+                        ? card.description.Substring(0, 69) + "..."
+                        : card.description;
+                    var txtDesc = GameBootstrapper.CreateText(descPanel.transform, "DescText", compactDesc, 9,
+                        new Color(0.92f, 0.92f, 0.96f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(124, 38));
+                    txtDesc.resizeTextForBestFit = true;
+                    txtDesc.resizeTextMinSize = 6;
+                    txtDesc.resizeTextMaxSize = 9;
+                    txtDesc.horizontalOverflow = HorizontalWrapMode.Wrap;
+                    txtDesc.verticalOverflow = VerticalWrapMode.Truncate;
                     txtDesc.raycastTarget = false;
 
                     var actionBadge = GameBootstrapper.CreatePanel(cardObj.transform, "ActionBadge", new Color(0.45f, 0.20f, 0.65f, 0.95f),
@@ -2468,25 +2512,31 @@ namespace MonsterCardGame.UI
 
                 // Name Plate
                 var namePanel = GameBootstrapper.CreatePanel(cardObj.transform, "NamePlate", new Color(0.10f, 0.04f, 0.06f, 0.95f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -6f), new Vector2(134f, 24f));
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -6f), new Vector2(130f, 24f));
                 namePanel.GetComponent<Image>().raycastTarget = false;
                 var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", $"{card.name}", 10,
-                    covGold, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(128f, 22f));
+                    covGold, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(124f, 22f));
                 txtName.fontStyle = FontStyle.Bold;
                 txtName.resizeTextForBestFit = true;
                 txtName.resizeTextMinSize = 7;
                 txtName.resizeTextMaxSize = 10;
+                txtName.horizontalOverflow = HorizontalWrapMode.Wrap;
+                txtName.verticalOverflow = VerticalWrapMode.Truncate;
                 txtName.raycastTarget = false;
 
-                // Description box
+                // Description box (trimmed cleanly on small hand card; full text shown in Detail Inspector on click)
                 var descPanel = GameBootstrapper.CreatePanel(cardObj.transform, "DescPanel", new Color(0.06f, 0.03f, 0.05f, 0.92f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -44f), new Vector2(134f, 46f));
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -44f), new Vector2(130f, 44f));
                 descPanel.GetComponent<Image>().raycastTarget = false;
-                var txtDesc = GameBootstrapper.CreateText(descPanel.transform, "DescText", card.description, 9,
-                    new Color(0.96f, 0.92f, 0.86f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(128f, 44f));
+                string covDesc = card.description ?? "";
+                if (covDesc.Length > 76) covDesc = covDesc.Substring(0, 73) + "...";
+                var txtDesc = GameBootstrapper.CreateText(descPanel.transform, "DescText", covDesc, 8,
+                    new Color(0.96f, 0.92f, 0.86f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(124f, 40f));
                 txtDesc.resizeTextForBestFit = true;
                 txtDesc.resizeTextMinSize = 6;
-                txtDesc.resizeTextMaxSize = 9;
+                txtDesc.resizeTextMaxSize = 8;
+                txtDesc.horizontalOverflow = HorizontalWrapMode.Wrap;
+                txtDesc.verticalOverflow = VerticalWrapMode.Truncate;
                 txtDesc.raycastTarget = false;
 
                 // Bottom Style / Tier badge
@@ -2669,13 +2719,20 @@ namespace MonsterCardGame.UI
                 ? new Color(0.22f, 0.12f, 0.05f)
                 : MonsterArtLoader.GetElementColor(data.element);
 
+            string detailPlaceholderText = $"#{data.id}\n{data.name}";
             Text numTxt;
             if (numTr == null)
             {
-                numTxt = GameBootstrapper.CreateText(detailCardArt.transform, "DetailBigNumber", data.name, 46,
-                    textCol, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(240, 120));
+                numTxt = GameBootstrapper.CreateText(detailCardArt.transform, "DetailBigNumber", detailPlaceholderText, 16,
+                    Color.Lerp(textCol, Color.white, 0.35f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(180, 100));
                 numTxt.fontStyle = FontStyle.Bold;
+                numTxt.resizeTextForBestFit = true;
+                numTxt.resizeTextMinSize = 10;
+                numTxt.resizeTextMaxSize = 16;
+                numTxt.horizontalOverflow = HorizontalWrapMode.Wrap;
+                numTxt.verticalOverflow = VerticalWrapMode.Truncate;
                 numTxt.raycastTarget = false;
+                GameBootstrapper.AddTextShadow(numTxt);
             }
             else
             {
@@ -2683,8 +2740,14 @@ namespace MonsterCardGame.UI
                 numTxt = numTr.GetComponent<Text>();
                 if (numTxt != null)
                 {
-                    numTxt.text = data.name;
-                    numTxt.color = textCol;
+                    numTxt.text = detailPlaceholderText;
+                    numTxt.color = Color.Lerp(textCol, Color.white, 0.35f);
+                    numTxt.fontSize = 16;
+                    numTxt.resizeTextForBestFit = true;
+                    numTxt.resizeTextMinSize = 10;
+                    numTxt.resizeTextMaxSize = 16;
+                    numTxt.horizontalOverflow = HorizontalWrapMode.Wrap;
+                    numTxt.verticalOverflow = VerticalWrapMode.Truncate;
                 }
             }
         }

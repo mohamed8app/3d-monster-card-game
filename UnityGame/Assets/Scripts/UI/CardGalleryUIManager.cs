@@ -1666,6 +1666,11 @@ namespace MonsterCardGame.UI
             var nameTxt = GameBootstrapper.CreateText(hdr.transform, "Name", card.name, 10,
                 new Color(0.95f, 0.96f, 1f), TextAnchor.MiddleLeft, new Vector2(20f, 0f), new Vector2(126f, 20f));
             nameTxt.fontStyle = FontStyle.Bold;
+            nameTxt.resizeTextForBestFit = true;
+            nameTxt.resizeTextMinSize = 7;
+            nameTxt.resizeTextMaxSize = 10;
+            nameTxt.horizontalOverflow = HorizontalWrapMode.Wrap;
+            nameTxt.verticalOverflow = VerticalWrapMode.Truncate;
 
             // Artwork Box
             var artBox = GameBootstrapper.CreatePanel(cellObj.transform, "ArtBox",
@@ -1701,7 +1706,8 @@ namespace MonsterCardGame.UI
             string tagLabel = card.cardType switch
             {
                 CardType.Monster => $"{elemEmoji}{tribeEmoji} {card.tribe}",
-                CardType.Spell => $"🔮 {card.element} Spell",
+                CardType.Spell => $"🔮 {card.playstyle} Spell",
+                CardType.Covenant => $"⚖️ {card.playstyle} Covenant",
                 CardType.Environment => $"🌋 {card.element} Env",
                 CardType.Leader => $"👑 {card.tribe}",
                 _ => $"{card.element}"
@@ -2524,10 +2530,16 @@ namespace MonsterCardGame.UI
                 else
                 {
                     artImg.color = MonsterArtLoader.GetEnvironmentAtmosphereColor(card.element);
-                    var idTxt = GameBootstrapper.CreateText(token.transform, "MissingIdText", $"#{card.id}\n⚠️ NO ART", 16,
-                        elemColor, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(130f, 64f));
+                    var idTxt = GameBootstrapper.CreateText(token.transform, "MissingIdText", $"#{card.id}\n{card.name}", 11,
+                        Color.Lerp(elemColor, Color.white, 0.45f), TextAnchor.MiddleCenter, new Vector2(0f, 6f), new Vector2(106f, 64f));
                     idTxt.fontStyle = FontStyle.Bold;
+                    idTxt.resizeTextForBestFit = true;
+                    idTxt.resizeTextMinSize = 8;
+                    idTxt.resizeTextMaxSize = 11;
+                    idTxt.horizontalOverflow = HorizontalWrapMode.Wrap;
+                    idTxt.verticalOverflow = VerticalWrapMode.Truncate;
                     idTxt.raycastTarget = false;
+                    GameBootstrapper.AddTextShadow(idTxt);
                 }
 
                 // Elemental Frame Overlay

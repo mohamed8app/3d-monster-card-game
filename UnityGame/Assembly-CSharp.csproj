@@ -68,7 +68,9 @@
     <Compile Include="Assets\Scripts\UI\CardView.cs" />
     <Compile Include="Assets\Scripts\UI\BattlefieldAtmosphereEngine.cs" />
     <Compile Include="Assets\Scripts\Core\AIOpponent.cs" />
+    <Compile Include="Assets\Scripts\Core\V2NeuralBrain.cs" />
     <Compile Include="Assets\Scripts\UI\BattleUIManager.cs" />
+    <Compile Include="Assets\Scripts\Core\V2CardMechanicsEngine.cs" />
     <Compile Include="Assets\Scripts\UI\SlotView.cs" />
     <Compile Include="Assets\Scripts\Core\GameManager.cs" />
     <Compile Include="Assets\Scripts\Core\PlayerState.cs" />

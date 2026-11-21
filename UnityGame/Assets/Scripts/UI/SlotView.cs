@@ -1201,11 +1201,17 @@ namespace MonsterCardGame.UI
             tokenArtImage.raycastTarget = false;
             standbyAnimator = artObj.AddComponent<MonsterStandbyAnimator>();
 
-            // Central Monster ID Text (shown when no art image exists)
-            tokenNameText = GameBootstrapper.CreateText(fieldCardToken.transform, "MonsterIdText", "0", 34,
-                Color.white, TextAnchor.MiddleCenter, new Vector2(0, 6), new Vector2(140, 80));
+            // Central Monster Name Text (shown cleanly inside frame when no art image exists)
+            tokenNameText = GameBootstrapper.CreateText(fieldCardToken.transform, "MonsterIdText", "", 12,
+                Color.white, TextAnchor.MiddleCenter, new Vector2(0, 6), new Vector2(106, 62));
             tokenNameText.fontStyle = FontStyle.Bold;
+            tokenNameText.resizeTextForBestFit = true;
+            tokenNameText.resizeTextMinSize = 8;
+            tokenNameText.resizeTextMaxSize = 12;
+            tokenNameText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            tokenNameText.verticalOverflow = VerticalWrapMode.Truncate;
             tokenNameText.raycastTarget = false;
+            GameBootstrapper.AddTextShadow(tokenNameText);
 
             // 2. Classic Hand-Crafted Frame Overlay
             var frameOverlayObj = new GameObject("FrameOverlay");
