@@ -45,10 +45,23 @@ namespace MonsterCardGame.Core
             public int exec_below = 0;
             public int disc = 0;
             public int buff = 0;
+            public int poison = 0;
+            public int bleed = 0;
+            public int reflect_pct = 0;
+            public int grave_mult = 0;
+            public int board_atk_cap = 0;
             public string fx = "";
             public bool perm = false;
             public bool cleanse = false;
             public bool root = false;
+            public bool silence = false;
+            public bool silence_all = false;
+            public bool root_all = false;
+            public bool cleave = false;
+            public bool center_aoe = false;
+            public bool face_match = false;
+            public bool req_skill = false;
+            public bool disc_spells_to_1 = false;
             public bool dbl = false;
             public bool haste = false;
             public bool taunt = false;
@@ -73,41 +86,37 @@ namespace MonsterCardGame.Core
         {
             public int tribe = -1;
             public int style = 0;
-            public int summon_heal_hp = 0;
-            public int summon_dmg_face = 0;
-            public int summon_dmg_enemy = 0;
-            public int summon_buff_atk = 0;
-            public int summon_buff_def = 0;
-            public int summon_draw = 0;
-            public int summon_mana = 0;
-            public bool summon_cleanse = false;
-            public bool summon_freeze = false;
-            public bool summon_silence = false;
-            public bool summon_root = false;
-            public int summon_weaken = 0;
-            public int summon_burn = 0;
-            public int summon_poison = 0;
-            public int summon_bleed = 0;
-            public bool summon_clone = false;
-            public bool summon_copy_hand = false;
-            public bool summon_mind_control = false;
-            public bool summon_recall = false;
-            public int summon_tokens = 0;
-            public bool summon_revive = false;
-            public bool summon_double_skill = false;
             public int aura_atk = 0;
             public int aura_def = 0;
+            public int aura_heal_def = 0;
             public int aura_heal_hp = 0;
-            public int aura_reflect = 0;
+            public int aura_cleanse_turn = 0;
+            public int aura_banner_token = 0;
             public int aura_evasion = 0;
+            public int aura_reflect = 0;
+            public int aura_dmg_reduce = 0;
             public int aura_leech = 0;
             public int aura_burn = 0;
             public int aura_poison = 0;
             public int aura_bleed = 0;
+            public int aura_cleave_pct = 0;
+            public int aura_pierce_pct = 0;
+            public int aura_anti_barrier = 0;
+            public int aura_center_atk = 0;
+            public int aura_flank_atk = 0;
+            public int aura_open_lane_atk = 0;
+            public int aura_pack_atk = 0;
+            public int aura_grave_atk = 0;
+            public int aura_low_hp_atk = 0;
+            public int aura_high_hp_atk = 0;
             public int aura_skill_disc = 0;
+            public int aura_skill_power = 0;
+            public int aura_spell_power = 0;
             public int aura_spell_ping = 0;
             public int aura_death_ping = 0;
             public int aura_weaken_opp = 0;
+            public int aura_survive_atk = 0;
+            public int aura_kill_heal = 0;
         }
 
         [Serializable]
@@ -304,22 +313,77 @@ namespace MonsterCardGame.Core
             return false;
         }
 
-        public static int GetUnitPiercePct(MonsterInstance unit)
+        public static bool HasMatchingTribeAlly(PlayerState owner)
         {
-            if (unit == null || unit.data == null || unit.silencedTurns > 0) return 0;
-            var mops = GetMonsterOps(unit.data);
-            if (mops == null || mops.passives == null) return 0;
-            int best = 0;
-            for (int i = 0; i < mops.passives.Count; i++)
+            if (!IsLeaderActiveForPlayer(owner) || owner.slots == null) return false;
+            foreach (var s in owner.slots)
             {
-                var p = mops.passives[i];
-                if (p == null) continue;
-                if (string.Equals(p.kind, "pierce", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(p.kind, "bypass", StringComparison.OrdinalIgnoreCase))
+                if (s != null && s.IsOccupied && s.currentMonster != null && s.currentMonster.IsAlive &&
+                    DoesUnitMatchOwnerLeader(s.currentMonster, owner))
                 {
-                    int pct = p.pct > 0 ? p.pct : (p.v1 > 0 ? p.v1 : 25);
-                    if (pct > best) best = pct;
+                    return true;
                 }
+            }
+            return false;
+        }
+
+        public static void SyncLeaderDefAura(PlayerState player)
+        {
+            if (player == null || player.slots == null) return;
+            int targetDef = 0;
+            if (IsLeaderActiveForPlayer(player))
+            {
+                var lops = GetLeaderOps(player.activeLeader);
+                if (lops != null && lops.aura_def > 0) targetDef = lops.aura_def;
+            }
+            foreach (var s in player.slots)
+            {
+                if (s == null || !s.IsOccupied || s.currentMonster == null || !s.currentMonster.IsAlive) continue;
+                var m = s.currentMonster;
+                int want = (targetDef > 0 && DoesUnitMatchOwnerLeader(m, player)) ? targetDef : 0;
+                int diff = want - m.leaderDefApplied;
+                if (diff > 0)
+                {
+                    m.baseDef += diff;
+                    m.currentDef += diff;
+                    m.leaderDefApplied = want;
+                }
+                else if (diff < 0)
+                {
+                    m.baseDef = Mathf.Max(1, m.baseDef + diff);
+                    m.currentDef = Mathf.Max(1, Mathf.Min(m.currentDef, m.baseDef + m.permBonusDef));
+                    m.leaderDefApplied = want;
+                }
+            }
+        }
+
+        public static int GetUnitPiercePct(MonsterInstance unit, PlayerState owner = null)
+        {
+            if (unit == null || unit.data == null) return 0;
+            int best = 0;
+            if (unit.silencedTurns <= 0)
+            {
+                var mops = GetMonsterOps(unit.data);
+                if (mops != null && mops.passives != null)
+                {
+                    for (int i = 0; i < mops.passives.Count; i++)
+                    {
+                        var p = mops.passives[i];
+                        if (p == null) continue;
+                        if (string.Equals(p.kind, "pierce", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(p.kind, "bypass", StringComparison.OrdinalIgnoreCase))
+                        {
+                            int pct = p.pct > 0 ? p.pct : (p.v1 > 0 ? p.v1 : 25);
+                            if (pct > best) best = pct;
+                        }
+                    }
+                }
+            }
+            if (owner != null && DoesUnitMatchOwnerLeader(unit, owner))
+            {
+                var lops = GetLeaderOps(owner.activeLeader);
+                if (lops != null && lops.aura_pierce_pct > 0)
+                    best += lops.aura_pierce_pct;
             }
             return best;
         }
@@ -382,14 +446,48 @@ namespace MonsterCardGame.Core
             if (unit == null || owner == null || unit.IsBarrier || unit.IsAllAttack) return 0;
             int delta = 0;
 
-            // 1. Owner-Only Leader Spirit Tribal Aura (Rule #6)
+            // 1. Owner-Only Pure Continuous Tribal Leader ATK Auras (V2.3)
             if (DoesUnitMatchOwnerLeader(unit, owner))
             {
                 var lops = GetLeaderOps(owner.activeLeader);
                 if (lops != null)
                 {
                     int sign = owner.leaderBetrayedTurns > 0 ? -1 : 1;
-                    delta += sign * lops.aura_atk;
+                    int slotIdx = unit.currentSlot != null ? unit.currentSlot.slotIndex : -1;
+                    int leaderAtk = lops.aura_atk;
+                    if (lops.aura_center_atk > 0 && (slotIdx == 2 || slotIdx == 3))
+                        leaderAtk += lops.aura_center_atk;
+                    if (lops.aura_flank_atk > 0 && (slotIdx == 0 || slotIdx == 1 || slotIdx == 4 || slotIdx == 5))
+                        leaderAtk += lops.aura_flank_atk;
+                    if (lops.aura_open_lane_atk > 0 && slotIdx >= 0 && slotIdx < 6 && GameManager.Instance != null)
+                    {
+                        var opp = (owner == GameManager.Instance.humanPlayer) ? GameManager.Instance.aiPlayer : GameManager.Instance.humanPlayer;
+                        if (opp != null && opp.slots != null && slotIdx < opp.slots.Length &&
+                            (opp.slots[slotIdx] == null || !opp.slots[slotIdx].IsOccupied))
+                        {
+                            leaderAtk += lops.aura_open_lane_atk;
+                        }
+                    }
+                    if (lops.aura_pack_atk > 0 && owner.slots != null)
+                    {
+                        int tCnt = 0;
+                        foreach (var s in owner.slots)
+                            if (s != null && s.IsOccupied && s.currentMonster != null && s.currentMonster.IsAlive &&
+                                DoesUnitMatchOwnerLeader(s.currentMonster, owner)) tCnt++;
+                        if (tCnt >= 3) leaderAtk += lops.aura_pack_atk;
+                    }
+                    if (lops.aura_grave_atk > 0 && owner.graveyard != null && !string.IsNullOrEmpty(owner.activeLeader.tribe))
+                    {
+                        int gCnt = 0;
+                        foreach (var gc in owner.graveyard)
+                            if (gc != null && string.Equals(gc.tribe, owner.activeLeader.tribe, StringComparison.OrdinalIgnoreCase)) gCnt++;
+                        leaderAtk += Mathf.Min(lops.aura_grave_atk, gCnt / 2);
+                    }
+                    if (lops.aura_low_hp_atk > 0 && owner.currentHp <= 220)
+                        leaderAtk += lops.aura_low_hp_atk;
+                    if (lops.aura_high_hp_atk > 0 && owner.currentHp >= 280)
+                        leaderAtk += lops.aura_high_hp_atk;
+                    delta += sign * leaderAtk;
                 }
             }
 
@@ -415,13 +513,15 @@ namespace MonsterCardGame.Core
         {
             if (player == null || instance == null || instance.data == null) return;
 
-            // 1. Leader Owner-Only DEF Aura on summon
+            // 1. Leader Owner-Only Pure Continuous DEF Aura on summon
             if (DoesUnitMatchOwnerLeader(instance, player))
             {
                 var lops = GetLeaderOps(player.activeLeader);
                 if (lops != null && lops.aura_def > 0)
                 {
-                    instance.AddBonusDef(lops.aura_def);
+                    instance.baseDef += lops.aura_def;
+                    instance.currentDef += lops.aura_def;
+                    instance.leaderDefApplied = lops.aura_def;
                 }
             }
 
@@ -507,110 +607,242 @@ namespace MonsterCardGame.Core
         public static void ApplyV2LeaderOnSummon(PlayerState player, PlayerState opponent, CardData leaderCard)
         {
             if (player == null || leaderCard == null) return;
-            var ops = GetLeaderOps(leaderCard);
-            if (ops == null) return;
-
             player.leaderExorcised = false;
             player.leaderBetrayedTurns = 0;
             player.leaderMutedTurns = 0;
 
-            // V2.1 Balance Rule: On-Summon Trigger requires at least 1 matching-Tribe ally on your board
-            bool hasTribeAlly = false;
-            if (player.slots != null)
+            // V2.3 Pure Continuous Tribal Ancestor Blessing: ZERO On-Summon burst!
+            // Immediately synchronize continuous +DEF aura to all matching-Tribe allies on board.
+            SyncLeaderDefAura(player);
+        }
+
+        public static void ApplyLeaderStartOfTurn(PlayerState activePlayer, PlayerState otherPlayer)
+        {
+            if (!IsLeaderActiveForPlayer(activePlayer)) return;
+            var lops = GetLeaderOps(activePlayer.activeLeader);
+            if (lops == null) return;
+
+            if (lops.aura_heal_hp > 0 && HasMatchingTribeAlly(activePlayer))
+                activePlayer.HealLeader(lops.aura_heal_hp, otherPlayer);
+
+            if (lops.aura_heal_def > 0 && activePlayer.slots != null)
             {
-                foreach (var s in player.slots)
+                foreach (var s in activePlayer.slots)
                 {
                     if (s != null && s.IsOccupied && s.currentMonster != null && s.currentMonster.IsAlive &&
-                        DoesUnitMatchOwnerLeader(s.currentMonster, player))
+                        DoesUnitMatchOwnerLeader(s.currentMonster, activePlayer))
                     {
-                        hasTribeAlly = true;
-                        break;
+                        s.currentMonster.HealDefense(lops.aura_heal_def);
                     }
                 }
             }
-            if (!hasTribeAlly) return;
 
-            if (ops.summon_heal_hp > 0) player.HealLeader(ops.summon_heal_hp, opponent);
-            if (ops.summon_dmg_face > 0 && opponent != null) opponent.TakeLeaderDamage(ops.summon_dmg_face);
-            if (ops.summon_dmg_enemy > 0 && opponent != null && opponent.slots != null)
+            if (lops.aura_cleanse_turn > 0 && activePlayer.slots != null)
             {
-                foreach (var s in opponent.slots)
+                MonsterInstance chosen = null;
+                foreach (var s in activePlayer.slots)
+                {
+                    if (s == null || !s.IsOccupied || s.currentMonster == null || !s.currentMonster.IsAlive) continue;
+                    var m = s.currentMonster;
+                    if (!DoesUnitMatchOwnerLeader(m, activePlayer)) continue;
+                    if (m.burnDmg > 0 || m.poisonDmg > 0 || m.bleedDmg > 0 || m.frozenTurns > 0 || m.silencedTurns > 0 || m.rootedTurns > 0 || m.weakenedTurns > 0 || m.weakenedAtkFlat > 0)
+                    {
+                        chosen = m;
+                        break;
+                    }
+                }
+                if (chosen == null)
+                {
+                    foreach (var s in activePlayer.slots)
+                    {
+                        if (s == null || !s.IsOccupied || s.currentMonster == null || !s.currentMonster.IsAlive) continue;
+                        var m = s.currentMonster;
+                        if (DoesUnitMatchOwnerLeader(m, activePlayer) && m.currentDef < m.baseDef + m.permBonusDef)
+                        {
+                            chosen = m;
+                            break;
+                        }
+                    }
+                }
+                if (chosen != null)
+                {
+                    chosen.burnDmg = 0;
+                    chosen.poisonDmg = 0;
+                    chosen.bleedDmg = 0;
+                    chosen.frozenTurns = 0;
+                    chosen.silencedTurns = 0;
+                    chosen.rootedTurns = 0;
+                    chosen.weakenedTurns = 0;
+                    chosen.weakenedAtkFlat = 0;
+                    chosen.HealDefense(lops.aura_cleanse_turn);
+                }
+            }
+
+            if (lops.aura_banner_token > 0 && activePlayer.slots != null)
+            {
+                bool boardEmpty = true;
+                foreach (var s in activePlayer.slots)
                 {
                     if (s != null && s.IsOccupied && s.currentMonster != null && s.currentMonster.IsAlive)
                     {
-                        s.currentMonster.TakeDamage(ops.summon_dmg_enemy);
-                        if (!s.currentMonster.IsAlive)
+                        boardEmpty = false;
+                        break;
+                    }
+                }
+                if (boardEmpty)
+                {
+                    var emptySlot = FindFirstEmptySlot(activePlayer);
+                    if (emptySlot != null)
+                    {
+                        var tokData = new CardData
                         {
-                            opponent.graveyard.Add(s.currentMonster.data);
-                            s.ClearSlot();
+                            id = 0,
+                            name = $"{activePlayer.activeLeader.tribe} Banner",
+                            cardType = CardType.Monster,
+                            card_type = "monster",
+                            tribe = activePlayer.activeLeader.tribe ?? "",
+                            element = "None",
+                            cost = 1,
+                            atk = lops.aura_banner_token,
+                            def = lops.aura_banner_token + 2
+                        };
+                        var tokInst = new MonsterInstance(tokData, GameManager.Instance != null ? GameManager.Instance.currentTurn : 1);
+                        emptySlot.PlaceMonster(tokInst);
+                        SyncLeaderDefAura(activePlayer);
+                    }
+                }
+            }
+        }
+
+        public static float GetLeaderEvasionChance(PlayerState defenderOwner, MonsterInstance defender)
+        {
+            if (!DoesUnitMatchOwnerLeader(defender, defenderOwner)) return 0f;
+            var lops = GetLeaderOps(defenderOwner.activeLeader);
+            return (lops != null && lops.aura_evasion > 0) ? (lops.aura_evasion / 100f) : 0f;
+        }
+
+        public static int GetLeaderIncomingReduction(PlayerState defenderOwner, MonsterInstance defender)
+        {
+            if (!DoesUnitMatchOwnerLeader(defender, defenderOwner)) return 0;
+            var lops = GetLeaderOps(defenderOwner.activeLeader);
+            return (lops != null && lops.aura_dmg_reduce > 0) ? lops.aura_dmg_reduce : 0;
+        }
+
+        public static int GetLeaderEnemyDreadPenalty(PlayerState opponent)
+        {
+            if (!HasMatchingTribeAlly(opponent)) return 0;
+            var lops = GetLeaderOps(opponent.activeLeader);
+            return (lops != null && lops.aura_weaken_opp > 0) ? lops.aura_weaken_opp : 0;
+        }
+
+        public static int GetLeaderSkillManaDiscount(PlayerState owner, MonsterInstance unit)
+        {
+            if (!DoesUnitMatchOwnerLeader(unit, owner)) return 0;
+            var lops = GetLeaderOps(owner.activeLeader);
+            return (lops != null && lops.aura_skill_disc > 0) ? lops.aura_skill_disc : 0;
+        }
+
+        public static int GetLeaderSkillPowerBonus(PlayerState owner, MonsterInstance unit)
+        {
+            if (!DoesUnitMatchOwnerLeader(unit, owner)) return 0;
+            var lops = GetLeaderOps(owner.activeLeader);
+            return (lops != null && lops.aura_skill_power > 0) ? lops.aura_skill_power : 0;
+        }
+
+        public static int GetLeaderSpellPowerBonus(PlayerState owner)
+        {
+            if (!HasMatchingTribeAlly(owner)) return 0;
+            var lops = GetLeaderOps(owner.activeLeader);
+            return (lops != null && lops.aura_spell_power > 0) ? lops.aura_spell_power : 0;
+        }
+
+        public static int ModifyLeaderOutgoingAttack(PlayerState attackerOwner, MonsterInstance attacker, MonsterInstance defender, int atkPower)
+        {
+            if (defender != null && DoesUnitMatchOwnerLeader(attacker, attackerOwner))
+            {
+                var lops = GetLeaderOps(attackerOwner.activeLeader);
+                if (lops != null && lops.aura_anti_barrier > 0 &&
+                    (defender.IsBarrier || defender.HasPassiveSubstr("Taunt") != null))
+                {
+                    atkPower += lops.aura_anti_barrier;
+                }
+            }
+            return Mathf.Max(0, atkPower);
+        }
+
+        public static void OnLeaderCombatHitDealt(PlayerState attackerOwner, MonsterInstance attacker, PlayerState defenderOwner, MonsterInstance defender, int dmgDealt)
+        {
+            if (dmgDealt > 0 && attacker != null && DoesUnitMatchOwnerLeader(attacker, attackerOwner))
+            {
+                var lops = GetLeaderOps(attackerOwner.activeLeader);
+                if (lops != null)
+                {
+                    if (lops.aura_leech > 0)
+                        attackerOwner.HealLeader(Mathf.Max(1, StrictRoundPct(dmgDealt, lops.aura_leech)), defenderOwner);
+                    if (defender != null && defender.IsAlive)
+                    {
+                        if (lops.aura_burn > 0) defender.burnDmg += lops.aura_burn;
+                        if (lops.aura_poison > 0) defender.poisonDmg += lops.aura_poison;
+                        if (lops.aura_bleed > 0) defender.bleedDmg += lops.aura_bleed;
+                    }
+                    if (lops.aura_cleave_pct > 0 && defender != null && defender.currentSlot != null && defenderOwner != null && defenderOwner.slots != null)
+                    {
+                        int cDmg = Mathf.Max(1, StrictRoundPct(dmgDealt, lops.aura_cleave_pct));
+                        int dSlot = defender.currentSlot.slotIndex;
+                        foreach (int adj in new[] { dSlot - 1, dSlot + 1 })
+                        {
+                            if (adj >= 0 && adj < defenderOwner.slots.Length &&
+                                defenderOwner.slots[adj] != null && defenderOwner.slots[adj].IsOccupied &&
+                                defenderOwner.slots[adj].currentMonster != null && defenderOwner.slots[adj].currentMonster.IsAlive)
+                            {
+                                var adjM = defenderOwner.slots[adj].currentMonster;
+                                adjM.TakeDamage(cDmg);
+                                if (!adjM.IsAlive)
+                                    CombatSystem.Instance?.HandleMonsterDeath(defenderOwner, attackerOwner, adj, adjM, attacker);
+                            }
                         }
                     }
                 }
             }
-            if ((ops.summon_buff_atk > 0 || ops.summon_buff_def > 0) && player.slots != null)
+
+            if (dmgDealt > 0 && defender != null && DoesUnitMatchOwnerLeader(defender, defenderOwner))
             {
-                foreach (var s in player.slots)
+                var dlops = GetLeaderOps(defenderOwner.activeLeader);
+                if (dlops != null)
                 {
-                    if (s != null && s.IsOccupied && s.currentMonster != null && s.currentMonster.IsAlive)
+                    if (dlops.aura_reflect > 0 && attacker != null && attacker.IsAlive)
                     {
-                        s.currentMonster.ApplyPermBuff(ops.summon_buff_atk, ops.summon_buff_def);
+                        attacker.TakeDamage(dlops.aura_reflect);
+                        if (!attacker.IsAlive && attacker.currentSlot != null)
+                            CombatSystem.Instance?.HandleMonsterDeath(attackerOwner, defenderOwner, attacker.currentSlot.slotIndex, attacker, defender);
+                    }
+                    if (dlops.aura_survive_atk > 0 && defender.IsAlive && !defender.IsBarrier && !defender.IsAllAttack)
+                    {
+                        defender.ApplyPermBuff(dlops.aura_survive_atk, 0);
                     }
                 }
             }
-            for (int i = 0; i < ops.summon_draw; i++) player.DrawCard();
-            if (ops.summon_mana > 0) player.currentMana += ops.summon_mana;
-            if (ops.summon_cleanse && player.slots != null)
+        }
+
+        public static void OnLeaderMonsterDied(PlayerState deadOwner, PlayerState killerOwner, MonsterInstance deadM, MonsterInstance killerM)
+        {
+            if (deadM != null && DoesUnitMatchOwnerLeader(deadM, deadOwner))
             {
-                foreach (var s in player.slots)
+                var lops = GetLeaderOps(deadOwner.activeLeader);
+                if (lops != null && lops.aura_death_ping > 0)
                 {
-                    if (s != null && s.IsOccupied && s.currentMonster != null)
-                    {
-                        s.currentMonster.burnDmg = 0;
-                        s.currentMonster.poisonDmg = 0;
-                        s.currentMonster.bleedDmg = 0;
-                        s.currentMonster.frozenTurns = 0;
-                        s.currentMonster.silencedTurns = 0;
-                        s.currentMonster.weakenedTurns = 0;
-                        s.currentMonster.weakenedAtkFlat = 0;
-                    }
+                    var gm = GameManager.Instance;
+                    var opp = killerOwner ?? ((gm != null && deadOwner == gm.humanPlayer) ? gm.aiPlayer : gm?.humanPlayer);
+                    opp?.TakeLeaderDamage(lops.aura_death_ping);
                 }
             }
-            if (opponent != null && opponent.slots != null)
+            if (killerM != null && killerM.IsAlive && killerOwner != null && killerOwner != deadOwner &&
+                DoesUnitMatchOwnerLeader(killerM, killerOwner))
             {
-                if (ops.summon_weaken > 0)
+                var klops = GetLeaderOps(killerOwner.activeLeader);
+                if (klops != null && klops.aura_kill_heal > 0)
                 {
-                    foreach (var s in opponent.slots)
-                        if (s != null && s.IsOccupied && s.currentMonster != null)
-                            s.currentMonster.weakenedAtkFlat += ops.summon_weaken;
-                }
-                if (ops.summon_burn > 0)
-                {
-                    foreach (var s in opponent.slots)
-                        if (s != null && s.IsOccupied && s.currentMonster != null)
-                            s.currentMonster.burnDmg += ops.summon_burn;
-                }
-                if (ops.summon_poison > 0)
-                {
-                    foreach (var s in opponent.slots)
-                        if (s != null && s.IsOccupied && s.currentMonster != null)
-                            s.currentMonster.poisonDmg += ops.summon_poison;
-                }
-                if (ops.summon_bleed > 0)
-                {
-                    foreach (var s in opponent.slots)
-                        if (s != null && s.IsOccupied && s.currentMonster != null)
-                            s.currentMonster.bleedDmg += ops.summon_bleed;
-                }
-            }
-            if (ops.summon_double_skill && player.slots != null)
-            {
-                foreach (var s in player.slots)
-                {
-                    if (s != null && s.IsOccupied && s.currentMonster != null && !s.currentMonster.IsBarrier)
-                    {
-                        s.currentMonster.doubleSkillOneTurn = true;
-                        break;
-                    }
+                    killerM.HealDefense(klops.aura_kill_heal);
                 }
             }
         }
@@ -688,7 +920,7 @@ namespace MonsterCardGame.Core
             var op = GetSpellOps(spellCard);
             if (op == null || string.IsNullOrEmpty(op.kind)) return false;
 
-            int spBonus = 0;
+            int spBonus = GetLeaderSpellPowerBonus(caster);
             if (IsCovenantActiveForPlayer(caster))
             {
                 var cov = GetCovenantOps(caster.activeCovenant);
@@ -707,6 +939,7 @@ namespace MonsterCardGame.Core
                         target.activeLeader = null;
                     }
                     target.leaderExorcised = true;
+                    SyncLeaderDefAura(target);
                     BattleUIManager.Instance?.LogCombatMessage($"⚡ [Exorcism] Banished [{target.playerName}]'s Commander Spirit Talisman!", spellCard);
                     BattleUIManager.Instance?.UpdateLeaderSlotsUI();
                     break;
@@ -732,6 +965,7 @@ namespace MonsterCardGame.Core
                 case "counter_stand_alone":
                     target.leaderMutedTurns = 2;
                     target.covenantMutedTurns = 2;
+                    SyncLeaderDefAura(target);
                     BattleUIManager.Instance?.LogCombatMessage($"⚡ [Stand Alone] Muted [{target.playerName}]'s Spirit & Covenant for 2 turns!", spellCard);
                     break;
 
@@ -741,11 +975,33 @@ namespace MonsterCardGame.Core
                     var es = PickEnemySlot(target, targetSlotIdx);
                     if (es != null && es.IsOccupied && es.currentMonster != null)
                     {
-                        es.currentMonster.TakeDamage(Mathf.Max(6, v1));
-                        if (!es.currentMonster.IsAlive)
+                        if (op.kind == "melt_enemy_def")
                         {
-                            target.graveyard.Add(es.currentMonster.data);
-                            es.ClearSlot();
+                            int cut = Mathf.Max(1, StrictRoundPct(es.currentMonster.currentDef, op.pct > 0 ? op.pct : 50));
+                            es.currentMonster.currentDef = Mathf.Max(1, es.currentMonster.currentDef - cut);
+                            es.currentMonster.baseDef = Mathf.Max(1, es.currentMonster.baseDef - cut);
+                            if (op.poison > 0) es.currentMonster.poisonDmg += op.poison;
+                            if (op.bleed > 0) es.currentMonster.bleedDmg += op.bleed;
+                            if (op.silence) es.currentMonster.silencedTurns = Mathf.Max(1, es.currentMonster.silencedTurns + Mathf.Max(1, op.dur));
+                        }
+                        else if (op.kind == "cleave_enemy" && target.slots != null)
+                        {
+                            int baseSl = es.slotIndex;
+                            for (int sl = baseSl - 1; sl <= baseSl + 1; sl++)
+                            {
+                                if (sl < 0 || sl >= target.slots.Length || target.slots[sl] == null || !target.slots[sl].IsOccupied) continue;
+                                var em = target.slots[sl].currentMonster;
+                                if (em == null || !em.IsAlive) continue;
+                                if (op.v1 > 0) em.TakeDamage(v1);
+                                if (em.IsAlive) ApplySpellFxOnUnit(em, op);
+                                if (!em.IsAlive) { target.graveyard.Add(em.data); target.slots[sl].ClearSlot(); }
+                            }
+                        }
+                        else
+                        {
+                            if (op.v1 > 0) es.currentMonster.TakeDamage(v1);
+                            if (es.currentMonster.IsAlive) ApplySpellFxOnUnit(es.currentMonster, op);
+                            if (!es.currentMonster.IsAlive) { target.graveyard.Add(es.currentMonster.data); es.ClearSlot(); }
                         }
                     }
                     break;
@@ -754,24 +1010,142 @@ namespace MonsterCardGame.Core
                 case "aoe_enemy":
                     if (target.slots != null)
                     {
+                        int aoeDmg = op.v1 > 0 ? v1 : 0;
+                        if (op.grave_mult > 0 && caster.graveyard != null)
+                        {
+                            int mCnt = 0;
+                            foreach (var g in caster.graveyard) if (g != null && g.cardType == CardType.Monster) mCnt++;
+                            aoeDmg = Mathf.Min(op.cap > 0 ? op.cap : 42, op.grave_mult * mCnt) + spBonus;
+                        }
+                        int hitCount = 0;
                         foreach (var s in target.slots)
                         {
                             if (s != null && s.IsOccupied && s.currentMonster != null && s.currentMonster.IsAlive)
                             {
-                                s.currentMonster.TakeDamage(Mathf.Max(5, v1));
-                                if (!s.currentMonster.IsAlive)
+                                if (op.cnt > 1 && hitCount >= op.cnt) break;
+                                hitCount++;
+                                if (aoeDmg > 0) s.currentMonster.TakeDamage(aoeDmg);
+                                if (s.currentMonster.IsAlive) ApplySpellFxOnUnit(s.currentMonster, op);
+                                if (!s.currentMonster.IsAlive) { target.graveyard.Add(s.currentMonster.data); s.ClearSlot(); }
+                            }
+                        }
+                        if (op.face_match && aoeDmg > 0) target.TakeLeaderDamage(aoeDmg);
+                    }
+                    break;
+
+                case "dmg_leader":
+                    if (op.board_atk_cap > 0 && caster.slots != null)
+                    {
+                        int bSum = 0;
+                        foreach (var s in caster.slots)
+                            if (s != null && s.IsOccupied && s.currentMonster != null && s.currentMonster.IsAlive)
+                                bSum += s.currentMonster.GetEffectiveAtk(GameManager.Instance != null ? GameManager.Instance.activeEnvironment : null, caster);
+                        target.TakeLeaderDamage(Mathf.Min(op.board_atk_cap, bSum) + spBonus);
+                    }
+                    else
+                    {
+                        target.TakeLeaderDamage(Mathf.Max(8, v1));
+                    }
+                    break;
+
+                case "reduce_enemy_max_mana":
+                    target.power = Mathf.Max(1, target.power - Mathf.Max(1, op.v1));
+                    if (target.slots != null)
+                    {
+                        foreach (var s in target.slots)
+                        {
+                            if (s == null || !s.IsOccupied || s.currentMonster == null || !s.currentMonster.IsAlive) continue;
+                            if (op.silence_all) s.currentMonster.silencedTurns = Mathf.Max(s.currentMonster.silencedTurns, Mathf.Max(1, op.dur));
+                            if (op.root_all) s.currentMonster.rootedTurns = Mathf.Max(s.currentMonster.rootedTurns, Mathf.Max(2, op.dur));
+                        }
+                    }
+                    break;
+
+                case "def_slam":
+                    if (caster.slots != null)
+                    {
+                        int capV = op.cap > 0 ? op.cap : 99;
+                        if (op.center_aoe)
+                        {
+                            int cSum = 0;
+                            foreach (int ci in new[] { 2, 3 })
+                                if (ci < caster.slots.Length && caster.slots[ci] != null && caster.slots[ci].IsOccupied && caster.slots[ci].currentMonster != null)
+                                    cSum += caster.slots[ci].currentMonster.currentDef;
+                            int slam = Mathf.Min(capV, StrictRoundPct(cSum, op.pct > 0 ? op.pct : 50)) + (cSum > 0 ? spBonus : 0);
+                            if (slam > 0 && target.slots != null)
+                            {
+                                foreach (var s in target.slots)
+                                    if (s != null && s.IsOccupied && s.currentMonster != null && s.currentMonster.IsAlive)
+                                    {
+                                        s.currentMonster.TakeDamage(slam);
+                                        if (!s.currentMonster.IsAlive) { target.graveyard.Add(s.currentMonster.data); s.ClearSlot(); }
+                                    }
+                                target.TakeLeaderDamage(slam);
+                            }
+                        }
+                        else
+                        {
+                            int bestDef = 0;
+                            foreach (var s in caster.slots)
+                                if (s != null && s.IsOccupied && s.currentMonster != null && s.currentMonster.currentDef > bestDef)
+                                    bestDef = s.currentMonster.currentDef;
+                            int slam = Mathf.Min(capV, StrictRoundPct(bestDef, op.pct > 0 ? op.pct : 50)) + (bestDef > 0 ? spBonus : 0);
+                            var tSl = PickEnemySlot(target, targetSlotIdx);
+                            if (slam > 0 && tSl != null && target.slots != null)
+                            {
+                                if (op.cleave)
                                 {
-                                    target.graveyard.Add(s.currentMonster.data);
-                                    s.ClearSlot();
+                                    for (int sl = tSl.slotIndex - 1; sl <= tSl.slotIndex + 1; sl++)
+                                    {
+                                        if (sl < 0 || sl >= target.slots.Length || target.slots[sl] == null || !target.slots[sl].IsOccupied) continue;
+                                        target.slots[sl].currentMonster.TakeDamage(slam);
+                                        if (!target.slots[sl].currentMonster.IsAlive) { target.graveyard.Add(target.slots[sl].currentMonster.data); target.slots[sl].ClearSlot(); }
+                                    }
+                                }
+                                else if (tSl.currentMonster != null)
+                                {
+                                    tSl.currentMonster.TakeDamage(slam);
+                                    if (!tSl.currentMonster.IsAlive) { target.graveyard.Add(tSl.currentMonster.data); tSl.ClearSlot(); }
                                 }
                             }
                         }
                     }
                     break;
 
-                case "dmg_leader":
-                    target.TakeLeaderDamage(Mathf.Max(8, v1));
+                case "random_bolts":
+                {
+                    int bolts = Mathf.Max(1, op.cnt > 0 ? op.cnt : 4);
+                    int bdmg = Mathf.Max(1, (op.dmg > 0 ? op.dmg : 8) + spBonus);
+                    for (int b = 0; b < bolts; b++)
+                    {
+                        var alive = new List<BoardSlot>();
+                        if (target.slots != null)
+                            foreach (var s in target.slots)
+                                if (s != null && s.IsOccupied && s.currentMonster != null && s.currentMonster.IsAlive) alive.Add(s);
+                        if (alive.Count > 0 && UnityEngine.Random.value < 0.7f)
+                        {
+                            var pick = alive[UnityEngine.Random.Range(0, alive.Count)];
+                            pick.currentMonster.TakeDamage(bdmg);
+                            if (!pick.currentMonster.IsAlive) { target.graveyard.Add(pick.currentMonster.data); pick.ClearSlot(); }
+                        }
+                        else
+                        {
+                            target.TakeLeaderDamage(bdmg);
+                        }
+                    }
                     break;
+                }
+
+                case "trigger_lb":
+                {
+                    var lbSlot = PickAllySlot(caster, targetSlotIdx);
+                    if (lbSlot != null && lbSlot.currentMonster != null)
+                    {
+                        caster.HealLeader(10, target);
+                        target.TakeLeaderDamage(8 + spBonus);
+                    }
+                    break;
+                }
 
                 case "heal_leader":
                     caster.HealLeader(Mathf.Max(8, v1), target);
@@ -971,8 +1345,8 @@ namespace MonsterCardGame.Core
                     break;
             }
 
-            // Trigger Leader Spell-Ping Aura if active
-            if (IsLeaderActiveForPlayer(caster))
+            // Trigger Leader Spell-Ping Aura if active and controlling a matching-Tribe ally
+            if (HasMatchingTribeAlly(caster))
             {
                 var lops = GetLeaderOps(caster.activeLeader);
                 if (lops != null && lops.aura_spell_ping > 0)
@@ -1009,14 +1383,6 @@ namespace MonsterCardGame.Core
                         }
                     }
                 }
-
-                // Leader turn-end heal aura
-                if (IsLeaderActiveForPlayer(activePlayer))
-                {
-                    var lops = GetLeaderOps(activePlayer.activeLeader);
-                    if (lops != null && lops.aura_heal_hp > 0)
-                        activePlayer.HealLeader(lops.aura_heal_hp, otherPlayer);
-                }
             }
 
             // Turn 41+ Sudden Death Penalty (-100 HP to BOTH Commanders!)
@@ -1026,6 +1392,29 @@ namespace MonsterCardGame.Core
                 activePlayer.TakeLeaderDamage(100);
                 otherPlayer.TakeLeaderDamage(100);
             }
+        }
+
+        private static void ApplySpellFxOnUnit(MonsterInstance m, V2OpItem op)
+        {
+            if (m == null || op == null) return;
+            int dur = Mathf.Max(1, op.dur);
+            if (!string.IsNullOrEmpty(op.fx))
+            {
+                switch (op.fx)
+                {
+                    case "burn": m.burnDmg += Mathf.Max(1, op.v2); break;
+                    case "poison": m.poisonDmg += Mathf.Max(1, op.v2); break;
+                    case "bleed": m.bleedDmg += Mathf.Max(1, op.v2); break;
+                    case "weaken": m.weakenedAtkFlat += Mathf.Max(1, op.v2); break;
+                    case "freeze": m.frozenTurns = Mathf.Max(m.frozenTurns, dur); break;
+                    case "silence": m.silencedTurns = Mathf.Max(m.silencedTurns, dur); break;
+                    case "root": m.rootedTurns = Mathf.Max(m.rootedTurns, dur); break;
+                }
+            }
+            if (op.weaken > 0) m.weakenedAtkFlat += op.weaken;
+            if (op.bleed > 0) m.bleedDmg += op.bleed;
+            if (op.root) m.rootedTurns = Mathf.Max(m.rootedTurns, dur);
+            if (op.silence) m.silencedTurns = Mathf.Max(m.silencedTurns, dur);
         }
 
         private static BoardSlot PickEnemySlot(PlayerState opp, int preferredIdx)

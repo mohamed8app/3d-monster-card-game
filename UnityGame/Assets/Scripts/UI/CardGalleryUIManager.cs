@@ -2361,6 +2361,7 @@ namespace MonsterCardGame.UI
                 CardType.Spell => $"🔮 #{card.id} T{Mathf.Max(1, card.tier_num)}",
                 CardType.Environment => $"🌋 {card.element} Environment",
                 CardType.Leader => $"👑 #{card.id} {tribeEmoji} {card.tribe}",
+                CardType.Covenant => $"⚖️ #{card.id} T{Mathf.Max(1, card.tier_num)}",
                 _ => $"#{card.id}"
             };
 
@@ -2436,6 +2437,7 @@ namespace MonsterCardGame.UI
                 CardType.Spell => $"💎{card.cost}   • {card.role}",
                 CardType.Environment => $"💎{card.cost}   • Permanent Arena Weather (Levels 1-3)",
                 CardType.Leader => $"💎{card.cost}   • {MonsterArtLoader.FormatSpiritTitle(card)}",
+                CardType.Covenant => $"🩸{card.cost}   • ⚖️ {card.playstyle} Covenant",
                 _ => ""
             };
             var ftr = GameBootstrapper.CreateText(cellObj.transform, "CellFooter", footerText, 10,
@@ -2732,6 +2734,53 @@ namespace MonsterCardGame.UI
 
                 var lbl = GameBootstrapper.CreateText(root.transform, "SpellFieldLbl", "BATTLEFIELD SPELL CAST", 10,
                     new Color(0.86f, 0.78f, 1f), TextAnchor.MiddleCenter, new Vector2(0f, -74f), new Vector2(144f, 20f));
+                lbl.fontStyle = FontStyle.Bold;
+                lbl.raycastTarget = false;
+            }
+            else if (card.cardType == CardType.Covenant)
+            {
+                var circleObj = GameBootstrapper.CreatePanel(root.transform, "CovenantAltarCircle",
+                    new Color(0.88f, 0.22f, 0.24f, 0.65f),
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 10f), new Vector2(142f, 142f));
+                var cImg = circleObj.GetComponent<Image>();
+                cImg.sprite = GameBootstrapper.GetSummoningCircleSprite();
+                cImg.raycastTarget = false;
+
+                var covToken = GameBootstrapper.CreatePanel(root.transform, "CovenantAltarToken", Color.clear,
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 10f), new Vector2(114f, 152f));
+                var covImg = covToken.GetComponent<Image>();
+                covImg.sprite = MonsterArtLoader.GetCovenantFrameSprite();
+                covImg.color = Color.white;
+                covImg.preserveAspect = true;
+                covImg.raycastTarget = false;
+
+                var emblem = GameBootstrapper.CreateText(covToken.transform, "CovFieldEmblem", $"⚖️\n#{card.id}", 15,
+                    new Color(0.96f, 0.82f, 0.45f), TextAnchor.MiddleCenter, new Vector2(0f, 27f), new Vector2(68f, 40f));
+                emblem.fontStyle = FontStyle.Bold;
+                emblem.raycastTarget = false;
+                GameBootstrapper.AddTextShadow(emblem);
+
+                var nameTxt = GameBootstrapper.CreateText(covToken.transform, "CovFieldName", card.name, 8,
+                    new Color(0.18f, 0.08f, 0.04f), TextAnchor.MiddleCenter, new Vector2(0f, -32f), new Vector2(66f, 24f));
+                nameTxt.fontStyle = FontStyle.Bold;
+                nameTxt.resizeTextForBestFit = true;
+                nameTxt.resizeTextMinSize = 6;
+                nameTxt.resizeTextMaxSize = 8;
+                nameTxt.horizontalOverflow = HorizontalWrapMode.Wrap;
+                nameTxt.verticalOverflow = VerticalWrapMode.Truncate;
+                nameTxt.raycastTarget = false;
+
+                var costTxt = GameBootstrapper.CreateText(covToken.transform, "CovFieldCost", card.cost.ToString(), 13,
+                    new Color(1f, 0.95f, 0.85f), TextAnchor.MiddleCenter, new Vector2(0f, 12f), new Vector2(24f, 22f));
+                costTxt.rectTransform.anchorMin = new Vector2(0.5f, 0f);
+                costTxt.rectTransform.anchorMax = new Vector2(0.5f, 0f);
+                costTxt.rectTransform.anchoredPosition = new Vector2(0f, 12f);
+                costTxt.fontStyle = FontStyle.Bold;
+                costTxt.raycastTarget = false;
+                GameBootstrapper.AddTextShadow(costTxt);
+
+                var lbl = GameBootstrapper.CreateText(root.transform, "CovenantFieldLbl", "RIGHT-WING ALTAR COVENANT", 9,
+                    new Color(0.96f, 0.78f, 0.36f), TextAnchor.MiddleCenter, new Vector2(0f, -76f), new Vector2(148f, 18f));
                 lbl.fontStyle = FontStyle.Bold;
                 lbl.raycastTarget = false;
             }

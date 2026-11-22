@@ -35,7 +35,9 @@ from .card_model import (
 )
 
 # === Fixed RL Interface Dimensions ===
-ACTION_DIM = 62   # 0: EndTurn, 1..7: Sacrifice h, 8..49: Play h at slot s, 50..61: Active slot s skill k
+AETHER_DRAW_COST = 2
+AETHER_DRAW_ACTION = 62
+ACTION_DIM = 63   # 0: EndTurn, 1..7: Sacrifice h, 8..49: Play h at slot s, 50..61: Active slot s skill k, 62: Aether Draw (2 Mana, 1x/turn)
 OBS_DIM = 220     # 160 core state features + 60 raw passive/active/status indicator lights (18 ally + 42 enemy)
 
 
@@ -67,6 +69,18 @@ class BattleEngine:
         self._max_deficit: List[int] = [0, 0]
         self._turn_events: List[Tuple[int, ...]] = []
         self._dmg_cause: str = "passive"
+        self._pace_first_summon: int = 0
+        self._pace_first_attack: int = 0
+        self._pace_first_death: int = 0
+        self._pace_first_defense: int = 0
+        self._pace_last_impact_turn: int = 0
+        self._pace_turn_skills: int = 0
+        self._pace_turn_attacks: int = 0
+        self._turn_mana_spent: int = 0
+        self._turn_recorded: bool = True
+        self._turn_face_dmg: int = 0
+        self._vc_kill_channel: int = 5
+        self._hp_history: List[Tuple[int, int, int]] = []
 
     def _add_highlight(self, side: int, tag: str) -> None:
         if side in (0, 1):
@@ -107,10 +121,24 @@ class BattleEngine:
         self._turn_dmg = 0
         self._turn_kills = 0
         self._turn_highlights = 0
+        self._pace_turn_skills = 0
+        self._pace_turn_attacks = 0
         self._lead_side = -1
         self._max_deficit = [0, 0]
         self._turn_events = []
         self._dmg_cause = "passive"
+        self._pace_first_summon = 0
+        self._pace_first_attack = 0
+        self._pace_first_death = 0
+        self._pace_first_defense = 0
+        self._pace_last_impact_turn = 0
+        self._pace_turn_skills = 0
+        self._pace_turn_attacks = 0
+        self._turn_mana_spent = 0
+        self._turn_recorded = True
+        self._turn_face_dmg = 0
+        self._vc_kill_channel = 5
+        self._hp_history = []
         self.players[self.active].telemetry.went_first = True
 
         # Opening hands: first player draws 4, second player draws 5
@@ -118,6 +146,10 @@ class BattleEngine:
             n_open = 4 if side == self.active else 5
             for _ in range(n_open):
                 self._draw_card(side, check_deckout=False)
+            p_cur = self.players[side]
+            p_cur.telemetry.cf_open_playable = any(self.db.get(hc.card_id).mana <= 2 for hc in p_cur.hand)
+            if any(self.db.get(hc.card_id).type in ("leader", "covenant") for hc in p_cur.hand):
+                p_cur.telemetry.cf_early_special = True
 
         self._begin_turn(self.active)
 
@@ -131,7 +163,18 @@ class BattleEngine:
         self._turn_dmg = 0
         self._turn_kills = 0
         self._turn_highlights = 0
+        self._pace_turn_skills = 0
+        self._pace_turn_attacks = 0
+        self._turn_mana_spent = 0
+        self._turn_recorded = False
+        self._turn_face_dmg = 0
+        self._dmg_cause = "passive"
         p.sacrificed_this_turn = False
+        p.aether_drawn_this_turn = False
+        if self.turn == 4 and not self.players[0].telemetry.cf_t4_recorded:
+            p1_s = 0 if self.players[0].telemetry.went_first else 1
+            self.players[0].telemetry.cf_t4_hp_diff = self.players[p1_s].hp - self.players[1 - p1_s].hp
+            self.players[0].telemetry.cf_t4_recorded = True
         p.cards_played_turn = 0
         p.summons_turn = 0
         p.echo_next_spell = False
@@ -150,11 +193,14 @@ class BattleEngine:
         # Leader mute countdown
         if p.leader_muted_turns > 0:
             p.leader_muted_turns -= 1
+            if p.leader_muted_turns == 0:
+                self._sync_leader_def_aura(side)
 
-        # Refresh mana (Constitution: +1 automatic mana per turn up to cap; sacrifice can ramp faster)
-        if self.turn > 1 or side != self.active:
-            if p.max_mana < p.mana_cap():
-                p.max_mana += 1
+        # Aether Well: +1 permanent Aether (up to cap) & full Mana refill every turn automatically (1+1)!
+        if p.max_mana < p.mana_cap():
+            p.max_mana += 1
+        if p.max_mana >= p.mana_cap() and p.telemetry.re_reach_cap_turn == 0:
+            p.telemetry.re_reach_cap_turn = self.turn
         locked = p.locked_mana_next
         p.locked_mana_next = 0
         p.mana = max(0, p.max_mana - locked)
@@ -244,11 +290,39 @@ class BattleEngine:
                     if eu.element != 9:
                         self._damage_unit(1 - side, eu, erode, source_side=side)
 
-        # Active Leader Spirit continuous start-of-turn heal aura (Owner-Only!)
+        # Active Leader Spirit continuous start-of-turn tribal blessings (Owner-Only, Pure Continuous!)
         if self._leader_aura_on(side) and p.leader_ops:
-            l_hp = int(p.leader_ops.get("aura_heal_hp", 0))
-            if l_hp > 0:
+            lops = p.leader_ops
+            l_hp = int(lops.get("aura_heal_hp", 0))
+            if l_hp > 0 and self._has_matching_tribe_ally(side):
                 p.heal_hp(l_hp)
+            l_hdef = int(lops.get("aura_heal_def", 0))
+            if l_hdef > 0:
+                for au in p.board_units():
+                    if self._unit_matches_leader(side, au):
+                        p.telemetry.def_healed += au.heal_def(l_hdef)
+            l_cln = int(lops.get("aura_cleanse_turn", 0))
+            if l_cln > 0:
+                t_allies = [au for au in p.board_units() if self._unit_matches_leader(side, au)]
+                chosen = None
+                for au in t_allies:
+                    if au.burn > 0 or au.poison > 0 or au.bleed > 0 or au.frozen > 0 or au.silenced > 0 or au.rooted > 0 or au.weakened > 0:
+                        chosen = au
+                        break
+                if chosen is None:
+                    for au in t_allies:
+                        if au.deff < au.max_def:
+                            chosen = au
+                            break
+                if chosen is not None:
+                    chosen.cleanse()
+                    p.telemetry.def_healed += chosen.heal_def(l_cln)
+            l_ban = int(lops.get("aura_banner_token", 0))
+            if l_ban > 0 and p.board_count() == 0:
+                l_tr = int(lops.get("tribe", 9))
+                tok = self._spawn_token(side, l_ban, l_ban + 2, name="Tribal Banner", haste=False, tribe=l_tr)
+                if tok is not None:
+                    self._sync_leader_def_aura(side)
 
         # Draw 1 card (plus Covenant extra draw unless ban_self_extra_draw is active)
         if p.no_draw_turns > 0:
@@ -313,6 +387,39 @@ class BattleEngine:
         if b_cnt >= 5:
             p.telemetry.turns_with_full_board += 1
 
+        # Pillar #4 & #9: Start-of-turn hand playability + Strategic Intelligence choice depth (1 single mask call!)
+        lmask = self.get_legal_mask(side)
+        _n_leg = int(lmask.sum())
+        p.telemetry.si_legal_actions_sum += _n_leg
+        _has_sac = bool(lmask[1:8].any())
+        if _has_sac:
+            p.telemetry.si_sac_avail_turns += 1
+        _playable_cards = 0
+        if p.hand:
+            p.telemetry.cu_hand_checks_cards += len(p.hand)
+            for h_i in range(len(p.hand)):
+                base_a = 8 + h_i * BOARD_SLOTS
+                if lmask[base_a : base_a + BOARD_SLOTS].any():
+                    _playable_cards += 1
+                else:
+                    p.telemetry.cu_hand_unplayable_cards += 1
+        _n_skills_leg = int(lmask[50:62].sum())
+        _dist_ch = (1 if _has_sac else 0) + _playable_cards + _n_skills_leg + (1 if bool(lmask[AETHER_DRAW_ACTION]) else 0)
+        p.telemetry.si_distinct_choices_sum += _dist_ch
+        if _dist_ch == 0:
+            p.telemetry.si_forced_pass_turns += 1
+            p.telemetry.si_choice_hist[0] += 1
+        elif _dist_ch == 1:
+            p.telemetry.si_choice_hist[1] += 1
+        elif _dist_ch <= 3:
+            p.telemetry.si_choice_hist[2] += 1
+        elif _dist_ch <= 5:
+            p.telemetry.si_choice_hist[3] += 1
+        elif _dist_ch <= 7:
+            p.telemetry.si_choice_hist[4] += 1
+        else:
+            p.telemetry.si_choice_hist[5] += 1
+
     # ------------------------------------------------------------------
     # Dynamic Stat & Aura Calculations (Strict Integer!)
     # ------------------------------------------------------------------
@@ -329,6 +436,28 @@ class BattleEngine:
         if u.chameleon and not u.is_silenced():
             return True
         return u.tribe == int(p.leader_ops.get("tribe", -2))
+
+    def _has_matching_tribe_ally(self, side: int) -> bool:
+        if not self._leader_aura_on(side):
+            return False
+        p = self.players[side]
+        return any(self._unit_matches_leader(side, u) for u in p.board_units())
+
+    def _sync_leader_def_aura(self, side: int) -> None:
+        """Synchronizes continuous Leader +DEF aura cleanly across all matching-Tribe allies on board."""
+        p = self.players[side]
+        target_def = int(p.leader_ops.get("aura_def", 0)) if (self._leader_aura_on(side) and p.leader_ops) else 0
+        for u in p.board_units():
+            want = target_def if (target_def > 0 and self._unit_matches_leader(side, u)) else 0
+            diff = want - u.leader_def_applied
+            if diff > 0:
+                u.max_def += diff
+                u.deff += diff
+                u.leader_def_applied = want
+            elif diff < 0:
+                u.max_def = max(1, u.max_def + diff)
+                u.deff = max(1, min(u.deff, u.max_def))
+                u.leader_def_applied = want
 
     def _effective_atk(self, side: int, u: MonsterUnit) -> int:
         """Computes strict integer effective ATK respecting Barrier/All-Attack ATK lock."""
@@ -356,9 +485,32 @@ class BattleEngine:
                 elif self.env_id == 8 and u.slot in FLANK_SLOTS:
                     atk += (1, 2, 3)[el_idx]
 
-        # Leader Owner-Only Tribal Aura
+        # Leader Owner-Only Pure Continuous Tribal ATK Auras
         if self._unit_matches_leader(side, u) and p.leader_ops:
-            atk += int(p.leader_ops.get("aura_atk", 0))
+            lops = p.leader_ops
+            atk += int(lops.get("aura_atk", 0))
+            if u.slot in CENTER_SLOTS:
+                atk += int(lops.get("aura_center_atk", 0))
+            if u.slot in FLANK_SLOTS:
+                atk += int(lops.get("aura_flank_atk", 0))
+            if opp.board[u.slot] is None:
+                atk += int(lops.get("aura_open_lane_atk", 0))
+            l_pack = int(lops.get("aura_pack_atk", 0))
+            if l_pack > 0:
+                t_cnt = sum(1 for au in p.board_units() if self._unit_matches_leader(side, au))
+                if t_cnt >= 3:
+                    atk += l_pack
+            l_grave = int(lops.get("aura_grave_atk", 0))
+            if l_grave > 0:
+                l_tr = int(lops.get("tribe", -2))
+                g_cnt = sum(1 for cid in p.graveyard if self.db.get(cid).tribe == l_tr)
+                atk += min(l_grave, g_cnt // 2)
+            l_low = int(lops.get("aura_low_hp_atk", 0))
+            if l_low > 0 and p.hp <= 220:
+                atk += l_low
+            l_high = int(lops.get("aura_high_hp_atk", 0))
+            if l_high > 0 and p.hp >= 280:
+                atk += l_high
 
         # Covenant bonus / penalty
         if p.covenant_active and p.covenant_ops:
@@ -391,7 +543,7 @@ class BattleEngine:
         opp_u = opp.board[u.slot]
         if opp_u is not None and not opp_u.is_silenced() and opp_u.aura_weaken_opp > 0:
             atk -= opp_u.aura_weaken_opp
-        if self._leader_aura_on(1 - side) and opp.leader_ops:
+        if self._has_matching_tribe_ally(1 - side) and opp.leader_ops:
             atk -= int(opp.leader_ops.get("aura_weaken_opp", 0))
 
         # Weakened debuff
@@ -470,18 +622,20 @@ class BattleEngine:
         cost -= p.skill_discount_temp
         return max(1, int(cost))
 
-    def _effective_skill_power_bonus(self, side: int) -> int:
+    def _effective_skill_power_bonus(self, side: int, u: Optional[MonsterUnit] = None) -> int:
         p = self.players[side]
         bonus = p.skill_bonus_temp
         if self.env_id == 9:  # Desert Arena: +2/+4/+6 active skill power
             bonus += (2, 4, 6)[min(2, max(0, self.env_level - 1))]
         if self.env_id == 3 and self.env_level >= 2:
             bonus += 3
+        if u is not None and self._unit_matches_leader(side, u) and p.leader_ops:
+            bonus += int(p.leader_ops.get("aura_skill_power", 0))
         if p.covenant_active and p.covenant_ops:
             bonus += int(p.covenant_ops.get("rew_skill_power", 0))
-        for u in p.board_units():
-            if not u.is_silenced() and u.skill_conduit > 0:
-                bonus += u.skill_conduit
+        for au in p.board_units():
+            if not au.is_silenced() and au.skill_conduit > 0:
+                bonus += au.skill_conduit
         return int(bonus)
 
     def _effective_spell_power(self, side: int) -> int:
@@ -489,6 +643,8 @@ class BattleEngine:
         sp = p.spell_power_temp
         if self.env_id in (0, 3) and any(u.element == self.env_id for u in p.board_units()):
             sp += (3, 5, 8)[min(2, max(0, self.env_level - 1))]
+        if self._has_matching_tribe_ally(side) and p.leader_ops:
+            sp += int(p.leader_ops.get("aura_spell_power", 0))
         if p.covenant_active and p.covenant_ops:
             sp += int(p.covenant_ops.get("rew_spell_power", 0))
         for u in p.board_units():
@@ -610,6 +766,17 @@ class BattleEngine:
                             continue
                     mask[50 + slot * 2 + k] = True
 
+        # 62: Aether Well Draw — Spend 2 Mana to draw +1 extra card (once per turn, hand < limit)
+        ban_xd = bool(cov and cov.get("ban_self_extra_draw"))
+        if (
+            not p.aether_drawn_this_turn
+            and avail_mana >= AETHER_DRAW_COST
+            and len(p.hand) < p.hand_limit()
+            and p.no_draw_turns <= 0
+            and not ban_xd
+        ):
+            mask[AETHER_DRAW_ACTION] = True
+
         return mask
 
     def step(self, action: int) -> bool:
@@ -623,6 +790,11 @@ class BattleEngine:
         self.actions_this_turn += 1
 
         if action == 0:
+            # Pillar #9: Tactical Restraint check (passing while holding playable cards, active skills, or Aether Draw!)
+            if p.mana + p.temp_mana > 0 or p.hand:
+                _em = self.get_legal_mask(s)
+                if _em[8:ACTION_DIM].any():
+                    p.telemetry.si_restraint_passes += 1
             self._run_combat_and_end_turn(s)
             return self.done
 
@@ -635,6 +807,8 @@ class BattleEngine:
                 p.mana += 1
                 p.sacrificed_this_turn = True
                 p.telemetry.sacrifices_made += 1
+                if p.max_mana >= p.mana_cap() and p.telemetry.re_reach_cap_turn == 0:
+                    p.telemetry.re_reach_cap_turn = self.turn
             return self.done
 
         if 8 <= action <= 49:
@@ -652,6 +826,25 @@ class BattleEngine:
             self._use_active_skill(s, slot, k)
             return self.done
 
+        if action == AETHER_DRAW_ACTION:
+            cov = p.covenant_ops if (p.covenant_active and p.covenant_ops) else None
+            ban_xd = bool(cov and cov.get("ban_self_extra_draw"))
+            if (
+                not p.aether_drawn_this_turn
+                and (p.mana + p.temp_mana) >= AETHER_DRAW_COST
+                and len(p.hand) < p.hand_limit()
+                and p.no_draw_turns <= 0
+                and not ban_xd
+            ):
+                self._spend_mana(s, AETHER_DRAW_COST)
+                p.aether_drawn_this_turn = True
+                p.telemetry.re_aether_draws += 1
+                p.telemetry.re_mana_spent_other += AETHER_DRAW_COST
+                p.telemetry.re_mana_defense += AETHER_DRAW_COST
+                p.telemetry.si_total_decisions += 1
+                self._draw_card(s, check_deckout=True)
+            return self.done
+
         return self.done
 
     # ------------------------------------------------------------------
@@ -660,6 +853,8 @@ class BattleEngine:
     def _spend_mana(self, side: int, cost: int) -> None:
         p = self.players[side]
         c = max(0, int(cost))
+        if c > 0:
+            self._turn_mana_spent += c
         use_temp = min(p.temp_mana, c)
         p.temp_mana -= use_temp
         c -= use_temp
@@ -677,6 +872,51 @@ class BattleEngine:
         self._spend_mana(side, cost)
         p.cards_played_turn += 1
         p.telemetry.cards_played_ids.append(card.id)
+        p.telemetry.cu_played_count += 1
+        p.telemetry.cu_play_turn_sum += self.turn
+        if hc.drawn_turn > 0 and hc.drawn_turn == self.turn:
+            p.telemetry.cu_played_on_draw_turn += 1
+        if card.type == "monster":
+            p.telemetry.cu_played_by_type[1 if card.is_barrier else 0] += 1
+        elif card.type == "spell":
+            p.telemetry.cu_played_by_type[2] += 1
+        elif card.type == "leader":
+            p.telemetry.cu_played_by_type[3] += 1
+        elif card.type == "covenant":
+            p.telemetry.cu_played_by_type[4] += 1
+        elif card.type == "environment":
+            p.telemetry.cu_played_by_type[5] += 1
+
+        # Pillar #5 & #9: Resource Economy & Strategic Intelligence decision attribution
+        _cb = min(7, max(0, int(cost)))
+        p.telemetry.re_card_cost_played[_cb] += 1
+        p.telemetry.si_total_decisions += 1
+        _is_def_play = False
+        if card.type == "monster" and not card.is_barrier:
+            _is_def_play = (card.role in (2, 3, 4, 5))
+        elif card.type == "spell":
+            _sk_re = str((card.spell_ops or {}).get("kind", ""))
+            _is_def_play = _sk_re in (
+                "heal_leader", "buff_ally", "aoe_ally", "freeze_enemy", "silence_enemy",
+                "time_rewind", "recall_enemy", "recall_ally", "cleanse_all",
+                "counter_betrayal", "counter_stand_alone", "counter_oblivion", "counter_exorcism",
+            ) or bool((card.spell_ops or {}).get("cleanse"))
+        else:
+            _is_def_play = bool(card.is_barrier or (card.type == "environment" and card.env_id in (1, 2, 4, 5, 7)))
+        if _is_def_play:
+            p.telemetry.si_reactive_decisions += 1
+        if cost > 0:
+            p.telemetry.re_mana_spent_cards += cost
+            if card.type == "monster" and not card.is_barrier:
+                p.telemetry.re_mana_spent_monsters += cost
+            elif card.type == "spell":
+                p.telemetry.re_mana_spent_spells += cost
+            else:
+                p.telemetry.re_mana_spent_other += cost
+            if _is_def_play:
+                p.telemetry.re_mana_defense += cost
+            else:
+                p.telemetry.re_mana_offense += cost
 
         if card.type == "environment":
             self._dmg_cause = "passive"
@@ -690,13 +930,35 @@ class BattleEngine:
             self._play_covenant(side, card)
         elif card.type == "spell":
             self._dmg_cause = "spell"
+            if self._pace_first_defense == 0 and card.spell_ops:
+                sk_def = str(card.spell_ops.get("kind", ""))
+                if sk_def in (
+                    "heal_leader", "buff_ally", "aoe_ally", "freeze_enemy", "silence_enemy",
+                    "time_rewind", "recall_enemy", "recall_ally", "cleanse_all",
+                ) or card.spell_ops.get("cleanse"):
+                    self._pace_first_defense = self.turn
             p.telemetry.spells_cast += 1
+            _sp_snap = (
+                p.telemetry.dmg_to_face + p.telemetry.dmg_to_monsters + p.telemetry.hp_healed
+                + p.telemetry.def_healed + p.telemetry.cards_drawn + p.telemetry.disruptions_applied
+                + p.telemetry.tokens_spawned + p.telemetry.clones_made + p.telemetry.revives_done
+                + p.telemetry.grave_returns + p.temp_mana + p.max_mana
+            )
             echo = p.echo_next_spell
             p.echo_next_spell = False
             self._cast_spell(side, card, slot)
             if echo and not self.done:
                 self._cast_spell(side, card, slot)
             p.graveyard.append(card.id)
+            _sp_after = (
+                p.telemetry.dmg_to_face + p.telemetry.dmg_to_monsters + p.telemetry.hp_healed
+                + p.telemetry.def_healed + p.telemetry.cards_drawn + p.telemetry.disruptions_applied
+                + p.telemetry.tokens_spawned + p.telemetry.clones_made + p.telemetry.revives_done
+                + p.telemetry.grave_returns + p.temp_mana + p.max_mana
+            )
+            _sp_k = str((card.spell_ops or {}).get("kind", ""))
+            if _sp_after <= _sp_snap and _sp_k not in ("buff_ally", "aoe_ally", "grant_double_strike", "double_skill_1t", "boost_skills", "echo_next_spell", "stat_flip", "swap_lanes", "time_rewind"):
+                p.telemetry.cu_low_value_plays += 1
             # Trigger ally on-spell passives & Leader spell-ping aura
             if not self.done:
                 for u in p.board_units():
@@ -705,17 +967,20 @@ class BattleEngine:
                             u.apply_perm_buff(u.on_spell_atk, u.on_spell_def)
                         if u.spell_ping_dmg > 0:
                             self._damage_commander(1 - side, u.spell_ping_dmg, source_side=side)
-                if self._leader_aura_on(side) and p.leader_ops and p.leader_ops.get("aura_spell_ping", 0) > 0:
+                if self._has_matching_tribe_ally(side) and p.leader_ops and p.leader_ops.get("aura_spell_ping", 0) > 0:
                     self._damage_commander(1 - side, int(p.leader_ops["aura_spell_ping"]), source_side=side)
         elif card.type == "monster":
             self._dmg_cause = "passive"
             if p.board[slot] is None and p.board_count() < p.board_limit():
                 p.summons_turn += 1
+                if 0 <= slot < BOARD_SLOTS:
+                    p.telemetry.si_slot_summons[slot] += 1
                 self._summon_monster(side, card, slot)
 
     def _play_environment(self, side: int, env_id: int) -> None:
         if self.env_id == env_id:
             self.env_level = min(3, self.env_level + 1)
+            self.players[side].telemetry.mp_env_upgrades += 1
         else:
             self.env_id = env_id
             self.env_level = 1
@@ -807,98 +1072,28 @@ class BattleEngine:
                 au.on_hit_bleed += (5, 7, 10)[el_idx]
 
     def _play_leader(self, side: int, card: CardDef) -> None:
+        """V2.3 Pure Continuous Tribal Ancestor Blessing (ZERO On-Summon burst, continuous aura ONLY!)."""
         p = self.players[side]
-        opp = self.players[1 - side]
         ops = card.leader_ops or {}
         p.leader_card_id = card.id
         p.leader_active = True
         p.leader_ops = ops
 
-        # V2.1 Balance Rule: Leader Spirit's immediate On-Summon Trigger requires at least 1 matching-Tribe
-        # monster on your board (preventing off-tribe decks from exploiting 0-Mana Leaders as free spells!)
+        # Track tribal fit telemetry: does this player's deck/board actually have matching-Tribe monsters?
         leader_tribe = int(ops.get("tribe", -2))
-        has_tribe_ally = any(
+        has_tribe_fit = any(
             (not u.is_barrier and not u.is_spy and (u.tribe == leader_tribe or (u.chameleon and not u.is_silenced())))
             for u in p.board_units()
+        ) or any(
+            self.db.get(cid).type == "monster" and not self.db.get(cid).is_barrier and self.db.get(cid).tribe == leader_tribe
+            for cid in self._initial_decks[side]
         )
-        if not has_tribe_ally:
-            return
+        p.telemetry.cu_cond_attempts += 1
+        if has_tribe_fit:
+            p.telemetry.cu_cond_success += 1
 
-        # Summon trigger
-        if ops.get("summon_heal_hp", 0) > 0:
-            p.heal_hp(int(ops["summon_heal_hp"]))
-        if ops.get("summon_dmg_face", 0) > 0:
-            self._damage_commander(1 - side, int(ops["summon_dmg_face"]), source_side=side)
-        if ops.get("summon_dmg_enemy", 0) > 0:
-            dmg = int(ops["summon_dmg_enemy"])
-            for eu in list(opp.board_units()):
-                self._damage_unit(1 - side, eu, dmg, source_side=side)
-        if ops.get("summon_buff_atk", 0) > 0 or ops.get("summon_buff_def", 0) > 0:
-            for au in p.board_units():
-                au.apply_perm_buff(int(ops.get("summon_buff_atk", 0)), int(ops.get("summon_buff_def", 0)))
-        for _ in range(int(ops.get("summon_draw", 0))):
-            self._draw_card(side, check_deckout=True)
-        if ops.get("summon_mana", 0) > 0:
-            p.temp_mana += int(ops["summon_mana"])
-        if ops.get("summon_cleanse"):
-            for au in p.board_units():
-                au.cleanse()
-        if ops.get("summon_freeze"):
-            t = self._best_enemy_unit(side)
-            if t:
-                self._apply_status(1 - side, t, "freeze", 1, source_side=side)
-        if ops.get("summon_silence"):
-            t = self._best_enemy_unit(side)
-            if t:
-                self._apply_status(1 - side, t, "silence", 1, source_side=side)
-        if ops.get("summon_root"):
-            t = self._best_enemy_unit(side)
-            if t:
-                self._apply_status(1 - side, t, "root", 2, source_side=side)
-        if ops.get("summon_weaken", 0) > 0:
-            for eu in opp.board_units():
-                eu.weakened += int(ops["summon_weaken"])
-        if ops.get("summon_clone"):
-            src = self._best_enemy_unit(side, max_mana=4) or self._best_ally_unit(side)
-            empties = p.empty_slots()
-            if src and src.card_id > 0 and empties and p.board_count() < p.board_limit():
-                self._summon_monster(side, self.db.get(src.card_id), empties[0], is_clone=True, stat_pct=70)
-                p.telemetry.clones_made += 1
-        if ops.get("summon_copy_hand") and opp.hand:
-            p.add_to_hand(self.rng.choice(opp.hand).card_id, cost_mod=-1)
-            p.telemetry.clones_made += 1
-        if ops.get("summon_mind_control"):
-            t = self._best_enemy_unit(side, max_mana=3)
-            empties = p.empty_slots()
-            if t and empties and p.board_count() < p.board_limit():
-                opp.board[t.slot] = None
-                ns = empties[0]
-                t.owner = side; t.slot = ns; t.temp_mc_orig_owner = 1 - side
-                t.can_attack = t.can_ever_attack()
-                p.board[ns] = t
-                p.telemetry.clones_made += 1
-        if ops.get("summon_recall"):
-            t = self._best_enemy_unit(side, max_mana=3)
-            if t:
-                self._recall_unit(1 - side, t, source_side=side)
-        if ops.get("summon_burn", 0) > 0:
-            for eu in opp.board_units():
-                self._apply_status(1 - side, eu, "burn", int(ops["summon_burn"]), source_side=side)
-        if ops.get("summon_poison", 0) > 0:
-            for eu in opp.board_units():
-                self._apply_status(1 - side, eu, "poison", int(ops["summon_poison"]), source_side=side)
-        if ops.get("summon_bleed", 0) > 0:
-            for eu in opp.board_units():
-                self._apply_status(1 - side, eu, "bleed", int(ops["summon_bleed"]), source_side=side)
-        for _ in range(int(ops.get("summon_tokens", 0))):
-            self._spawn_token(side, 5, 5, name="Leader Token", haste=True)
-        if ops.get("summon_revive"):
-            self._revive_from_grave(side, cap=99, count=1, haste=True)
-        if ops.get("summon_double_skill"):
-            for au in p.board_units():
-                if not au.is_barrier:
-                    au.double_skill_1t = True
-                    break
+        # Immediately synchronize continuous +DEF aura to all existing matching-Tribe allies on board
+        self._sync_leader_def_aura(side)
 
     def _play_covenant(self, side: int, card: CardDef) -> None:
         p = self.players[side]
@@ -981,17 +1176,29 @@ class BattleEngine:
             summoned_turn=self.turn,
         )
         p.board[slot] = u
+        if self._pace_first_summon == 0:
+            self._pace_first_summon = self.turn
+        if self._pace_first_defense == 0 and (card.is_barrier or any(pa.get("kind") in ("taunt", "taunt_reflect_pct", "taunt_evasion", "summon_freeze", "summon_silence", "cleanse_heal_aura", "turn_heal_aura") for pa in card.passives)):
+            self._pace_first_defense = self.turn
+        if any(
+            pa.get("kind") in (
+                "summon_draw", "summon_freeze", "summon_silence", "summon_clone_self",
+                "summon_recall_enemy", "summon_steal_atk", "summon_tax_mana", "mana_lock_summon",
+                "temp_mana_summon", "perm_mana_summon", "arena_upgrade_once", "root_lock",
+                "doppelganger",
+            ) or (pa.get("kind") == "cleanse_heal_aura" and pa.get("summon"))
+            for pa in card.passives
+        ):
+            u.had_impact = True
+            u.first_impact_turn = self.turn
 
-        # Leader Owner-Only DEF aura on summon
+        # Leader Owner-Only Pure Continuous DEF aura on summon (other combat auras evaluated dynamically!)
         if self._unit_matches_leader(side, u) and p.leader_ops:
             ldef = int(p.leader_ops.get("aura_def", 0))
             if ldef > 0:
                 u.deff += ldef
                 u.max_def += ldef
-            u.life_leech_pct += int(p.leader_ops.get("aura_leech", 0))
-            u.on_hit_burn += int(p.leader_ops.get("aura_burn", 0))
-            u.on_hit_poison += int(p.leader_ops.get("aura_poison", 0))
-            u.on_hit_bleed += int(p.leader_ops.get("aura_bleed", 0))
+                u.leader_def_applied = ldef
 
         # Covenant summon keywords
         if p.covenant_active and p.covenant_ops:
@@ -1334,18 +1541,42 @@ class BattleEngine:
             return
 
         self._spend_mana(side, cost)
+        p.telemetry.si_total_decisions += 1
+        _sk_re2 = str(op.get("kind", ""))
+        _is_def_sk = _sk_re2 in (
+            "heal_leader", "buff_ally", "aoe_ally", "buff_center",
+            "recall_ally", "recall_enemy", "discount_hand_spells",
+        ) or bool(op.get("cleanse") or op.get("taunt")) or (op.get("fx") in ("freeze", "silence", "weaken"))
+        if _is_def_sk:
+            p.telemetry.si_reactive_decisions += 1
+        if cost > 0:
+            p.telemetry.re_mana_spent_skills += cost
+            if _is_def_sk:
+                p.telemetry.re_mana_defense += cost
+            else:
+                p.telemetry.re_mana_offense += cost
         u.skill_uses_this_turn[skill_idx] += 1
         u.skills_used_this_turn += 1
+        u.skills_used_total += 1
+        u.had_impact = True
+        if u.first_impact_turn < 0:
+            u.first_impact_turn = self.turn
         u.stealth = False
         p.telemetry.actives_used += 1
+        self._pace_turn_skills += 1
+        if self._pace_first_defense == 0:
+            sk_k = str(op.get("kind", ""))
+            if sk_k in ("heal_leader", "buff_ally", "aoe_ally", "recall_ally", "recall_enemy") or op.get("cleanse") or op.get("taunt") or op.get("fx") in ("freeze", "silence", "weaken"):
+                self._pace_first_defense = self.turn
         self._dmg_cause = "active"
+        _sk_dmg_before = p.telemetry.cq_skill_dmg_total
 
         # Trigger on-skill passives
         for ally in p.board_units():
             if not ally.is_silenced() and (ally.on_skill_atk > 0 or ally.on_skill_def > 0):
                 ally.apply_perm_buff(ally.on_skill_atk, ally.on_skill_def)
 
-        bonus = self._effective_skill_power_bonus(side)
+        bonus = self._effective_skill_power_bonus(side, u)
         k = op.get("kind", "dmg_single")
         v1 = int(op.get("v1", 0))
         v2 = int(op.get("v2", 0))
@@ -1409,12 +1640,16 @@ class BattleEngine:
         elif k == "aoe_enemy":
             dmg = v1 + bonus
             fx = op.get("fx", "")
+            dur = int(op.get("dur", 1))
+            wk = int(op.get("weaken", 0))
             for eu in list(opp.board_units()):
                 dealt = self._damage_unit(1 - side, eu, dmg, source_side=side)
                 if op.get("leech", 0) > 0 and dealt > 0:
                     p.heal_hp(pct_of(dealt, int(op["leech"])))
                 if fx and eu.deff > 0:
-                    self._apply_status(1 - side, eu, fx, v2, source_side=side)
+                    self._apply_status(1 - side, eu, fx, v2 if fx in ("burn", "poison", "bleed", "weaken") else dur, source_side=side)
+                if wk > 0 and eu.deff > 0:
+                    self._apply_status(1 - side, eu, "weaken", wk, source_side=side)
             if op.get("cleanse"):
                 u.cleanse()
         elif k == "cleave_enemy":
@@ -1507,6 +1742,10 @@ class BattleEngine:
             self._damage_commander(1 - side, v1 + bonus, source_side=side)
             if op.get("heal", 0) > 0:
                 p.heal_hp(int(op["heal"]))
+            if op.get("weaken", 0) > 0:
+                t_wk = self._best_enemy_unit(side)
+                if t_wk is not None:
+                    self._apply_status(1 - side, t_wk, "weaken", int(op["weaken"]), source_side=side)
             if op.get("double_burn"):
                 for eu in opp.board_units():
                     if eu.burn > 0:
@@ -1545,6 +1784,9 @@ class BattleEngine:
             st = op.get("spawn_tok")
             if st:
                 self._spawn_token(side, int(st[0]), int(st[1]), name="Skill Token")
+        _sk_delta = p.telemetry.cq_skill_dmg_total - _sk_dmg_before
+        if _sk_delta > 0:
+            u.dmg_dealt_total += _sk_delta
 
     # ------------------------------------------------------------------
     # Spell Casting (All 300 Spells & 41 Opcodes)
@@ -1569,6 +1811,7 @@ class BattleEngine:
         elif k == "counter_stand_alone":
             if opp.leader_active:
                 opp.leader_muted_turns = max(opp.leader_muted_turns, int(op.get("dur", 3)))
+                self._sync_leader_def_aura(1 - side)
                 p.telemetry.disruptions_applied += 2
                 self._add_highlight(side, "Counter_Tech_Break")
         elif k == "counter_oblivion":
@@ -1583,6 +1826,7 @@ class BattleEngine:
                 opp.leader_active = False
                 opp.leader_exorcised = True
                 opp.leader_ops = None
+                self._sync_leader_def_aura(1 - side)
                 p.telemetry.disruptions_applied += 3
                 self._add_highlight(side, "Counter_Tech_Break")
 
@@ -1788,7 +2032,10 @@ class BattleEngine:
                 self._damage_commander(1 - side, int(op["dmg"]) + sp, source_side=side)
             if op.get("silence_all"):
                 for eu in opp.board_units():
-                    self._apply_status(1 - side, eu, "silence", 1, source_side=side)
+                    self._apply_status(1 - side, eu, "silence", int(op.get("dur", 1)), source_side=side)
+            if op.get("root_all"):
+                for eu in opp.board_units():
+                    self._apply_status(1 - side, eu, "root", int(op.get("dur", 2)), source_side=side)
         elif k == "drain_enemy_mana":
             opp.locked_mana_next = min(4, opp.locked_mana_next + max(1, int(op.get("v1", 2))))
             p.telemetry.disruptions_applied += 2
@@ -1831,6 +2078,8 @@ class BattleEngine:
                     self._apply_status(1 - side, eu, "poison", int(op["poison"]), source_side=side)
                 if op.get("bleed", 0) > 0:
                     self._apply_status(1 - side, eu, "bleed", int(op["bleed"]), source_side=side)
+                if op.get("silence"):
+                    self._apply_status(1 - side, eu, "silence", int(op.get("dur", 1)), source_side=side)
                 if op.get("dmg", 0) > 0:
                     self._damage_unit(1 - side, eu, int(op["dmg"]) + sp, source_side=side)
         elif k == "execute_enemy":
@@ -1851,18 +2100,41 @@ class BattleEngine:
                     for eu in opp.board_units():
                         self._apply_status(1 - side, eu, "poison", int(op["poison_all"]), source_side=side)
         elif k == "aoe_enemy":
-            dmg = int(op.get("v1", 12)) + sp
+            raw_v1 = int(op.get("v1", 12))
+            gm = int(op.get("grave_mult", 0))
+            if gm > 0:
+                mon_g = sum(1 for cid in p.graveyard if self.db.get(cid).type == "monster")
+                dmg = min(int(op.get("cap", 42)), gm * mon_g) + sp
+            else:
+                dmg = (raw_v1 + sp) if raw_v1 > 0 else 0
             fx = op.get("fx", "")
             v2 = int(op.get("v2", 3))
             dur = int(op.get("dur", 1))
+            wk = int(op.get("weaken", 0))
+            bl = int(op.get("bleed", 0))
+            cnt_lim = int(op.get("cnt", 0))
+            targets = [eu for eu in list(opp.board_units()) if not eu.spell_immune]
+            if cnt_lim > 0 and len(targets) > cnt_lim:
+                targets.sort(key=lambda x: (x.atk + x.deff), reverse=True)
+                targets = targets[:cnt_lim]
             total_dealt = 0
-            for eu in list(opp.board_units()):
-                if eu.spell_immune:
-                    continue
-                total_dealt += self._damage_unit(1 - side, eu, dmg, source_side=side)
+            for eu in targets:
+                if dmg > 0:
+                    total_dealt += self._damage_unit(1 - side, eu, dmg, source_side=side)
                 if fx and eu.deff > 0:
                     self._apply_status(1 - side, eu, fx, v2 if fx in ("burn", "poison", "bleed", "weaken") else dur, source_side=side)
-            if op.get("face", 0) > 0:
+                if wk > 0 and eu.deff > 0:
+                    self._apply_status(1 - side, eu, "weaken", wk, source_side=side)
+                if bl > 0 and eu.deff > 0:
+                    self._apply_status(1 - side, eu, "bleed", bl, source_side=side)
+                if op.get("root") and eu.deff > 0:
+                    self._apply_status(1 - side, eu, "root", dur, source_side=side)
+                if op.get("silence") and eu.deff > 0:
+                    self._apply_status(1 - side, eu, "silence", dur, source_side=side)
+            if op.get("face_match") and dmg > 0:
+                self._damage_commander(1 - side, dmg, source_side=side)
+                p.telemetry.direct_face_spells += 1
+            elif op.get("face", 0) > 0:
                 self._damage_commander(1 - side, int(op["face"]) + sp, source_side=side)
                 p.telemetry.direct_face_spells += 1
             if op.get("leech") and total_dealt > 0:
@@ -1872,40 +2144,54 @@ class BattleEngine:
         elif k == "cleave_enemy":
             t = self._pick_enemy_target(side, slot)
             if t:
-                dmg = int(op.get("v1", 12)) + sp
+                raw_v1 = int(op.get("v1", 12))
+                dmg = (raw_v1 + sp) if raw_v1 > 0 else 0
                 fx = op.get("fx", "")
                 v2 = int(op.get("v2", 3))
+                dur = int(op.get("dur", 1))
+                wk = int(op.get("weaken", 0))
                 for sl in (t.slot - 1, t.slot, t.slot + 1):
                     if 0 <= sl < BOARD_SLOTS and opp.board[sl] is not None and not opp.board[sl].spell_immune:
                         eu = opp.board[sl]
-                        self._damage_unit(1 - side, eu, dmg, source_side=side)
+                        if dmg > 0:
+                            self._damage_unit(1 - side, eu, dmg, source_side=side)
                         if fx and eu.deff > 0:
-                            self._apply_status(1 - side, eu, fx, v2, source_side=side)
+                            self._apply_status(1 - side, eu, fx, v2 if fx in ("burn", "poison", "bleed", "weaken") else dur, source_side=side)
+                        if wk > 0 and eu.deff > 0:
+                            self._apply_status(1 - side, eu, "weaken", wk, source_side=side)
+                        if op.get("root") and eu.deff > 0:
+                            self._apply_status(1 - side, eu, "root", dur, source_side=side)
         elif k == "aoe_ally":
-            for au in p.board_units():
-                au.apply_perm_buff(int(op.get("atk", 0)), int(op.get("deff", 0)))
-                if op.get("full_heal"):
-                    p.telemetry.def_healed += au.heal_def(au.max_def)
-                if op.get("cleanse"):
-                    au.cleanse()
-                if op.get("haste") and au.can_ever_attack():
-                    au.haste = True
-                    au.can_attack = True
-                if op.get("reflect", 0) > 0:
-                    au.reflect_flat += int(op["reflect"])
-                if op.get("reflect_pct", 0) > 0:
-                    au.reflect_pct += int(op["reflect_pct"])
-                if op.get("imm"):
-                    au.status_immune = True
+            if (not op.get("req_skill")) or self._pace_turn_skills > 0:
+                for au in p.board_units():
+                    au.apply_perm_buff(int(op.get("atk", 0)), int(op.get("deff", 0)))
+                    if op.get("full_heal"):
+                        p.telemetry.def_healed += au.heal_def(au.max_def)
+                    if op.get("cleanse"):
+                        au.cleanse()
+                    if op.get("haste") and au.can_ever_attack():
+                        au.haste = True
+                        au.can_attack = True
+                    if op.get("reflect", 0) > 0:
+                        au.reflect_flat += int(op["reflect"])
+                    if op.get("reflect_pct", 0) > 0:
+                        au.reflect_pct += int(op["reflect_pct"])
+                    if op.get("imm"):
+                        au.status_immune = True
             if op.get("hp", 0) > 0:
                 p.heal_hp(int(op["hp"]))
         elif k == "dmg_leader":
-            dmg = int(op.get("v1", 18)) + sp
-            gm = int(op.get("grave_mult", 0))
-            if gm > 0:
-                dmg += min(60, gm * len(p.graveyard))
-            self._damage_commander(1 - side, dmg, source_side=side)
-            p.telemetry.direct_face_spells += 1
+            bcap = int(op.get("board_atk_cap", 0))
+            if bcap > 0:
+                dmg = min(bcap, sum(self._effective_atk(side, au) for au in p.board_units())) + sp
+            else:
+                dmg = int(op.get("v1", 18)) + sp
+                gm = int(op.get("grave_mult", 0))
+                if gm > 0:
+                    dmg += min(60, gm * len(p.graveyard))
+            if dmg > 0:
+                self._damage_commander(1 - side, dmg, source_side=side)
+                p.telemetry.direct_face_spells += 1
             if op.get("self_dmg", 0) > 0:
                 self._damage_commander(side, int(op["self_dmg"]), source_side=-1)
         elif k == "heal_leader":
@@ -2005,6 +2291,11 @@ class BattleEngine:
                     self._damage_unit(1 - side, self.rng.choice(eus), bdmg, source_side=side)
                 else:
                     self._damage_commander(1 - side, bdmg, source_side=side)
+            if op.get("disc_spells_to_1"):
+                for hc in p.hand:
+                    c_h = self.db.get(hc.card_id)
+                    if c_h.type == "spell" and c_h.mana > 1:
+                        hc.cost_mod = min(hc.cost_mod, 1 - c_h.mana)
         elif k == "solar_sacrifice":
             au = self._best_ally_unit(side, non_barrier=True)
             if au:
@@ -2016,14 +2307,33 @@ class BattleEngine:
                 else:
                     self._damage_commander(1 - side, dmg, source_side=side)
         elif k == "def_slam":
-            au = max(p.board_units(), key=lambda u: u.deff, default=None)
-            if au:
-                dmg = max(1, pct_of(au.deff, int(op.get("pct", 50)))) + sp
-                t = self._best_enemy_unit(side)
-                if t and not t.spell_immune:
-                    self._damage_unit(1 - side, t, dmg, source_side=side)
-                else:
+            cap_v = int(op.get("cap", 99))
+            if op.get("center_aoe"):
+                c_sum = sum(p.board[cs].deff for cs in CENTER_SLOTS if p.board[cs] is not None)
+                dmg = min(cap_v, pct_of(c_sum, int(op.get("pct", 50)))) + (sp if c_sum > 0 else 0)
+                if dmg > 0:
+                    for eu in list(opp.board_units()):
+                        if not eu.spell_immune:
+                            self._damage_unit(1 - side, eu, dmg, source_side=side)
                     self._damage_commander(1 - side, dmg, source_side=side)
+                    p.telemetry.direct_face_spells += 1
+            elif op.get("cleave"):
+                au = max(p.board_units(), key=lambda u: u.deff, default=None)
+                t = self._pick_enemy_target(side, slot)
+                if au and t:
+                    dmg = min(cap_v, pct_of(au.deff, int(op.get("pct", 100)))) + sp
+                    for sl in (t.slot - 1, t.slot, t.slot + 1):
+                        if 0 <= sl < BOARD_SLOTS and opp.board[sl] is not None and not opp.board[sl].spell_immune:
+                            self._damage_unit(1 - side, opp.board[sl], dmg, source_side=side)
+            else:
+                au = max(p.board_units(), key=lambda u: u.deff, default=None)
+                if au:
+                    dmg = min(cap_v, max(1, pct_of(au.deff, int(op.get("pct", 50))))) + sp
+                    t = self._best_enemy_unit(side)
+                    if t and not t.spell_immune:
+                        self._damage_unit(1 - side, t, dmg, source_side=side)
+                    else:
+                        self._damage_commander(1 - side, dmg, source_side=side)
         elif k == "swap_atk_enemy":
             au = self._best_ally_unit(side, non_barrier=True)
             eu = self._best_enemy_unit(side)
@@ -2040,14 +2350,15 @@ class BattleEngine:
                 else:
                     self._damage_commander(1 - side, dmg_each, source_side=side)
         else:
-            # Default single-target damage / status spell
-            t = self._pick_enemy_target(side, slot)
-            dmg = int(op.get("v1", 10)) + sp
+            # Default single-target damage / pure-status spell
+            t = self._pick_enemy_target(side, slot, max_mana=int(op.get("cap", 99)))
+            raw_v1 = int(op.get("v1", 10))
+            dmg = (raw_v1 + sp) if raw_v1 > 0 else 0
             if t is not None and not t.spell_immune:
                 if op.get("bonus_if_dmg", 0) > 0 and t.deff < t.max_def:
                     dmg = max(dmg, int(op["bonus_if_dmg"]) + sp)
                 pre_def = t.deff
-                dealt = self._damage_unit(1 - side, t, dmg, source_side=side)
+                dealt = self._damage_unit(1 - side, t, dmg, source_side=side) if dmg > 0 else 0
                 if op.get("leech", 0) > 0 and dealt > 0:
                     p.heal_hp(int(op["leech"]))
                 if op.get("overkill") and dmg > pre_def:
@@ -2059,7 +2370,9 @@ class BattleEngine:
                     v2 = int(op.get("v2", 3))
                     dur = int(op.get("dur", 1))
                     self._apply_status(1 - side, t, fx, v2 if fx in ("burn", "poison", "bleed", "weaken") else dur, source_side=side)
-            else:
+                if op.get("weaken", 0) > 0 and t.deff > 0:
+                    self._apply_status(1 - side, t, "weaken", int(op["weaken"]), source_side=side)
+            elif dmg > 0:
                 self._damage_commander(1 - side, dmg, source_side=side)
                 p.telemetry.direct_face_spells += 1
 
@@ -2105,6 +2418,12 @@ class BattleEngine:
                 strikes = 2 if ((u.double_strike and not u.is_silenced()) or u.double_strike_temp) else 1
                 u.attacked_this_turn = True
                 u.attacks_made += 1
+                u.had_impact = True
+                if u.first_impact_turn < 0:
+                    u.first_impact_turn = self.turn
+                self._pace_turn_attacks += 1
+                if self._pace_first_attack == 0:
+                    self._pace_first_attack = self.turn
                 u.stealth = False
 
                 for _ in range(strikes):
@@ -2113,8 +2432,10 @@ class BattleEngine:
                     # Bleed triggers on attack (splashes if lethal)
                     if u.bleed > 0:
                         bleed_d = u.bleed
+                        self._dmg_cause = "dot"
                         self._damage_unit(side, u, bleed_d, source_side=1 - side, is_dot=True)
                         if u.deff <= 0:
+                            self._dmg_cause = "dot"
                             self._damage_commander(side, bleed_d, source_side=1 - side)
                             break
 
@@ -2171,8 +2492,10 @@ class BattleEngine:
             if u.burn > 0:
                 bd = u.burn
                 pre = u.deff
+                self._dmg_cause = "dot"
                 self._damage_unit(side, u, bd, source_side=1 - side, is_dot=True)
                 if u.deff <= 0 and bd > pre:
+                    self._dmg_cause = "dot"
                     self._damage_commander(side, bd - pre, source_side=1 - side)
                 elif u.deff > 0:
                     u.burn = max(0, u.burn - 1)
@@ -2295,15 +2618,26 @@ class BattleEngine:
         p = self.players[side]
         opp_side = 1 - side
         opp = self.players[opp_side]
+        pt = p.telemetry
+        pt.cq_total_strikes += 1
+        pt.cq_unit_clashes += 1
+        if defender.is_barrier or defender.taunt:
+            pt.cq_intercepted_strikes += 1
 
         # Evasion check
         ev = self._effective_evasion(opp_side, defender)
         if ev > 0 and self.rng.random() * 100.0 < ev:
             opp.telemetry.evasions_triggered += 1
+            opp.telemetry.mp_passive_triggers += 1
+            pt.cq_whiff_strikes += 1
             return
 
-        # Strip buffs bonus passive
+        # Strip buffs bonus passive & Leader Anti-Barrier/Taunt continuous blessing
         dmg = int(atk)
+        if self._unit_matches_leader(side, attacker) and p.leader_ops:
+            l_ab = int(p.leader_ops.get("aura_anti_barrier", 0))
+            if l_ab > 0 and (defender.is_barrier or defender.taunt):
+                dmg += l_ab
         if not attacker.is_silenced() and attacker.strip_buffs_bonus > 0:
             if defender.perm_atk_buff > 0 or defender.perm_def_buff > 0:
                 defender.atk = max(0, defender.atk - defender.perm_atk_buff)
@@ -2316,8 +2650,18 @@ class BattleEngine:
             red = (5, 8, 12)[el_idx] if defender.element == 4 else (1, 2, 3)[el_idx]
             dmg = max(1, dmg - red)
 
+        atk_pre_def = attacker.deff
+        def_tier = defender.tier
+        pre_diff = p.hp - opp.hp
+
         self._dmg_cause = "attack"
         dealt = self._damage_unit(opp_side, defender, dmg, source_side=side, killer_unit=attacker)
+        attacker.dmg_dealt_total += dealt
+        if dealt <= 0:
+            pt.cq_whiff_strikes += 1
+        def_died = (defender.deff <= 0)
+        if def_died:
+            pt.cq_lethal_strikes += 1
 
         # Ice Arena elemental resonance: Ice attackers have 35%/50%/70% Freeze on hit
         if dealt > 0 and defender.deff > 0 and self.env_id == 4 and attacker.element == 4:
@@ -2325,24 +2669,39 @@ class BattleEngine:
             if self.rng.random() * 100.0 < (35, 50, 70)[el_idx]:
                 self._apply_status(opp_side, defender, "freeze", 1, source_side=side)
 
-        # On-hit DoTs & Life Leech
-        if dealt > 0 and not attacker.is_silenced():
-            if attacker.life_leech_pct > 0:
-                p.heal_hp(pct_of(dealt, attacker.life_leech_pct))
+        # On-hit DoTs, Life Leech, Armor Pierce & Cleave (unit passives + dynamic continuous Leader aura!)
+        if dealt > 0:
+            _lops = p.leader_ops if (self._unit_matches_leader(side, attacker) and p.leader_ops) else None
+            leech_tot = (0 if attacker.is_silenced() else attacker.life_leech_pct) + (int(_lops.get("aura_leech", 0)) if _lops else 0)
+            if leech_tot > 0:
+                p.heal_hp(pct_of(dealt, leech_tot))
+                pt.mp_passive_triggers += 1
+            if _lops and int(_lops.get("aura_pierce_pct", 0)) > 0:
+                p_dmg = max(1, pct_of(dealt, int(_lops["aura_pierce_pct"])))
+                self._damage_commander(opp_side, p_dmg, source_side=side)
             if defender.deff > 0:
-                if attacker.on_hit_burn > 0:
-                    self._apply_status(opp_side, defender, "burn", attacker.on_hit_burn, source_side=side)
-                if attacker.on_hit_poison > 0:
-                    self._apply_status(opp_side, defender, "poison", attacker.on_hit_poison, source_side=side)
-                if attacker.on_hit_bleed > 0:
-                    self._apply_status(opp_side, defender, "bleed", attacker.on_hit_bleed, source_side=side)
+                b_amt = (0 if attacker.is_silenced() else attacker.on_hit_burn) + (int(_lops.get("aura_burn", 0)) if _lops else 0)
+                if b_amt > 0:
+                    self._apply_status(opp_side, defender, "burn", b_amt, source_side=side)
+                    pt.mp_passive_triggers += 1
+                p_amt = (0 if attacker.is_silenced() else attacker.on_hit_poison) + (int(_lops.get("aura_poison", 0)) if _lops else 0)
+                if p_amt > 0:
+                    self._apply_status(opp_side, defender, "poison", p_amt, source_side=side)
+                    pt.mp_passive_triggers += 1
+                bl_amt = (0 if attacker.is_silenced() else attacker.on_hit_bleed) + (int(_lops.get("aura_bleed", 0)) if _lops else 0)
+                if bl_amt > 0:
+                    self._apply_status(opp_side, defender, "bleed", bl_amt, source_side=side)
+                    pt.mp_passive_triggers += 1
 
             # Cleave splash to adjacent enemy slots
-            if attacker.cleave_pct > 0:
-                cdmg = max(1, pct_of(dmg, attacker.cleave_pct))
+            clv_pct = (0 if attacker.is_silenced() else attacker.cleave_pct) + (int(_lops.get("aura_cleave_pct", 0)) if _lops else 0)
+            if clv_pct > 0:
+                pt.mp_passive_triggers += 1
+                cdmg = max(1, pct_of(dmg, clv_pct))
                 for adj in (defender.slot - 1, defender.slot + 1):
                     if 0 <= adj < BOARD_SLOTS and opp.board[adj] is not None:
-                        self._damage_unit(opp_side, opp.board[adj], cdmg, source_side=side)
+                        c_dealt = self._damage_unit(opp_side, opp.board[adj], cdmg, source_side=side)
+                        attacker.dmg_dealt_total += c_dealt
 
         # Reflect / Thorns retaliation (automatic, works even on Barriers!)
         self._dmg_cause = "counter"
@@ -2350,18 +2709,44 @@ class BattleEngine:
         ref_dmg = r_flat + (pct_of(dmg, r_pct) if r_pct > 0 else 0)
         if ref_dmg > 0 and attacker.deff > 0:
             opp.telemetry.reflect_dmg_dealt += ref_dmg
-            self._damage_unit(side, attacker, ref_dmg, source_side=opp_side)
+            opp.telemetry.mp_passive_triggers += 1
+            r_dealt = self._damage_unit(side, attacker, ref_dmg, source_side=opp_side)
+            defender.dmg_dealt_total += r_dealt
 
         # Defender counter-attack (ONLY if defender survived, is NOT Barrier/Spy, NOT Frozen, and ATK > 0)
         if defender.deff > 0 and attacker.deff > 0 and defender.can_ever_attack() and defender.frozen <= 0:
             c_atk = self._effective_atk(opp_side, defender)
             if c_atk > 0:
-                self._damage_unit(side, attacker, c_atk, source_side=opp_side)
+                cnt_dealt = self._damage_unit(side, attacker, c_atk, source_side=opp_side)
+                defender.dmg_dealt_total += cnt_dealt
+
+        atk_taken = max(0, atk_pre_def - attacker.deff)
+        atk_died = (attacker.deff <= 0)
+        if def_died and atk_died:
+            pt.cq_mutual_kills += 1
+            pt.cq_fair_trades += 1
+        elif def_died and atk_taken == 0:
+            pt.cq_clean_kills += 1
+        elif dealt > 0 and atk_taken > 0:
+            pt.cq_fair_trades += 1
+        if (def_died and def_tier >= 5) or dealt >= 25 or (pre_diff < 0 and (p.hp - opp.hp) >= 0):
+            pt.cq_swing_strikes += 1
 
     def _strike_commander(self, side: int, attacker: MonsterUnit, dmg: int) -> None:
+        p = self.players[side]
+        opp = self.players[1 - side]
+        pre_diff = p.hp - opp.hp
+        p.telemetry.cq_total_strikes += 1
+        p.telemetry.cq_face_strikes += 1
+        attacker.dmg_dealt_total += max(0, int(dmg))
+        self._dmg_cause = "attack"
         self._damage_commander(1 - side, dmg, source_side=side)
-        if not attacker.is_silenced() and attacker.life_leech_pct > 0:
-            self.players[side].heal_hp(pct_of(dmg, attacker.life_leech_pct))
+        _l_leech = int(p.leader_ops.get("aura_leech", 0)) if (self._unit_matches_leader(side, attacker) and p.leader_ops) else 0
+        leech_face = (0 if attacker.is_silenced() else attacker.life_leech_pct) + _l_leech
+        if leech_face > 0:
+            p.heal_hp(pct_of(dmg, leech_face))
+        if dmg >= 25 or (pre_diff < 0 and (p.hp - opp.hp) >= 0):
+            p.telemetry.cq_swing_strikes += 1
 
     # ------------------------------------------------------------------
     # Damage, Death, Undying, Hydra Split, Last Breath & Special Helpers
@@ -2373,8 +2758,26 @@ class BattleEngine:
         tp = self.players[target_side]
         tp.hp -= amt
         if source_side in (0, 1) and source_side != target_side:
-            self.players[source_side].telemetry.dmg_to_face += amt
+            st_src = self.players[source_side].telemetry
+            st_src.dmg_to_face += amt
+            c_tag = self._dmg_cause
+            if c_tag == "attack":
+                ch_i = 0
+            elif c_tag == "active":
+                ch_i = 1
+                st_src.cq_skill_dmg_total += amt
+            elif c_tag == "spell":
+                ch_i = 2
+            elif c_tag == "dot":
+                ch_i = 3
+            else:
+                ch_i = 4
+            st_src.vc_face_by_ch[ch_i] += amt
             self._turn_dmg += amt
+            self._turn_face_dmg += amt
+        else:
+            ch_i = 5
+            self.players[1 - target_side].telemetry.vc_face_by_ch[5] += amt
         # Update live HP deficits for comeback detection
         d0 = self.players[1].hp - self.players[0].hp
         if d0 > self._max_deficit[0]:
@@ -2383,6 +2786,7 @@ class BattleEngine:
             self._max_deficit[1] = -d0
         if tp.hp <= 0:
             tp.hp = 0
+            self._vc_kill_channel = ch_i
             self._finish(1 - target_side, "CommanderHP")
 
     def _damage_unit(
@@ -2396,11 +2800,20 @@ class BattleEngine:
     ) -> int:
         if u.deff <= 0 or self.done:
             return 0
-        amt = max(0, int(amount) - (0 if u.is_silenced() else u.dmg_reduce_flat))
+        raw_amt = int(amount)
+        if raw_amt <= 0:
+            return 0
+        amt = max(0, raw_amt - (0 if u.is_silenced() else u.dmg_reduce_flat))
+        if amt > 0 and self._unit_matches_leader(owner_side, u) and self.players[owner_side].leader_ops:
+            l_red = int(self.players[owner_side].leader_ops.get("aura_dmg_reduce", 0))
+            if l_red > 0:
+                amt = max(1, amt - l_red)
         if amt <= 0:
             return 0
 
         # Undying 1 DEF once-per-game save
+        pre_def = u.deff
+        overkill = 0
         if amt >= u.deff and u.undying_ready and not u.undying_used and not u.is_silenced():
             dealt = max(0, u.deff - 1)
             u.deff = 1
@@ -2409,17 +2822,33 @@ class BattleEngine:
             self._add_highlight(owner_side, "Undying_1DEF_Save")
         else:
             dealt = min(u.deff, amt)
+            overkill = max(0, amt - pre_def)
             u.deff -= dealt
+
+        u.dmg_taken_total += dealt
+        u.hits_taken_total += 1
+        if u.is_barrier and dealt > 0:
+            self.players[owner_side].telemetry.cq_barrier_dmg_absorbed += dealt
+        if dealt > 0 and (u.is_barrier or u.taunt):
+            u.had_impact = True
+            if u.first_impact_turn < 0:
+                u.first_impact_turn = self.turn
 
         cause = "dot" if is_dot else self._dmg_cause
         if source_side in (0, 1) and source_side != owner_side:
             st = self.players[source_side].telemetry
             st.dmg_to_monsters += dealt
+            st.cq_raw_unit_dmg += amt
+            st.cq_overkill_dmg += overkill
+            st.cq_total_unit_hits += 1
+            if 1 <= u.deff <= 2:
+                st.cq_near_death_hits += 1
             self._turn_dmg += dealt
             if is_dot:
                 st.dot_dmg_dealt += dealt
             if cause == "active":
                 st.dmg_m_by_active += dealt
+                st.cq_skill_dmg_total += dealt
             elif cause == "attack":
                 st.dmg_m_by_attack += dealt
             elif cause == "spell":
@@ -2435,7 +2864,11 @@ class BattleEngine:
             self._destroy_unit(owner_side, u, killer_side=source_side, killer_unit=killer_unit, cause=cause)
             return dealt
 
-        # Survived hit -> Enrage activation & Hydra Split check
+        # Survived hit -> Leader Battle-Hardened aura + Enrage activation & Hydra Split check
+        if dealt > 0 and self._unit_matches_leader(owner_side, u) and self.players[owner_side].leader_ops:
+            l_surv = int(self.players[owner_side].leader_ops.get("aura_survive_atk", 0))
+            if l_surv > 0 and not u.atk_locked:
+                u.apply_perm_buff(l_surv, 0)
         if not u.is_silenced():
             if not u.enrage_active and (u.enrage_atk > 0 or u.enrage_reflect > 0) and u.deff < u.max_def:
                 u.enrage_active = True
@@ -2473,10 +2906,17 @@ class BattleEngine:
 
         # Track monster board lifespan & survival buckets (non-token, non-spy units)
         if not u.is_token and not u.is_spy:
+            if self._pace_first_death == 0:
+                self._pace_first_death = self.turn
+            if not u.is_silenced() and any(str(pa.get("kind", "")).startswith("lb_") for pa in u.passives):
+                u.had_impact = True
+                if u.first_impact_turn < 0:
+                    u.first_impact_turn = self.turn
             ot = p.telemetry
             ot.units_died_count += 1
-            rnds = u.own_turns_survived
+            rnds = max(0, u.own_turns_survived)
             ot.units_died_rounds_sum += rnds
+            ot.unit_life_hist[min(6, rnds)] += 1
             if rnds <= 0:
                 ot.units_died_0rnd += 1
             elif rnds == 1:
@@ -2485,10 +2925,41 @@ class BattleEngine:
                 ot.units_died_2rnd += 1
             else:
                 ot.units_died_3p_rnd += 1
+
+            if 1 <= u.tier <= 7:
+                ot.unit_tier_sum[u.tier] += rnds
+                ot.unit_tier_cnt[u.tier] += 1
+            if 0 <= u.role < 6:
+                ot.unit_role_sum[u.role] += rnds
+                ot.unit_role_cnt[u.role] += 1
+            if 0 <= u.tribe < 10:
+                ot.unit_tribe_sum[u.tribe] += rnds
+                ot.unit_tribe_cnt[u.tribe] += 1
+            if 0 <= u.element < 10:
+                ot.unit_elem_sum[u.element] += rnds
+                ot.unit_elem_cnt[u.element] += 1
+
+            ot.unit_dmg_absorbed_sum += u.dmg_taken_total
+            ot.unit_base_def_sum += max(1, u.base_def)
+            ot.cq_hits_to_kill_sum += max(1, u.hits_taken_total)
+
             if not u.is_barrier:
                 ot.combat_died_count += 1
+                ot.unit_attacks_died_sum += u.attacks_made
+                ot.cq_unit_dmg_dealt_sum += u.dmg_dealt_total
                 if u.attacks_made == 0:
                     ot.combat_died_0atk += 1
+                if not u.had_impact:
+                    ot.unit_zero_impact_died += 1
+                    ot.cu_low_value_plays += 1
+            if u.actives:
+                ot.unit_skill_holders_died += 1
+                ot.unit_skills_died_sum += u.skills_used_total
+            if u.first_impact_turn >= 0:
+                ot.unit_first_impact_wait_sum += max(0, u.first_impact_turn - u.summoned_turn)
+                ot.unit_first_impact_cnt += 1
+            if killer_side == owner_side or (killer_side == -1 and c_tag != "dot"):
+                ot.exits_sacrifice += 1
 
         if killer_side in (0, 1) and killer_side != owner_side:
             kt = self.players[killer_side].telemetry
@@ -2535,11 +3006,22 @@ class BattleEngine:
             self._trigger_last_breath(owner_side, u)
             self._dmg_cause = _prev_cause
 
-        # Leader Owner-Only death-ping aura & board on-death passives
-        if self._leader_aura_on(owner_side) and p.leader_ops:
+        # Leader Owner-Only Tribal death-ping & kill-heal continuous auras
+        if self._unit_matches_leader(owner_side, u) and p.leader_ops:
             dp = int(p.leader_ops.get("aura_death_ping", 0))
             if dp > 0:
                 self._damage_commander(1 - owner_side, dp, source_side=owner_side)
+        if (
+            killer_unit is not None
+            and killer_unit.deff > 0
+            and killer_side in (0, 1)
+            and killer_side != owner_side
+            and self._unit_matches_leader(killer_side, killer_unit)
+            and self.players[killer_side].leader_ops
+        ):
+            kh = int(self.players[killer_side].leader_ops.get("aura_kill_heal", 0))
+            if kh > 0:
+                self.players[killer_side].telemetry.def_healed += killer_unit.heal_def(kh)
 
         for s_idx in (0, 1):
             for au in list(self.players[s_idx].board_units()):
@@ -2561,6 +3043,9 @@ class BattleEngine:
             k = pa.get("kind", "")
             v1 = int(pa.get("v1", 0))
             v2 = int(pa.get("v2", 0))
+            if k.startswith("lb_"):
+                p.telemetry.mp_last_breaths += 1
+                p.telemetry.mp_passive_triggers += 1
             if k == "lb_token":
                 for _ in range(int(pa.get("count", 1))):
                     self._spawn_token(side, v1, v2, name="Brood Token")
@@ -2611,6 +3096,8 @@ class BattleEngine:
         u.ascended = True
         u.apply_perm_buff(int(pa.get("v1", 7)), int(pa.get("v2", 9)))
         u.life_leech_pct += int(pa.get("pct", 35))
+        self.players[side].telemetry.mp_ascends += 1
+        self.players[side].telemetry.mp_passive_triggers += 1
         self._add_highlight(side, "Ascend_Evolution")
 
     def _exec_warrior_call(self, side: int, op: Dict[str, Any]) -> None:
@@ -2679,7 +3166,7 @@ class BattleEngine:
         return True
 
     def _spawn_token(
-        self, side: int, atk: int, deff: int, name: str = "Token", haste: bool = False, slot: int = -1
+        self, side: int, atk: int, deff: int, name: str = "Token", haste: bool = False, slot: int = -1, tribe: int = 9
     ) -> Optional[MonsterUnit]:
         p = self.players[side]
         empties = p.empty_slots()
@@ -2688,7 +3175,7 @@ class BattleEngine:
         s = slot if slot in empties else empties[0]
         u = MonsterUnit(
             card_id=0, name=name, owner=side, slot=s,
-            element=-1, tribe=9, playstyle=6, role=0, tier=1, mana=1,
+            element=-1, tribe=tribe, playstyle=6, role=0, tier=1, mana=1,
             atk=max(0, int(atk)), deff=max(1, int(deff)), is_token=True, summoned_turn=self.turn,
         )
         if haste or (self.env_id == 8 and self.env_level >= 2):
@@ -2731,6 +3218,8 @@ class BattleEngine:
             return False
         p = self.players[owner_side]
         p.board[u.slot] = None
+        if not u.is_token and not u.is_spy:
+            p.telemetry.exits_recalled += 1
         if not u.is_token and u.card_id > 0:
             p.add_to_hand(u.card_id, cost_mod=0)
         if source_side != owner_side and source_side in (0, 1):
@@ -2848,8 +3337,10 @@ class BattleEngine:
         if not p.deck:
             return
         cid = p.deck.pop()
-        p.add_to_hand(cid)
+        p.add_to_hand(cid, drawn_turn=(self.turn if check_deckout else 0))
         p.telemetry.cards_drawn += 1
+        if self.turn <= 3 and self.db.get(cid).type in ("leader", "covenant"):
+            p.telemetry.cf_early_special = True
 
     # ------------------------------------------------------------------
     # Smart Targeting Helpers
@@ -2921,6 +3412,9 @@ class BattleEngine:
 
         # Check HP lead swing (when lead of >= 25 HP flips from one player to the other)
         hp_diff = self.players[0].hp - self.players[1].hp
+        t.en_hp_turns += 1
+        if abs(hp_diff) <= 100:
+            t.en_close_hp_turns += 1
         new_leader = 0 if hp_diff >= 25 else (1 if hp_diff <= -25 else self._lead_side)
         lead_swing = 0
         if new_leader in (0, 1) and self._lead_side in (0, 1) and new_leader != self._lead_side:
@@ -2934,8 +3428,47 @@ class BattleEngine:
         board_cnt = p.board_count()
         t.hand_sum_end += end_hand
         t.board_units_turn_sum += board_cnt
+        if board_cnt == 0:
+            t.empty_board_turns += 1
         if end_hand == 0:
             t.empty_hand_turns += 1
+
+        # Pillar #1 Game Pace per-turn counters (distinguishing strategic setup vs true dead turns!)
+        if p.cards_played_turn == 0:
+            t.pace_zero_card_turns += 1
+        # Pillar #5 Resource Economy exact turn mana conservation (available = spent + leftover)
+        self._turn_recorded = True
+        _m_spent = max(0, int(self._turn_mana_spent))
+        self._turn_mana_spent = 0
+        _m_left = max(0, int(p.mana) + int(p.temp_mana))
+        _m_avail = _m_spent + _m_left
+        t.re_mana_avail += _m_avail
+        t.re_mana_spent += _m_spent
+        t.re_mana_wasted += _m_left
+        if _m_left > 0:
+            t.re_turns_unspent += 1
+        if self.turn <= 5:
+            t.re_early_mana_avail += _m_avail
+            t.re_early_mana_spent += _m_spent
+        _tb = min(14, max(0, self.turn - 1))
+        t.re_turn_mana_avail[_tb] += _m_avail
+        t.re_turn_mana_spent[_tb] += _m_spent
+        t.re_turn_mana_cnt[_tb] += 1
+        turn_acts = (1 if p.sacrificed_this_turn else 0) + (1 if p.aether_drawn_this_turn else 0) + p.cards_played_turn + self._pace_turn_skills + self._pace_turn_attacks
+        t.pace_total_actions += turn_acts
+        if turn_acts == 0:
+            t.pace_dead_turns += 1
+        _dec_chain = (1 if p.sacrificed_this_turn else 0) + (1 if p.aether_drawn_this_turn else 0) + p.cards_played_turn + self._pace_turn_skills
+        t.si_decision_chain_sum += _dec_chain
+        if _dec_chain >= 2:
+            t.si_multi_action_turns += 1
+        is_impact = (self._turn_kills >= 1) or (self._turn_dmg >= 30) or (lead_swing > 0) or (self._turn_highlights > 0)
+        if is_impact:
+            if self._pace_last_impact_turn > 0:
+                t.pace_impact_gaps_sum += max(0, self.turn - self._pace_last_impact_turn)
+                t.pace_impact_gaps_cnt += 1
+            self._pace_last_impact_turn = self.turn
+        self._hp_history.append((self.turn, self.players[0].hp, self.players[1].hp))
         if self.turn <= 30:
             start_h = getattr(self, "_turn_start_hand", end_hand)
             # Per-turn Excitement Index (0..100) for real Turn 1 -> Endgame excitement curve!
@@ -2954,16 +3487,41 @@ class BattleEngine:
             self._turn_events.append((self.turn, self._turn_dmg, self._turn_kills, lead_swing, self._turn_highlights, start_h, end_hand, turn_exc, board_cnt))
 
     def _finish(self, winner: int, reason: str) -> None:
-        if not self.done:
+        if not self.done and not self._turn_recorded:
             self._record_turn_excitement(self.active)
         self.done = True
         self.winner = int(winner)
         self.win_reason = reason
+
+        # Compute Decisive Lead Turn: earliest round from which winner maintained >= 60 HP lead continuously to finish
+        dec_turn = self.turn
+        if winner in (0, 1) and self._hp_history:
+            w_idx = 1 if winner == 0 else 2
+            l_idx = 2 if winner == 0 else 1
+            last_contested = -1
+            for i_h, h_row in enumerate(self._hp_history):
+                if (h_row[w_idx] - h_row[l_idx]) < 60:
+                    last_contested = i_h
+            if last_contested + 1 < len(self._hp_history):
+                dec_turn = self._hp_history[last_contested + 1][0]
+            else:
+                dec_turn = self.turn
+
         for s in (0, 1):
             p = self.players[s]
             t = p.telemetry
             t.final_hp = p.hp
             t.max_hp_end = p.max_hp
+            t.cu_hand_end_remaining = len(p.hand)
+            t.cu_deck_cycles_done = max(0, p.deck_cycles - 1)
+            t.vc_kill_channel = self._vc_kill_channel if reason == "CommanderHP" else 5
+            t.vc_final_turn_face_dmg = self._turn_face_dmg
+            t.vc_end_board_cnt = p.board_count()
+            t.pace_first_summon = self._pace_first_summon
+            t.pace_first_attack = self._pace_first_attack
+            t.pace_first_death = self._pace_first_death
+            t.pace_first_defense = self._pace_first_defense
+            t.pace_decisive_turn = dec_turn
             for su in p.board_units():
                 if not su.is_token and not su.is_spy:
                     t.units_survived_end += 1

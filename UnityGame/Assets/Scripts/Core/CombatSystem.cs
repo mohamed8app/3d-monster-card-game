@@ -996,12 +996,12 @@ namespace MonsterCardGame.Core
                 if (targetM.HasPassiveSubstr("Rock Hardness") != null) flatRed += 5;
                 if (targetM.HasPassiveSubstr("Granite Armor") != null) flatRed += 6;
                 if (targetM.HasPassiveSubstr("Molten Anvil") != null) flatRed += 3;
+                flatRed += CommanderSpiritEffects.GetCombatIncomingReduction(opponent, targetM);
                 if (isCombat)
                 {
                     if (targetM.HasPassiveSubstr("Cinder Shield") != null) flatRed += 3;
                     if (targetM.HasPassiveSubstr("Protective Flame") != null) flatRed += 4;
                     if (targetM.HasPassiveSubstr("Steel Armor") != null) flatRed += 7;
-                    flatRed += CommanderSpiritEffects.GetCombatIncomingReduction(opponent, targetM);
                 }
                 else
                 {
@@ -1887,7 +1887,8 @@ namespace MonsterCardGame.Core
             int envSkillBonus = (activeEnv != null && IsEnvElement(activeEnv, "Desert"))
                 ? (activeEnv.level >= 3 ? 6 : (activeEnv.level == 2 ? 4 : 2))
                 : 0;
-            int bonus = bonusEff + covSkillBonus + envSkillBonus;
+            int leaderSkillBonus = V2CardMechanicsEngine.GetLeaderSkillPowerBonus(player, m);
+            int bonus = bonusEff + covSkillBonus + envSkillBonus + leaderSkillBonus;
             int v1 = op.v1;
             int v2 = op.v2;
 
@@ -1956,6 +1957,8 @@ namespace MonsterCardGame.Core
                         }
                         if (!string.IsNullOrEmpty(op.fx) && em.IsAlive)
                             ApplyV2SkillStatusFx(em, op.fx, v2, op.dur, oppIsHuman, es.slotIndex, showVfx);
+                        if (op.weaken > 0 && em.IsAlive)
+                            em.weakenedAtkFlat += op.weaken;
                     }
                     if (op.cleanse)
                     {
@@ -3686,8 +3689,8 @@ namespace MonsterCardGame.Core
                 if (MonsterCardGame.Audio.SoundManager.Instance != null)
                     MonsterCardGame.Audio.SoundManager.Instance.PlayCardHit();
 
-                // V2.1 Armor Pierce / Bypass Passive (deals strict integer-rounded % of hit straight to enemy Commander)
-                int piercePct = V2CardMechanicsEngine.GetUnitPiercePct(attackerMonster);
+                // V2.1 Armor Pierce / Bypass Passive + V2.3 Leader Continuous Pierce Aura
+                int piercePct = V2CardMechanicsEngine.GetUnitPiercePct(attackerMonster, attacker);
                 if (piercePct > 0 && dealtM > 0 && defender != null)
                 {
                     int pierceDmg = Mathf.Max(1, V2CardMechanicsEngine.StrictRoundPct(dealtM, piercePct));
@@ -3818,6 +3821,8 @@ namespace MonsterCardGame.Core
                     attackerMonster.bonusAtk += 2;
 
                 int dealtDirect = GetLeaderDmgDealt(defender, atkPower);
+                if (dealtDirect > 0)
+                    V2CardMechanicsEngine.OnLeaderCombatHitDealt(attacker, attackerMonster, defender, null, dealtDirect);
                 if (attackerMonster.HasPassiveSubstr("Psychic Drain") != null)
                 {
                     int dPd = GetLeaderDmgDealt(defender, 4);

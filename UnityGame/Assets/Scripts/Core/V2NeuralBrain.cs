@@ -14,7 +14,7 @@ namespace MonsterCardGame.Core
     public class V2NeuralBrain
     {
         public const int ExpectedObsDim = 220;
-        public const int ExpectedActionDim = 62;
+        public const int ExpectedActionDim = 63;
 
         public string ModelId { get; private set; }
         public int ObsDim { get; private set; }
@@ -665,6 +665,10 @@ namespace MonsterCardGame.Core
                         mask[50 + sl * 2 + k] = true;
                 }
             }
+
+            // 62: Aether Well Extra Draw (2 Mana -> +1 Card, once per turn)
+            if (ExpectedActionDim > 62 && p.CanAetherDraw(out _))
+                mask[62] = true;
 
             return mask;
         }

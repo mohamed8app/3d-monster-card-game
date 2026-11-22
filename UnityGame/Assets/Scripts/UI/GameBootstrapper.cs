@@ -521,6 +521,9 @@ namespace MonsterCardGame.UI
             // 10.2 Center Seam Astral Hourglass Medallion (integrated on BottomArenaSeamDivider at x = 0, y = -288)
             BuildAstralHourglassMedallion(screenRoot.transform, ui);
 
+            // 10.3 Aether Well Extra-Draw Button right beside the Hourglass (2 Mana -> +1 Card, 1x/turn)
+            BuildAetherDrawButton(screenRoot.transform, ui);
+
             // 10.5 Top-Level Overlay for Card Flight Animations (Deck -> Hand, Hand -> Board/Env/Leader)
             var flightLayerObj = new GameObject("CardFlightLayer");
             flightLayerObj.transform.SetParent(screenRoot.transform, false);
@@ -660,6 +663,26 @@ namespace MonsterCardGame.UI
             ctrl.BindButton();
 
             ui.hourglassControl = ctrl;
+        }
+
+        private static void BuildAetherDrawButton(Transform screenRoot, BattleUIManager ui)
+        {
+            var btn = CreateBeveledButton(
+                screenRoot,
+                "AetherDrawButton",
+                "✨ DRAW (2💧)",
+                new Color(0.08f, 0.28f, 0.44f, 0.96f),
+                new Color(0.84f, 0.96f, 1.0f),
+                new Vector2(150f, -288f),
+                new Vector2(138f, 34f),
+                11,
+                () => { GameManager.Instance?.OnPlayerAetherDrawClicked(); }
+            );
+            var outline = btn.gameObject.AddComponent<Outline>();
+            outline.effectColor = new Color(0.30f, 0.72f, 0.96f, 0.92f);
+            outline.effectDistance = new Vector2(1.2f, 1.2f);
+            ui.aetherDrawButton = btn;
+            ui.aetherDrawButtonText = btn.GetComponentInChildren<Text>();
         }
 
         private static void BuildBattleTestingToolbar(Transform parent, BattleUIManager ui)
@@ -1120,7 +1143,7 @@ namespace MonsterCardGame.UI
 
             if (isPlayerSide)
             {
-                ui.playerPowerText = CreateText(statusBox.transform, "PlayerPowerText", "[ ◇ ] Mana: 0  |  Power: 0 (∞)", 11,
+                ui.playerPowerText = CreateText(statusBox.transform, "PlayerPowerText", "[ ◇ ] Mana: 0  |  Aether: 0 (∞)", 11,
                     new Color(0.74f, 0.88f, 0.98f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(194, 30));
                 ui.playerPowerText.horizontalOverflow = HorizontalWrapMode.Wrap;
                 ui.playerPowerText.resizeTextForBestFit = true;
@@ -1130,7 +1153,7 @@ namespace MonsterCardGame.UI
             }
             else
             {
-                ui.enemyPowerText = CreateText(statusBox.transform, "EnemyPowerText", "[ ◇ ]  Mana: 0  |  Power: 0 (∞)", 10,
+                ui.enemyPowerText = CreateText(statusBox.transform, "EnemyPowerText", "[ ◇ ]  Mana: 0  |  Aether: 0 (∞)", 10,
                     new Color(0.98f, 0.78f, 0.82f), TextAnchor.MiddleCenter, new Vector2(0, 9), new Vector2(196, 22));
                 ui.enemyPowerText.horizontalOverflow = HorizontalWrapMode.Wrap;
                 ui.enemyPowerText.resizeTextForBestFit = true;

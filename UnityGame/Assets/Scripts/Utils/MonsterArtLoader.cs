@@ -19,7 +19,10 @@ namespace MonsterCardGame.Utils
         private static readonly Dictionary<string, Texture2D> depthTextureCache = new Dictionary<string, Texture2D>();
         private static readonly HashSet<string> missingTextureKeys = new HashSet<string>();
         private static readonly string[] SupportedExtensions = { ".png", ".jpg", ".jpeg", ".webp" };
-        private static readonly string[] SubfolderCandidates = { "", "Monsters", "Spells", "Environments", "Leaders" };
+        private static readonly string[] SubfolderCandidates = { "", "Monsters", "Spells", "Environments", "Leaders", "Covenants" };
+
+        // Strict Frame-Only Isolation Mode: card artwork is isolated outside the game structure so only authentic card frames render cleanly.
+        public static bool IsolateCardArtwork = true;
 
         public static string ResolveCardIdKey(CardData data)
         {
@@ -31,6 +34,7 @@ namespace MonsterCardGame.Utils
 
         public static Sprite GetCardSprite(CardData data)
         {
+            if (IsolateCardArtwork) return null;
             string key = ResolveCardIdKey(data);
             if (string.IsNullOrEmpty(key)) return null;
 
@@ -64,7 +68,7 @@ namespace MonsterCardGame.Utils
         /// </summary>
         public static Sprite GetEnvironmentFramedSprite(CardData data)
         {
-            if (data == null) return null;
+            if (IsolateCardArtwork || data == null) return null;
             string key = ResolveCardIdKey(data);
             if (string.IsNullOrEmpty(key)) return null;
 
@@ -92,6 +96,7 @@ namespace MonsterCardGame.Utils
 
         public static Sprite GetInspectorSprite(CardData data)
         {
+            if (IsolateCardArtwork) return null;
             string key = ResolveCardIdKey(data);
             if (string.IsNullOrEmpty(key)) return null;
 
@@ -378,6 +383,7 @@ namespace MonsterCardGame.Utils
         /// </summary>
         public static bool HasCustomCardArt(CardData data)
         {
+            if (IsolateCardArtwork) return false;
             string key = ResolveCardIdKey(data);
             if (string.IsNullOrEmpty(key)) return false;
             return LoadCardTexture(key) != null;
@@ -565,6 +571,7 @@ namespace MonsterCardGame.Utils
 
         private static Sprite _cardBackSprite;
         private static Sprite _spellScrollSprite;
+        private static Sprite _covenantFrameSprite;
         private static Sprite _playerAvatarSprite;
         private static Sprite _enemyAvatarSprite;
 
@@ -580,6 +587,13 @@ namespace MonsterCardGame.Utils
             if (_spellScrollSprite != null) return _spellScrollSprite;
             _spellScrollSprite = LoadSpriteByKey("card_scroll_spell");
             return _spellScrollSprite;
+        }
+
+        public static Sprite GetCovenantFrameSprite()
+        {
+            if (_covenantFrameSprite != null) return _covenantFrameSprite;
+            _covenantFrameSprite = LoadSpriteByKey("card_frame_covenant");
+            return _covenantFrameSprite;
         }
 
         public static Sprite GetPlayerAvatarSprite()

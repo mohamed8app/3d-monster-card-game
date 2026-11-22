@@ -197,6 +197,8 @@ namespace MonsterCardGame.Core
         /// </summary>
         public static void ApplyOnSummoned(PlayerState owner, PlayerState opponent, CardData spirit)
         {
+            // V2.3 Leaders (IDs 11..70) are Pure Continuous Tribal Ancestor Blessings with ZERO On-Summon bursts.
+            if (spirit != null && V2CardMechanicsEngine.GetLeaderOps(spirit) != null) return;
             int sid = ResolveSpiritEffectId(spirit);
             if (sid == 0 || owner == null) return;
 
@@ -544,6 +546,7 @@ namespace MonsterCardGame.Core
         public static void OnMonsterSummoned(PlayerState owner, PlayerState opponent, int slotIdx, MonsterInstance m)
         {
             if (owner == null || owner.activeLeader == null || m == null) return;
+            if (V2CardMechanicsEngine.GetLeaderOps(owner.activeLeader) != null) return;
             int sid = ResolveSpiritEffectId(owner.activeLeader);
             bool ownerHuman = IsOwnerHuman(owner);
             Color spiritCol = MonsterArtLoader.GetSpiritCategoryColor(owner.activeLeader, ownerHuman);
@@ -584,6 +587,7 @@ namespace MonsterCardGame.Core
         public static void OnCardSacrificed(PlayerState owner, PlayerState opponent)
         {
             if (owner == null || owner.activeLeader == null) return;
+            if (V2CardMechanicsEngine.GetLeaderOps(owner.activeLeader) != null) return;
             int sid = ResolveSpiritEffectId(owner.activeLeader);
             if (sid != 454) return; // Blood Baroness Lilitha
 
@@ -600,6 +604,7 @@ namespace MonsterCardGame.Core
         public static void OnSpellCast(PlayerState owner, PlayerState opponent)
         {
             if (owner == null || owner.activeLeader == null) return;
+            if (V2CardMechanicsEngine.GetLeaderOps(owner.activeLeader) != null) return;
             int sid = ResolveSpiritEffectId(owner.activeLeader);
             if (sid != 457) return; // Archmagus Zarathos
 
@@ -616,6 +621,11 @@ namespace MonsterCardGame.Core
         public static void OnStartOfTurn(PlayerState activePlayer, PlayerState otherPlayer)
         {
             if (activePlayer == null || activePlayer.activeLeader == null) return;
+            if (V2CardMechanicsEngine.GetLeaderOps(activePlayer.activeLeader) != null)
+            {
+                V2CardMechanicsEngine.ApplyLeaderStartOfTurn(activePlayer, otherPlayer);
+                return;
+            }
             int sid = ResolveSpiritEffectId(activePlayer.activeLeader);
             bool activeHuman = IsOwnerHuman(activePlayer);
             Color spiritCol = MonsterArtLoader.GetSpiritCategoryColor(activePlayer.activeLeader, activeHuman);
@@ -659,6 +669,8 @@ namespace MonsterCardGame.Core
         public static int GetContinuousAtkBonus(PlayerState owner, int slotIdx, MonsterInstance m)
         {
             if (owner == null || owner.activeLeader == null || m == null) return 0;
+            // V2.3 Leaders apply ATK auras exclusively via V2CardMechanicsEngine.GetUnitAuraAndCovenantAtkDelta
+            if (V2CardMechanicsEngine.GetLeaderOps(owner.activeLeader) != null) return 0;
             int sid = ResolveSpiritEffectId(owner.activeLeader);
 
             switch (sid)
@@ -691,6 +703,8 @@ namespace MonsterCardGame.Core
         public static int GetEnemyDreadAtkPenalty(PlayerState opponent, MonsterInstance attackerM)
         {
             if (opponent == null || opponent.activeLeader == null || attackerM == null) return 0;
+            if (V2CardMechanicsEngine.GetLeaderOps(opponent.activeLeader) != null)
+                return V2CardMechanicsEngine.GetLeaderEnemyDreadPenalty(opponent);
             int sid = ResolveSpiritEffectId(opponent.activeLeader);
             return sid switch
             {
@@ -705,6 +719,8 @@ namespace MonsterCardGame.Core
         public static int GetSkillManaDiscount(PlayerState owner, MonsterInstance m)
         {
             if (owner == null || owner.activeLeader == null || m == null) return 0;
+            if (V2CardMechanicsEngine.GetLeaderOps(owner.activeLeader) != null)
+                return V2CardMechanicsEngine.GetLeaderSkillManaDiscount(owner, m);
             int sid = ResolveSpiritEffectId(owner.activeLeader);
             if (sid == 458 && IsTribe(m, "Mages")) return 1;
             if (sid == 456 && IsTribe(m, "Celestials")) return 1;
@@ -714,6 +730,8 @@ namespace MonsterCardGame.Core
         public static float GetCombatEvasionChance(PlayerState defenderOwner, int slotIdx, MonsterInstance defenderM)
         {
             if (defenderOwner == null || defenderOwner.activeLeader == null || defenderM == null) return 0f;
+            if (V2CardMechanicsEngine.GetLeaderOps(defenderOwner.activeLeader) != null)
+                return V2CardMechanicsEngine.GetLeaderEvasionChance(defenderOwner, defenderM);
             int sid = ResolveSpiritEffectId(defenderOwner.activeLeader);
             return sid switch
             {
@@ -727,6 +745,8 @@ namespace MonsterCardGame.Core
         public static int GetCombatIncomingReduction(PlayerState defenderOwner, MonsterInstance defenderM)
         {
             if (defenderOwner == null || defenderOwner.activeLeader == null || defenderM == null) return 0;
+            if (V2CardMechanicsEngine.GetLeaderOps(defenderOwner.activeLeader) != null)
+                return V2CardMechanicsEngine.GetLeaderIncomingReduction(defenderOwner, defenderM);
             int sid = ResolveSpiritEffectId(defenderOwner.activeLeader);
             return sid switch
             {
@@ -740,6 +760,8 @@ namespace MonsterCardGame.Core
         public static int ModifyOutgoingCombatAttack(PlayerState attackerOwner, MonsterInstance attackerM, MonsterInstance defenderM, int atkPower)
         {
             if (attackerOwner == null || attackerOwner.activeLeader == null || attackerM == null) return atkPower;
+            if (V2CardMechanicsEngine.GetLeaderOps(attackerOwner.activeLeader) != null)
+                return V2CardMechanicsEngine.ModifyLeaderOutgoingAttack(attackerOwner, attackerM, defenderM, atkPower);
             int sid = ResolveSpiritEffectId(attackerOwner.activeLeader);
 
             if (sid == 459 && IsTribe(attackerM, "Warriors") && defenderM != null)
@@ -764,8 +786,15 @@ namespace MonsterCardGame.Core
         public static void OnCombatHitDealt(PlayerState attackerOwner, MonsterInstance attackerM, PlayerState defenderOwner, MonsterInstance defenderM, int dmgDealt)
         {
             if (attackerM == null || defenderM == null) return;
+            bool attV2 = attackerOwner != null && attackerOwner.activeLeader != null && V2CardMechanicsEngine.GetLeaderOps(attackerOwner.activeLeader) != null;
+            bool defV2 = defenderOwner != null && defenderOwner.activeLeader != null && V2CardMechanicsEngine.GetLeaderOps(defenderOwner.activeLeader) != null;
+            if (attV2 || defV2)
+            {
+                V2CardMechanicsEngine.OnLeaderCombatHitDealt(attackerOwner, attackerM, defenderOwner, defenderM, dmgDealt);
+                if (attV2 && defV2) return;
+            }
 
-            if (attackerOwner != null && attackerOwner.activeLeader != null)
+            if (!attV2 && attackerOwner != null && attackerOwner.activeLeader != null)
             {
                 int attSid = ResolveSpiritEffectId(attackerOwner.activeLeader);
                 if (attSid == 453 && IsTribe(attackerM, "Demons"))
@@ -786,7 +815,7 @@ namespace MonsterCardGame.Core
                 }
             }
 
-            if (defenderOwner != null && defenderOwner.activeLeader != null && attackerM.IsAlive)
+            if (!defV2 && defenderOwner != null && defenderOwner.activeLeader != null && attackerM.IsAlive)
             {
                 int defSid = ResolveSpiritEffectId(defenderOwner.activeLeader);
                 if (defSid == 460 && IsTribe(defenderM, "Warriors") && IsRivalTribe(attackerM, "Warriors"))
@@ -807,6 +836,13 @@ namespace MonsterCardGame.Core
         public static void OnMonsterDied(PlayerState deadOwner, PlayerState killerOwner, MonsterInstance deadM, MonsterInstance killerM)
         {
             if (deadM == null) return;
+            bool deadV2 = deadOwner != null && deadOwner.activeLeader != null && V2CardMechanicsEngine.GetLeaderOps(deadOwner.activeLeader) != null;
+            bool killerV2 = killerOwner != null && killerOwner.activeLeader != null && V2CardMechanicsEngine.GetLeaderOps(killerOwner.activeLeader) != null;
+            if (deadV2 || killerV2)
+            {
+                V2CardMechanicsEngine.OnLeaderMonsterDied(deadOwner, killerOwner, deadM, killerM);
+                return;
+            }
 
             // Archlich Valkor (451): any death hits Enemy Leader & heals weakest allied Ghost
             var gm = GameManager.Instance;

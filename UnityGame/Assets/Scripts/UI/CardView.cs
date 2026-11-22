@@ -39,7 +39,30 @@ namespace MonsterCardGame.UI
             if (elementText != null) elementText.text = data.element;
             if (roleText != null) roleText.text = data.role;
 
-            ApplyElementColor(data.element);
+            if (data.cardType == CardType.Covenant)
+            {
+                if (cardFrame != null)
+                {
+                    Sprite covFrame = MonsterArtLoader.GetCovenantFrameSprite();
+                    if (covFrame != null)
+                    {
+                        cardFrame.sprite = covFrame;
+                        cardFrame.color = Color.white;
+                    }
+                }
+                if (costText != null)
+                {
+                    costText.rectTransform.anchorMin = new Vector2(0.5f, 0f);
+                    costText.rectTransform.anchorMax = new Vector2(0.5f, 0f);
+                    costText.rectTransform.anchoredPosition = new Vector2(0f, 15f);
+                }
+                if (atkText != null) atkText.gameObject.SetActive(false);
+                if (defText != null) defText.gameObject.SetActive(false);
+            }
+            else
+            {
+                ApplyElementColor(data.element);
+            }
         }
 
         public void UpdateStats()

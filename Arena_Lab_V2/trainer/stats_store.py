@@ -22,13 +22,15 @@ CARD_STATS_PATH = os.path.join(LOGS_DIR, "card_stats.json")
 MATCH_HISTORY_PATH = os.path.join(LOGS_DIR, "match_history.jsonl")
 
 
-def _atomic_write_json(path: str, data: Any) -> None:
+def _atomic_write_json(path: str, data: Any, compact: bool = False) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = f"{path}.{os.getpid()}.tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        if compact:
+            json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+        else:
+            json.dump(data, f, ensure_ascii=False, indent=2)
         f.flush()
-        os.fsync(f.fileno())
     for attempt in range(12):
         try:
             if os.path.isfile(path) and os.path.getsize(path) > 64:
@@ -110,18 +112,230 @@ def _default_model_record(model_id: str) -> Dict[str, Any]:
 def _default_excitement_data() -> Dict[str, Any]:
     return {
         "total_matches": 0,
+        "total_turns_sum": 0,
+        "p1_games": 0,
+        "p1_wins": 0,
         "avg_excitement": 0.0,
         "avg_hand_start": 0.0,
         "avg_hand_end": 0.0,
         "empty_hand_pct": 0.0,
-        "avg_unit_lifespan": 0.0,
-        "died_0atk_pct": 0.0,
-        "avg_board_units": 0.0,
         "comeback_wins": 0,
         "clutch_wins": 0,
         "total_lead_swings": 0,
+        "match_len_bins": {"1-6": 0, "7-12": 0, "13-18": 0, "19-25": 0, "26-39": 0, "40+": 0},
+        "monster_survival": {
+            "died_cnt": 0, "died_rounds": 0,
+            "d0": 0, "d1": 0, "d2": 0, "d3p": 0,
+            "life_hist": [0, 0, 0, 0, 0, 0, 0],
+            "tier_sum": [0] * 8, "tier_cnt": [0] * 8,
+            "role_sum": [0] * 6, "role_cnt": [0] * 6,
+            "tribe_sum": [0] * 10, "tribe_cnt": [0] * 10,
+            "elem_sum": [0] * 10, "elem_cnt": [0] * 10,
+            "dmg_absorbed_sum": 0, "base_def_sum": 0,
+            "zero_impact_died": 0, "attacks_died_sum": 0,
+            "skill_holders_died": 0, "skills_died_sum": 0,
+            "first_impact_wait_sum": 0, "first_impact_cnt": 0,
+            "empty_board_turns": 0,
+            "exits_sacrifice": 0, "exits_recalled": 0,
+            "combat_died": 0, "combat_0atk": 0,
+            "surv_cnt": 0, "surv_rounds": 0,
+            "board_sum": 0, "board_turns": 0,
+        },
+        "kill_causes": {"active": 0, "attack": 0, "spell": 0, "counter": 0, "dot": 0, "passive": 0},
+        "dmg_sources": {"active": 0, "attack": 0, "spell": 0, "counter": 0, "dot": 0, "passive": 0},
+        "game_pace": {
+            "matches": 0,
+            "turn_hist": {},
+            "min_turn": 0,
+            "max_turn": 0,
+            "first_summon_sum": 0, "first_summon_cnt": 0,
+            "first_attack_sum": 0, "first_attack_cnt": 0,
+            "first_death_sum": 0,  "first_death_cnt": 0,
+            "first_defense_sum": 0,"first_defense_cnt": 0,
+            "zero_card_turns": 0,
+            "dead_turns": 0,
+            "total_player_turns": 0,
+            "total_actions": 0,
+            "impact_gaps_sum": 0,  "impact_gaps_cnt": 0,
+            "max_turn_40_cnt": 0,
+            "decisive_turn_sum": 0, "decisive_ratio_sum": 0.0, "decisive_cnt": 0,
+        },
+        "combat_quality": {
+            "unit_dmg_dealt_sum": 0,
+            "hits_to_kill_sum": 0,
+            "total_strikes": 0,
+            "unit_clashes": 0,
+            "face_strikes": 0,
+            "lethal_strikes": 0,
+            "whiff_strikes": 0,
+            "intercepted_strikes": 0,
+            "mutual_kills": 0,
+            "fair_trades": 0,
+            "clean_kills": 0,
+            "swing_strikes": 0,
+            "overkill_dmg": 0,
+            "raw_unit_dmg": 0,
+            "barrier_dmg_absorbed": 0,
+            "near_death_hits": 0,
+            "total_unit_hits": 0,
+            "skill_dmg_total": 0,
+            "actives_used_total": 0,
+            "total_healed": 0,
+            "total_face_dmg": 0,
+            "total_monster_dmg": 0,
+        },
+        "card_utilization": {
+            "drawn_total": 0,
+            "played_total": 0,
+            "sacrificed_total": 0,
+            "burned_hand7_total": 0,
+            "hand_end_remaining": 0,
+            "played_on_draw_turn": 0,
+            "play_turn_sum": 0,
+            "played_by_type": [0, 0, 0, 0, 0, 0],
+            "cond_attempts": 0,
+            "cond_success": 0,
+            "hand_checks_cards": 0,
+            "hand_unplayable_cards": 0,
+            "low_value_plays": 0,
+            "deck_cycles_done": 0,
+            "impact_value_sum": 0,
+            "sides_count": 0,
+        },
+        "resource_economy": {
+            "mana_avail": 0,
+            "mana_spent": 0,
+            "mana_wasted": 0,
+            "turns_total": 0,
+            "turns_unspent": 0,
+            "early_mana_avail": 0,
+            "early_mana_spent": 0,
+            "mana_spent_cards": 0,
+            "mana_spent_monsters": 0,
+            "mana_spent_spells": 0,
+            "mana_spent_skills": 0,
+            "mana_spent_other": 0,
+            "mana_offense": 0,
+            "mana_defense": 0,
+            "card_cost_played": [0, 0, 0, 0, 0, 0, 0, 0],
+            "card_cost_wins": [0, 0, 0, 0, 0, 0, 0, 0],
+            "turn_mana_avail": [0] * 15,
+            "turn_mana_spent": [0] * 15,
+            "turn_mana_cnt": [0] * 15,
+            "reach_cap_sum": 0,
+            "reach_cap_cnt": 0,
+            "sacrifices_total": 0,
+            "impact_value_sum": 0,
+            "sides_count": 0,
+        },
+        "mechanics_perf": {
+            "matches": 0,
+            "sides": 0,
+            "wins_total": 0,
+            "sys_used_sides": [0] * 9,
+            "sys_used_wins": [0] * 9,
+            "sys_total_cnt": [0] * 9,
+            "match_sys_present": [0] * 9,
+            "active_systems_sum": 0,
+            "env_upgrades": 0,
+            "passive_triggers": 0,
+            "ascends": 0,
+            "last_breaths": 0,
+            "reflect_dmg": 0,
+            "evasions": 0,
+            "dot_dmg": 0,
+            "total_dmg": 0,
+            "sac_ramp_sides": 0,
+            "sac_ramp_wins": 0,
+            "sac_low_sides": 0,
+            "sac_low_wins": 0,
+        },
+        "victory_cond": {
+            "matches": 0,
+            "decisive_matches": 0,
+            "face_by_ch": [0, 0, 0, 0, 0, 0],
+            "kill_by_ch": [0, 0, 0, 0, 0, 0],
+            "aggro_wins": 0,
+            "midrange_wins": 0,
+            "control_wins": 0,
+            "sudden_death_wins": 0,
+            "covenant_limit_wins": 0,
+            "board_dom_wins": 0,
+            "blowout_wins": 0,
+            "clutch_100_wins": 0,
+            "comeback_100_wins": 0,
+            "burst_finish_wins": 0,
+        },
+        "strategic_intel": {
+            "turns_total": 0,
+            "legal_actions_sum": 0,
+            "distinct_choices_sum": 0,
+            "choice_hist": [0, 0, 0, 0, 0, 0],
+            "forced_pass_turns": 0,
+            "multi_action_turns": 0,
+            "decision_chain_sum": 0,
+            "slot_summons": [0, 0, 0, 0, 0, 0],
+            "sac_avail_turns": 0,
+            "sac_taken_total": 0,
+            "restraint_passes": 0,
+            "reactive_decisions": 0,
+            "total_decisions": 0,
+            "planned_plays": 0,
+            "played_total": 0,
+            # Deep Skill Audit metrics (populated by Live Probe / Skill Audit)
+            "policy_entropy_pct": -1.0,
+            "ai_vs_random_wr": -1.0,
+            "ai_vs_random_n": 0,
+            "opt_vs_noisy_wr": -1.0,
+            "opt_vs_noisy_n": 0,
+            "decision_regret_pct": -1.0,
+        },
+        "enjoyment": {
+            "matches": 0,
+            "exc_sum": 0,
+            "exc_hist": [0, 0, 0, 0, 0],
+            "matches_high_exc": 0,
+            "matches_boring": 0,
+            "swings_sum": 0,
+            "matches_with_swing": 0,
+            "close_hp_turns": 0,
+            "total_hp_turns": 0,
+            "comeback_100": 0,
+            "clutch_75": 0,
+            "blowout_325": 0,
+            "highlights_sum": 0,
+            "multi_kill_matches": 0,
+            "empty_hand_turns": 0,
+            "player_turns_total": 0,
+            "zero_imp_died": 0,
+            "units_died_tot": 0,
+        },
+        "comp_fairness": {
+            "matches": 0,
+            "draws": 0,
+            "p1_decisive": 0,
+            "p1_wins": 0,
+            "t4_diff_sum": 0,
+            "t4_diff_cnt": 0,
+            "open_ok_sides": 0, "open_ok_wins": 0,
+            "open_brick_sides": 0, "open_brick_wins": 0,
+            "early_spec_sides": 0, "early_spec_wins": 0,
+            "no_spec_sides": 0, "no_spec_wins": 0,
+            "evasions_total": 0,
+            "mana_gap_sum": 0.0, "mana_gap_cnt": 0,
+            "draw_gap_sum": 0, "draw_gap_cnt": 0,
+            "mirror_matches": 0,
+            "mirror_p1_wins": 0,
+            "mirror_p1_decisive": 0,
+            "mirror_blowouts": 0,
+            "mirror_close": 0,
+        },
         "turn_curve": {
-            str(t): {"turns": 0, "dmg": 0, "kills": 0, "swings": 0, "bursts": 0, "highlights": 0, "finishes": 0, "hs": 0, "he": 0, "hempty": 0}
+            str(t): {
+                "turns": 0, "dmg": 0, "kills": 0, "swings": 0, "bursts": 0,
+                "highlights": 0, "finishes": 0, "hs": 0, "he": 0, "hempty": 0,
+                "exc_sum": 0, "board_sum": 0,
+            }
             for t in range(1, 26)
         },
         "highlights": {},
@@ -132,8 +346,31 @@ def _default_excitement_data() -> Dict[str, Any]:
 class StatsStore:
     """Thread-safe-at-batch-boundary persistent statistics store."""
 
-    def __init__(self, logs_dir: str = LOGS_DIR) -> None:
+    def __init__(
+        self,
+        logs_dir: str = LOGS_DIR,
+        saved_models_dir: Optional[str] = None,
+        read_only: bool = False,
+    ) -> None:
+        self.read_only = bool(read_only)
+        self._recovered_once = False
+        self.roster: Dict[str, Dict[str, Any]] = {}
+        self.free10_decks: Dict[str, List[int]] = {}
+        self.card_stats: Dict[str, Dict[str, int]] = {}
+        self.model_card_stats: Dict[str, Dict[str, List[int]]] = {}
+        self.head_to_head: Dict[str, Dict[str, int]] = {}
+        self.excitement: Dict[str, Any] = _default_excitement_data()
+        self.set_source(logs_dir=logs_dir, saved_models_dir=saved_models_dir, read_only=read_only)
+
+    def set_source(
+        self,
+        logs_dir: str,
+        saved_models_dir: Optional[str] = None,
+        read_only: bool = False,
+    ) -> None:
         self.logs_dir = logs_dir
+        self.saved_models_dir = saved_models_dir or os.path.abspath(os.path.join(logs_dir, "..", "saved_models"))
+        self.read_only = bool(read_only)
         self.roster_path = os.path.join(logs_dir, "roster_stats.json")
         self.free10_path = os.path.join(logs_dir, "free10_latest_decks.json")
         self.card_stats_path = os.path.join(logs_dir, "card_stats.json")
@@ -141,14 +378,8 @@ class StatsStore:
         self.h2h_path = os.path.join(logs_dir, "head_to_head.json")
         self.history_path = os.path.join(logs_dir, "match_history.jsonl")
         self.excitement_path = os.path.join(logs_dir, "excitement_anomalies.json")
-
-        os.makedirs(self.logs_dir, exist_ok=True)
-        self.roster: Dict[str, Dict[str, Any]] = {}
-        self.free10_decks: Dict[str, List[int]] = {}
-        self.card_stats: Dict[str, Dict[str, int]] = {}
-        self.model_card_stats: Dict[str, Dict[str, List[int]]] = {}
-        self.head_to_head: Dict[str, Dict[str, int]] = {}
-        self.excitement: Dict[str, Any] = _default_excitement_data()
+        if not self.read_only:
+            os.makedirs(self.logs_dir, exist_ok=True)
         self.reload()
 
     def reload(self) -> None:
@@ -175,7 +406,7 @@ class StatsStore:
             ):
                 if k in raw_ex:
                     self.excitement[k] = raw_ex[k]
-            for dict_key in ("match_len_bins", "monster_survival", "kill_causes", "dmg_sources"):
+            for dict_key in ("match_len_bins", "monster_survival", "kill_causes", "dmg_sources", "game_pace", "combat_quality", "card_utilization", "resource_economy", "mechanics_perf", "victory_cond", "strategic_intel", "enjoyment", "comp_fairness"):
                 if dict_key in raw_ex and isinstance(raw_ex[dict_key], dict):
                     self.excitement[dict_key].update(raw_ex[dict_key])
             if "turn_curve" in raw_ex and isinstance(raw_ex["turn_curve"], dict):
@@ -183,13 +414,13 @@ class StatsStore:
                     if tk_str in self.excitement["turn_curve"] and isinstance(tv, dict):
                         self.excitement["turn_curve"][tk_str].update(tv)
 
-        # Self-healing recovery: if roster_stats.json or head_to_head lost old data while
-        # match_history.jsonl and/or saved_models/*/brain.pt still have the overnight training,
-        # automatically reconstruct and heal all stats from match_history.jsonl + brain.pt!
-        self._auto_recover_from_history_and_brains()
+        # Self-healing recovery: ONLY run once at initial startup in local writable mode!
+        if not self.read_only and not getattr(self, "_recovered_once", False):
+            self._recovered_once = True
+            self._auto_recover_from_history_and_brains()
 
     def _auto_recover_from_history_and_brains(self) -> None:
-        saved_models_root = os.path.abspath(os.path.join(self.logs_dir, "..", "saved_models"))
+        saved_models_root = self.saved_models_dir
         hist_recs: Dict[str, Dict[str, Any]] = {
             spec.model_id: {
                 "m": 0, "w": 0, "l": 0, "d": 0, "elo": 1000.0,
@@ -439,13 +670,14 @@ class StatsStore:
         if changed:
             self.save_all()
 
-    def save_all(self) -> None:
+    def save_all(self, include_heavy: bool = True) -> None:
         _atomic_write_json(self.roster_path, self.roster)
         _atomic_write_json(self.free10_path, self.free10_decks)
-        _atomic_write_json(self.card_stats_path, self.card_stats)
-        _atomic_write_json(self.model_card_stats_path, self.model_card_stats)
         _atomic_write_json(self.h2h_path, self.head_to_head)
         _atomic_write_json(self.excitement_path, self.excitement)
+        if include_heavy:
+            _atomic_write_json(self.card_stats_path, self.card_stats, compact=True)
+            _atomic_write_json(self.model_card_stats_path, self.model_card_stats, compact=True)
 
     def get_anomaly_excluded_ids(self, top_k: int = 60) -> Set[int]:
         """
@@ -627,8 +859,414 @@ class StatsStore:
         t0, t1 = result.telemetry[0], result.telemetry[1]
         match_exc = max(t0.excitement_score, t1.excitement_score)
         ex["total_matches"] = tm + 1
+        ex["total_turns_sum"] = int(ex.get("total_turns_sum", 0)) + int(result.turns)
         ex["avg_excitement"] = round((float(ex.get("avg_excitement", 0.0)) * tm + match_exc) / (tm + 1), 2)
         ex["total_lead_swings"] = int(ex.get("total_lead_swings", 0)) + max(t0.lead_swings, t1.lead_swings)
+
+        # P1 vs P2 fairness tracking
+        if t0.went_first or t1.went_first:
+            p1_side = 0 if t0.went_first else 1
+            if result.winner in (0, 1):
+                ex["p1_games"] = int(ex.get("p1_games", 0)) + 1
+                if result.winner == p1_side:
+                    ex["p1_wins"] = int(ex.get("p1_wins", 0)) + 1
+
+        # Match length pacing histogram
+        ml = ex.setdefault("match_len_bins", {"1-6": 0, "7-12": 0, "13-18": 0, "19-25": 0, "26-39": 0, "40+": 0})
+        rt = int(result.turns)
+        if rt <= 6:
+            ml["1-6"] = int(ml.get("1-6", 0)) + 1
+        elif rt <= 12:
+            ml["7-12"] = int(ml.get("7-12", 0)) + 1
+        elif rt <= 18:
+            ml["13-18"] = int(ml.get("13-18", 0)) + 1
+        elif rt <= 25:
+            ml["19-25"] = int(ml.get("19-25", 0)) + 1
+        elif rt <= 39:
+            ml["26-39"] = int(ml.get("26-39", 0)) + 1
+        else:
+            ml["40+"] = int(ml.get("40+", 0)) + 1
+
+        # Monster survival, board occupancy & kill/damage causes aggregation
+        ms = ex.setdefault("monster_survival", {
+            "died_cnt": 0, "died_rounds": 0, "d0": 0, "d1": 0, "d2": 0, "d3p": 0,
+            "combat_died": 0, "combat_0atk": 0, "surv_cnt": 0, "surv_rounds": 0, "board_sum": 0, "board_turns": 0,
+        })
+        kc = ex.setdefault("kill_causes", {"active": 0, "attack": 0, "spell": 0, "counter": 0, "dot": 0, "passive": 0})
+        ds = ex.setdefault("dmg_sources", {"active": 0, "attack": 0, "spell": 0, "counter": 0, "dot": 0, "passive": 0})
+        for st_cur in (t0, t1):
+            ms["died_cnt"] = int(ms.get("died_cnt", 0)) + int(st_cur.units_died_count)
+            ms["died_rounds"] = int(ms.get("died_rounds", 0)) + int(st_cur.units_died_rounds_sum)
+            ms["d0"] = int(ms.get("d0", 0)) + int(st_cur.units_died_0rnd)
+            ms["d1"] = int(ms.get("d1", 0)) + int(st_cur.units_died_1rnd)
+            ms["d2"] = int(ms.get("d2", 0)) + int(st_cur.units_died_2rnd)
+            ms["d3p"] = int(ms.get("d3p", 0)) + int(st_cur.units_died_3p_rnd)
+            ms["combat_died"] = int(ms.get("combat_died", 0)) + int(st_cur.combat_died_count)
+            ms["combat_0atk"] = int(ms.get("combat_0atk", 0)) + int(st_cur.combat_died_0atk)
+            ms["surv_cnt"] = int(ms.get("surv_cnt", 0)) + int(st_cur.units_survived_end)
+            ms["surv_rounds"] = int(ms.get("surv_rounds", 0)) + int(st_cur.units_survived_rounds_sum)
+            ms["board_sum"] = int(ms.get("board_sum", 0)) + int(st_cur.board_units_turn_sum)
+            ms["board_turns"] = int(ms.get("board_turns", 0)) + int(st_cur.hand_turns)
+            ms["empty_board_turns"] = int(ms.get("empty_board_turns", 0)) + int(st_cur.empty_board_turns)
+            ms["dmg_absorbed_sum"] = int(ms.get("dmg_absorbed_sum", 0)) + int(st_cur.unit_dmg_absorbed_sum)
+            ms["base_def_sum"] = int(ms.get("base_def_sum", 0)) + int(st_cur.unit_base_def_sum)
+            ms["zero_impact_died"] = int(ms.get("zero_impact_died", 0)) + int(st_cur.unit_zero_impact_died)
+            ms["attacks_died_sum"] = int(ms.get("attacks_died_sum", 0)) + int(st_cur.unit_attacks_died_sum)
+            ms["skill_holders_died"] = int(ms.get("skill_holders_died", 0)) + int(st_cur.unit_skill_holders_died)
+            ms["skills_died_sum"] = int(ms.get("skills_died_sum", 0)) + int(st_cur.unit_skills_died_sum)
+            ms["first_impact_wait_sum"] = int(ms.get("first_impact_wait_sum", 0)) + int(st_cur.unit_first_impact_wait_sum)
+            ms["first_impact_cnt"] = int(ms.get("first_impact_cnt", 0)) + int(st_cur.unit_first_impact_cnt)
+            ms["exits_sacrifice"] = int(ms.get("exits_sacrifice", 0)) + int(st_cur.exits_sacrifice)
+            ms["exits_recalled"] = int(ms.get("exits_recalled", 0)) + int(st_cur.exits_recalled)
+            lh = ms.setdefault("life_hist", [0, 0, 0, 0, 0, 0, 0])
+            for bi in range(7):
+                lh[bi] = int(lh[bi]) + int(st_cur.unit_life_hist[bi])
+            for arr_k, src_a, ln_a in (
+                ("tier_sum", st_cur.unit_tier_sum, 8), ("tier_cnt", st_cur.unit_tier_cnt, 8),
+                ("role_sum", st_cur.unit_role_sum, 6), ("role_cnt", st_cur.unit_role_cnt, 6),
+                ("tribe_sum", st_cur.unit_tribe_sum, 10), ("tribe_cnt", st_cur.unit_tribe_cnt, 10),
+                ("elem_sum", st_cur.unit_elem_sum, 10), ("elem_cnt", st_cur.unit_elem_cnt, 10),
+            ):
+                dst_a = ms.setdefault(arr_k, [0] * ln_a)
+                for idx_a in range(ln_a):
+                    dst_a[idx_a] = int(dst_a[idx_a]) + int(src_a[idx_a])
+
+            kc["active"] = int(kc.get("active", 0)) + int(st_cur.kills_by_active)
+            kc["attack"] = int(kc.get("attack", 0)) + int(st_cur.kills_by_attack)
+            kc["spell"] = int(kc.get("spell", 0)) + int(st_cur.kills_by_spell)
+            kc["counter"] = int(kc.get("counter", 0)) + int(st_cur.kills_by_counter)
+            kc["dot"] = int(kc.get("dot", 0)) + int(st_cur.kills_by_dot)
+            kc["passive"] = int(kc.get("passive", 0)) + int(st_cur.kills_by_passive)
+
+            ds["active"] = int(ds.get("active", 0)) + int(st_cur.dmg_m_by_active)
+            ds["attack"] = int(ds.get("attack", 0)) + int(st_cur.dmg_m_by_attack)
+            ds["spell"] = int(ds.get("spell", 0)) + int(st_cur.dmg_m_by_spell)
+            ds["counter"] = int(ds.get("counter", 0)) + int(st_cur.dmg_m_by_counter)
+            ds["dot"] = int(ds.get("dot", 0)) + int(st_cur.dmg_m_by_dot)
+            ds["passive"] = int(ds.get("passive", 0)) + int(st_cur.dmg_m_by_passive)
+
+        # Pillar #1: Game Pace detailed aggregation
+        gp = ex.setdefault("game_pace", _default_excitement_data()["game_pace"])
+        gp["matches"] = int(gp.get("matches", 0)) + 1
+        th = gp.setdefault("turn_hist", {})
+        tk_h = str(max(1, rt))
+        th[tk_h] = int(th.get(tk_h, 0)) + 1
+        cur_min = int(gp.get("min_turn", 0))
+        gp["min_turn"] = rt if (cur_min <= 0 or rt < cur_min) else cur_min
+        gp["max_turn"] = max(int(gp.get("max_turn", 0)), rt)
+        if rt >= 40:
+            gp["max_turn_40_cnt"] = int(gp.get("max_turn_40_cnt", 0)) + 1
+        if t0.pace_first_summon > 0:
+            gp["first_summon_sum"] = int(gp.get("first_summon_sum", 0)) + int(t0.pace_first_summon)
+            gp["first_summon_cnt"] = int(gp.get("first_summon_cnt", 0)) + 1
+        if t0.pace_first_attack > 0:
+            gp["first_attack_sum"] = int(gp.get("first_attack_sum", 0)) + int(t0.pace_first_attack)
+            gp["first_attack_cnt"] = int(gp.get("first_attack_cnt", 0)) + 1
+        if t0.pace_first_death > 0:
+            gp["first_death_sum"] = int(gp.get("first_death_sum", 0)) + int(t0.pace_first_death)
+            gp["first_death_cnt"] = int(gp.get("first_death_cnt", 0)) + 1
+        if t0.pace_first_defense > 0:
+            gp["first_defense_sum"] = int(gp.get("first_defense_sum", 0)) + int(t0.pace_first_defense)
+            gp["first_defense_cnt"] = int(gp.get("first_defense_cnt", 0)) + 1
+        if t0.pace_decisive_turn > 0 and rt > 0:
+            gp["decisive_turn_sum"] = int(gp.get("decisive_turn_sum", 0)) + int(t0.pace_decisive_turn)
+            gp["decisive_ratio_sum"] = float(gp.get("decisive_ratio_sum", 0.0)) + min(1.0, float(t0.pace_decisive_turn) / float(rt))
+            gp["decisive_cnt"] = int(gp.get("decisive_cnt", 0)) + 1
+        for st_cur in (t0, t1):
+            gp["zero_card_turns"] = int(gp.get("zero_card_turns", 0)) + int(st_cur.pace_zero_card_turns)
+            gp["dead_turns"] = int(gp.get("dead_turns", 0)) + int(st_cur.pace_dead_turns)
+            gp["total_player_turns"] = int(gp.get("total_player_turns", 0)) + int(st_cur.hand_turns)
+            gp["total_actions"] = int(gp.get("total_actions", 0)) + int(st_cur.pace_total_actions)
+            gp["impact_gaps_sum"] = int(gp.get("impact_gaps_sum", 0)) + int(st_cur.pace_impact_gaps_sum)
+            gp["impact_gaps_cnt"] = int(gp.get("impact_gaps_cnt", 0)) + int(st_cur.pace_impact_gaps_cnt)
+
+        # Pillar #3: Combat Quality aggregation
+        cq = ex.setdefault("combat_quality", _default_excitement_data()["combat_quality"])
+        for st_cur in (t0, t1):
+            cq["unit_dmg_dealt_sum"] = int(cq.get("unit_dmg_dealt_sum", 0)) + int(st_cur.cq_unit_dmg_dealt_sum)
+            cq["hits_to_kill_sum"] = int(cq.get("hits_to_kill_sum", 0)) + int(st_cur.cq_hits_to_kill_sum)
+            cq["total_strikes"] = int(cq.get("total_strikes", 0)) + int(st_cur.cq_total_strikes)
+            cq["unit_clashes"] = int(cq.get("unit_clashes", 0)) + int(st_cur.cq_unit_clashes)
+            cq["face_strikes"] = int(cq.get("face_strikes", 0)) + int(st_cur.cq_face_strikes)
+            cq["lethal_strikes"] = int(cq.get("lethal_strikes", 0)) + int(st_cur.cq_lethal_strikes)
+            cq["whiff_strikes"] = int(cq.get("whiff_strikes", 0)) + int(st_cur.cq_whiff_strikes)
+            cq["intercepted_strikes"] = int(cq.get("intercepted_strikes", 0)) + int(st_cur.cq_intercepted_strikes)
+            cq["mutual_kills"] = int(cq.get("mutual_kills", 0)) + int(st_cur.cq_mutual_kills)
+            cq["fair_trades"] = int(cq.get("fair_trades", 0)) + int(st_cur.cq_fair_trades)
+            cq["clean_kills"] = int(cq.get("clean_kills", 0)) + int(st_cur.cq_clean_kills)
+            cq["swing_strikes"] = int(cq.get("swing_strikes", 0)) + int(st_cur.cq_swing_strikes)
+            cq["overkill_dmg"] = int(cq.get("overkill_dmg", 0)) + int(st_cur.cq_overkill_dmg)
+            cq["raw_unit_dmg"] = int(cq.get("raw_unit_dmg", 0)) + int(st_cur.cq_raw_unit_dmg)
+            cq["barrier_dmg_absorbed"] = int(cq.get("barrier_dmg_absorbed", 0)) + int(st_cur.cq_barrier_dmg_absorbed)
+            cq["near_death_hits"] = int(cq.get("near_death_hits", 0)) + int(st_cur.cq_near_death_hits)
+            cq["total_unit_hits"] = int(cq.get("total_unit_hits", 0)) + int(st_cur.cq_total_unit_hits)
+            cq["skill_dmg_total"] = int(cq.get("skill_dmg_total", 0)) + int(st_cur.cq_skill_dmg_total)
+            cq["actives_used_total"] = int(cq.get("actives_used_total", 0)) + int(st_cur.actives_used)
+            cq["total_healed"] = int(cq.get("total_healed", 0)) + int(st_cur.hp_healed) + int(st_cur.def_healed)
+            cq["total_face_dmg"] = int(cq.get("total_face_dmg", 0)) + int(st_cur.dmg_to_face)
+            cq["total_monster_dmg"] = int(cq.get("total_monster_dmg", 0)) + int(st_cur.dmg_to_monsters)
+
+        # Pillar #4: Card Utilization aggregation
+        cu = ex.setdefault("card_utilization", _default_excitement_data()["card_utilization"])
+        for st_cur in (t0, t1):
+            cu["sides_count"] = int(cu.get("sides_count", 0)) + 1
+            cu["drawn_total"] = int(cu.get("drawn_total", 0)) + int(st_cur.cards_drawn)
+            cu["played_total"] = int(cu.get("played_total", 0)) + int(st_cur.cu_played_count)
+            cu["sacrificed_total"] = int(cu.get("sacrificed_total", 0)) + int(st_cur.sacrifices_made)
+            cu["burned_hand7_total"] = int(cu.get("burned_hand7_total", 0)) + int(st_cur.cards_burned_hand7)
+            cu["hand_end_remaining"] = int(cu.get("hand_end_remaining", 0)) + int(st_cur.cu_hand_end_remaining)
+            cu["played_on_draw_turn"] = int(cu.get("played_on_draw_turn", 0)) + int(st_cur.cu_played_on_draw_turn)
+            cu["play_turn_sum"] = int(cu.get("play_turn_sum", 0)) + int(st_cur.cu_play_turn_sum)
+            cu["cond_attempts"] = int(cu.get("cond_attempts", 0)) + int(st_cur.cu_cond_attempts)
+            cu["cond_success"] = int(cu.get("cond_success", 0)) + int(st_cur.cu_cond_success)
+            cu["hand_checks_cards"] = int(cu.get("hand_checks_cards", 0)) + int(st_cur.cu_hand_checks_cards)
+            cu["hand_unplayable_cards"] = int(cu.get("hand_unplayable_cards", 0)) + int(st_cur.cu_hand_unplayable_cards)
+            cu["low_value_plays"] = int(cu.get("low_value_plays", 0)) + int(st_cur.cu_low_value_plays)
+            cu["deck_cycles_done"] = int(cu.get("deck_cycles_done", 0)) + int(st_cur.cu_deck_cycles_done)
+            imp_v = (
+                int(st_cur.dmg_to_face) + int(st_cur.dmg_to_monsters)
+                + int(st_cur.hp_healed) + int(st_cur.def_healed)
+                + 12 * int(st_cur.monsters_killed) + 8 * int(st_cur.disruptions_applied)
+            )
+            cu["impact_value_sum"] = int(cu.get("impact_value_sum", 0)) + imp_v
+            pbt = cu.setdefault("played_by_type", [0, 0, 0, 0, 0, 0])
+            for ti_c in range(6):
+                pbt[ti_c] = int(pbt[ti_c]) + int(st_cur.cu_played_by_type[ti_c])
+
+        # Pillar #5: Resource Economy aggregation
+        re_d = ex.setdefault("resource_economy", _default_excitement_data()["resource_economy"])
+        for side_i, st_cur in enumerate((t0, t1)):
+            re_d["sides_count"] = int(re_d.get("sides_count", 0)) + 1
+            re_d["mana_avail"] = int(re_d.get("mana_avail", 0)) + int(st_cur.re_mana_avail)
+            re_d["mana_spent"] = int(re_d.get("mana_spent", 0)) + int(st_cur.re_mana_spent)
+            re_d["mana_wasted"] = int(re_d.get("mana_wasted", 0)) + int(st_cur.re_mana_wasted)
+            re_d["turns_total"] = int(re_d.get("turns_total", 0)) + int(st_cur.hand_turns)
+            re_d["turns_unspent"] = int(re_d.get("turns_unspent", 0)) + int(st_cur.re_turns_unspent)
+            re_d["early_mana_avail"] = int(re_d.get("early_mana_avail", 0)) + int(st_cur.re_early_mana_avail)
+            re_d["early_mana_spent"] = int(re_d.get("early_mana_spent", 0)) + int(st_cur.re_early_mana_spent)
+            re_d["mana_spent_cards"] = int(re_d.get("mana_spent_cards", 0)) + int(st_cur.re_mana_spent_cards)
+            re_d["mana_spent_monsters"] = int(re_d.get("mana_spent_monsters", 0)) + int(st_cur.re_mana_spent_monsters)
+            re_d["mana_spent_spells"] = int(re_d.get("mana_spent_spells", 0)) + int(st_cur.re_mana_spent_spells)
+            re_d["mana_spent_skills"] = int(re_d.get("mana_spent_skills", 0)) + int(st_cur.re_mana_spent_skills)
+            re_d["mana_spent_other"] = int(re_d.get("mana_spent_other", 0)) + int(st_cur.re_mana_spent_other)
+            re_d["mana_offense"] = int(re_d.get("mana_offense", 0)) + int(st_cur.re_mana_offense)
+            re_d["mana_defense"] = int(re_d.get("mana_defense", 0)) + int(st_cur.re_mana_defense)
+            re_d["sacrifices_total"] = int(re_d.get("sacrifices_total", 0)) + int(st_cur.sacrifices_made)
+            re_d["aether_draws_total"] = int(re_d.get("aether_draws_total", 0)) + int(st_cur.re_aether_draws)
+            imp_re = (
+                int(st_cur.dmg_to_face) + int(st_cur.dmg_to_monsters)
+                + int(st_cur.hp_healed) + int(st_cur.def_healed)
+                + 12 * int(st_cur.monsters_killed) + 8 * int(st_cur.disruptions_applied)
+            )
+            re_d["impact_value_sum"] = int(re_d.get("impact_value_sum", 0)) + imp_re
+            if st_cur.re_reach_cap_turn > 0:
+                re_d["reach_cap_sum"] = int(re_d.get("reach_cap_sum", 0)) + int(st_cur.re_reach_cap_turn)
+                re_d["reach_cap_cnt"] = int(re_d.get("reach_cap_cnt", 0)) + 1
+            ccp = re_d.setdefault("card_cost_played", [0] * 8)
+            ccw = re_d.setdefault("card_cost_wins", [0] * 8)
+            is_win = (result.winner == side_i)
+            for ci in range(8):
+                cnt_c = int(st_cur.re_card_cost_played[ci])
+                ccp[ci] = int(ccp[ci]) + cnt_c
+                if is_win:
+                    ccw[ci] = int(ccw[ci]) + cnt_c
+            tma = re_d.setdefault("turn_mana_avail", [0] * 15)
+            tms = re_d.setdefault("turn_mana_spent", [0] * 15)
+            tmc = re_d.setdefault("turn_mana_cnt", [0] * 15)
+            for ti_m in range(15):
+                tma[ti_m] = int(tma[ti_m]) + int(st_cur.re_turn_mana_avail[ti_m])
+                tms[ti_m] = int(tms[ti_m]) + int(st_cur.re_turn_mana_spent[ti_m])
+                tmc[ti_m] = int(tmc[ti_m]) + int(st_cur.re_turn_mana_cnt[ti_m])
+
+        # Pillar #7: Mechanics Performance aggregation (9 Core Systems + WR Lift)
+        mp = ex.setdefault("mechanics_perf", _default_excitement_data()["mechanics_perf"])
+        mp["matches"] = int(mp.get("matches", 0)) + 1
+        su_s = mp.setdefault("sys_used_sides", [0] * 9)
+        su_w = mp.setdefault("sys_used_wins", [0] * 9)
+        su_c = mp.setdefault("sys_total_cnt", [0] * 9)
+        msp = mp.setdefault("match_sys_present", [0] * 9)
+        m_flags = [False] * 9
+        for side_i, st_cur in enumerate((t0, t1)):
+            mp["sides"] = int(mp.get("sides", 0)) + 1
+            is_w = (result.winner == side_i)
+            if is_w:
+                mp["wins_total"] = int(mp.get("wins_total", 0)) + 1
+            s_vals = [
+                int(st_cur.actives_used),
+                int(st_cur.spells_cast),
+                int(st_cur.cu_played_by_type[1]),
+                int(st_cur.cu_played_by_type[3]),
+                int(st_cur.cu_played_by_type[4]),
+                int(st_cur.cu_played_by_type[5]),
+                int(st_cur.dot_dmg_dealt),
+                int(st_cur.disruptions_applied),
+                int(st_cur.tokens_spawned) + int(st_cur.clones_made) + int(st_cur.revives_done) + int(st_cur.grave_returns),
+            ]
+            for ki in range(9):
+                v_k = s_vals[ki]
+                su_c[ki] = int(su_c[ki]) + v_k
+                if v_k > 0:
+                    su_s[ki] = int(su_s[ki]) + 1
+                    m_flags[ki] = True
+                    if is_w:
+                        su_w[ki] = int(su_w[ki]) + 1
+            mp["env_upgrades"] = int(mp.get("env_upgrades", 0)) + int(st_cur.mp_env_upgrades)
+            mp["passive_triggers"] = int(mp.get("passive_triggers", 0)) + int(st_cur.mp_passive_triggers)
+            mp["ascends"] = int(mp.get("ascends", 0)) + int(st_cur.mp_ascends)
+            mp["last_breaths"] = int(mp.get("last_breaths", 0)) + int(st_cur.mp_last_breaths)
+            mp["reflect_dmg"] = int(mp.get("reflect_dmg", 0)) + int(st_cur.reflect_dmg_dealt)
+            mp["evasions"] = int(mp.get("evasions", 0)) + int(st_cur.evasions_triggered)
+            mp["dot_dmg"] = int(mp.get("dot_dmg", 0)) + int(st_cur.dot_dmg_dealt)
+            mp["total_dmg"] = int(mp.get("total_dmg", 0)) + int(st_cur.dmg_to_face) + int(st_cur.dmg_to_monsters)
+            if int(st_cur.sacrifices_made) >= 3:
+                mp["sac_ramp_sides"] = int(mp.get("sac_ramp_sides", 0)) + 1
+                if is_w:
+                    mp["sac_ramp_wins"] = int(mp.get("sac_ramp_wins", 0)) + 1
+            else:
+                mp["sac_low_sides"] = int(mp.get("sac_low_sides", 0)) + 1
+                if is_w:
+                    mp["sac_low_wins"] = int(mp.get("sac_low_wins", 0)) + 1
+        for ki in range(9):
+            if m_flags[ki]:
+                msp[ki] = int(msp[ki]) + 1
+        mp["active_systems_sum"] = int(mp.get("active_systems_sum", 0)) + sum(1 for f in m_flags if f)
+
+        # Pillar #8: Victory Conditions & Win Channels aggregation
+        vc = ex.setdefault("victory_cond", _default_excitement_data()["victory_cond"])
+        vc["matches"] = int(vc.get("matches", 0)) + 1
+        fbc = vc.setdefault("face_by_ch", [0] * 6)
+        kbc = vc.setdefault("kill_by_ch", [0] * 6)
+        for st_cur in (t0, t1):
+            for ci_v in range(6):
+                fbc[ci_v] = int(fbc[ci_v]) + int(st_cur.vc_face_by_ch[ci_v])
+        if rt <= 12:
+            vc["aggro_wins"] = int(vc.get("aggro_wins", 0)) + 1
+        elif rt <= 22:
+            vc["midrange_wins"] = int(vc.get("midrange_wins", 0)) + 1
+        elif rt <= 39:
+            vc["control_wins"] = int(vc.get("control_wins", 0)) + 1
+        else:
+            vc["sudden_death_wins"] = int(vc.get("sudden_death_wins", 0)) + 1
+        if result.win_reason == "CovenantTurnLimit":
+            vc["covenant_limit_wins"] = int(vc.get("covenant_limit_wins", 0)) + 1
+        if result.winner in (0, 1):
+            vc["decisive_matches"] = int(vc.get("decisive_matches", 0)) + 1
+            wt_v = result.telemetry[result.winner]
+            kc_i = max(0, min(5, int(wt_v.vc_kill_channel)))
+            kbc[kc_i] = int(kbc[kc_i]) + 1
+            if int(wt_v.vc_end_board_cnt) >= 2:
+                vc["board_dom_wins"] = int(vc.get("board_dom_wins", 0)) + 1
+            if int(wt_v.final_hp) >= 325:
+                vc["blowout_wins"] = int(vc.get("blowout_wins", 0)) + 1
+            if 0 < int(wt_v.final_hp) <= 100:
+                vc["clutch_100_wins"] = int(vc.get("clutch_100_wins", 0)) + 1
+            if int(wt_v.comeback_deficit) >= 100:
+                vc["comeback_100_wins"] = int(vc.get("comeback_100_wins", 0)) + 1
+            if int(wt_v.vc_final_turn_face_dmg) >= 100:
+                vc["burst_finish_wins"] = int(vc.get("burst_finish_wins", 0)) + 1
+
+        # Pillar #9: Strategic Intelligence aggregation
+        si = ex.setdefault("strategic_intel", _default_excitement_data()["strategic_intel"])
+        ch_h = si.setdefault("choice_hist", [0] * 6)
+        sl_s = si.setdefault("slot_summons", [0] * 6)
+        for st_cur in (t0, t1):
+            si["turns_total"] = int(si.get("turns_total", 0)) + int(st_cur.hand_turns)
+            si["legal_actions_sum"] = int(si.get("legal_actions_sum", 0)) + int(st_cur.si_legal_actions_sum)
+            si["distinct_choices_sum"] = int(si.get("distinct_choices_sum", 0)) + int(st_cur.si_distinct_choices_sum)
+            si["forced_pass_turns"] = int(si.get("forced_pass_turns", 0)) + int(st_cur.si_forced_pass_turns)
+            si["multi_action_turns"] = int(si.get("multi_action_turns", 0)) + int(st_cur.si_multi_action_turns)
+            si["decision_chain_sum"] = int(si.get("decision_chain_sum", 0)) + int(st_cur.si_decision_chain_sum)
+            si["sac_avail_turns"] = int(si.get("sac_avail_turns", 0)) + int(st_cur.si_sac_avail_turns)
+            si["sac_taken_total"] = int(si.get("sac_taken_total", 0)) + int(st_cur.sacrifices_made)
+            si["restraint_passes"] = int(si.get("restraint_passes", 0)) + int(st_cur.si_restraint_passes)
+            si["reactive_decisions"] = int(si.get("reactive_decisions", 0)) + int(st_cur.si_reactive_decisions)
+            si["total_decisions"] = int(si.get("total_decisions", 0)) + int(st_cur.si_total_decisions)
+            si["played_total"] = int(si.get("played_total", 0)) + int(st_cur.cu_played_count)
+            si["planned_plays"] = int(si.get("planned_plays", 0)) + max(0, int(st_cur.cu_played_count) - int(st_cur.cu_played_on_draw_turn))
+            for k_si in range(6):
+                ch_h[k_si] = int(ch_h[k_si]) + int(st_cur.si_choice_hist[k_si])
+                sl_s[k_si] = int(sl_s[k_si]) + int(st_cur.si_slot_summons[k_si])
+
+        # Pillar #10: Gameplay Enjoyment & Emotional Arc aggregation
+        enj = ex.setdefault("enjoyment", _default_excitement_data()["enjoyment"])
+        enj["matches"] = int(enj.get("matches", 0)) + 1
+        enj["exc_sum"] = int(enj.get("exc_sum", 0)) + int(match_exc)
+        eh = enj.setdefault("exc_hist", [0, 0, 0, 0, 0])
+        if match_exc < 35:
+            eh[0] = int(eh[0]) + 1
+            enj["matches_boring"] = int(enj.get("matches_boring", 0)) + 1
+        elif match_exc < 50:
+            eh[1] = int(eh[1]) + 1
+        elif match_exc < 65:
+            eh[2] = int(eh[2]) + 1
+        elif match_exc < 80:
+            eh[3] = int(eh[3]) + 1
+            enj["matches_high_exc"] = int(enj.get("matches_high_exc", 0)) + 1
+        else:
+            eh[4] = int(eh[4]) + 1
+            enj["matches_high_exc"] = int(enj.get("matches_high_exc", 0)) + 1
+        m_sw = max(int(t0.lead_swings), int(t1.lead_swings))
+        enj["swings_sum"] = int(enj.get("swings_sum", 0)) + m_sw
+        if m_sw >= 1:
+            enj["matches_with_swing"] = int(enj.get("matches_with_swing", 0)) + 1
+        enj["close_hp_turns"] = int(enj.get("close_hp_turns", 0)) + int(t0.en_close_hp_turns) + int(t1.en_close_hp_turns)
+        enj["total_hp_turns"] = int(enj.get("total_hp_turns", 0)) + int(t0.en_hp_turns) + int(t1.en_hp_turns)
+        enj["highlights_sum"] = int(enj.get("highlights_sum", 0)) + int(t0.highlight_triggers) + int(t1.highlight_triggers)
+        if (int(t0.multi_kill_turns) + int(t1.multi_kill_turns)) >= 1:
+            enj["multi_kill_matches"] = int(enj.get("multi_kill_matches", 0)) + 1
+        enj["empty_hand_turns"] = int(enj.get("empty_hand_turns", 0)) + int(t0.empty_hand_turns) + int(t1.empty_hand_turns)
+        enj["player_turns_total"] = int(enj.get("player_turns_total", 0)) + int(t0.hand_turns) + int(t1.hand_turns)
+        enj["zero_imp_died"] = int(enj.get("zero_imp_died", 0)) + int(t0.unit_zero_impact_died) + int(t1.unit_zero_impact_died)
+        enj["units_died_tot"] = int(enj.get("units_died_tot", 0)) + int(t0.units_died_count) + int(t1.units_died_count)
+        if result.winner in (0, 1):
+            wt_e = result.telemetry[result.winner]
+            if int(wt_e.comeback_deficit) >= 100:
+                enj["comeback_100"] = int(enj.get("comeback_100", 0)) + 1
+            if wt_e.clutch_win:
+                enj["clutch_75"] = int(enj.get("clutch_75", 0)) + 1
+            if int(wt_e.final_hp) >= 325:
+                enj["blowout_325"] = int(enj.get("blowout_325", 0)) + 1
+
+        # Pillar #11: Competitive Fairness aggregation
+        cf = ex.setdefault("comp_fairness", _default_excitement_data()["comp_fairness"])
+        cf["matches"] = int(cf.get("matches", 0)) + 1
+        cf["evasions_total"] = int(cf.get("evasions_total", 0)) + int(t0.evasions_triggered) + int(t1.evasions_triggered)
+        if t0.cf_t4_recorded:
+            cf["t4_diff_sum"] = int(cf.get("t4_diff_sum", 0)) + int(t0.cf_t4_hp_diff)
+            cf["t4_diff_cnt"] = int(cf.get("t4_diff_cnt", 0)) + 1
+        if result.winner not in (0, 1):
+            cf["draws"] = int(cf.get("draws", 0)) + 1
+        else:
+            p1_s = 0 if t0.went_first else 1
+            cf["p1_decisive"] = int(cf.get("p1_decisive", 0)) + 1
+            if result.winner == p1_s:
+                cf["p1_wins"] = int(cf.get("p1_wins", 0)) + 1
+            wt_f = result.telemetry[result.winner]
+            lt_f = result.telemetry[1 - result.winner]
+            w_mpt = wt_f.re_mana_avail / max(1.0, float(wt_f.hand_turns))
+            l_mpt = lt_f.re_mana_avail / max(1.0, float(lt_f.hand_turns))
+            cf["mana_gap_sum"] = float(cf.get("mana_gap_sum", 0.0)) + (w_mpt - l_mpt)
+            cf["mana_gap_cnt"] = int(cf.get("mana_gap_cnt", 0)) + 1
+            cf["draw_gap_sum"] = int(cf.get("draw_gap_sum", 0)) + (int(wt_f.cards_drawn) - int(lt_f.cards_drawn))
+            cf["draw_gap_cnt"] = int(cf.get("draw_gap_cnt", 0)) + 1
+        for side_i, st_cur in enumerate((t0, t1)):
+            won_s = (result.winner == side_i)
+            if st_cur.cf_open_playable:
+                cf["open_ok_sides"] = int(cf.get("open_ok_sides", 0)) + 1
+                if won_s:
+                    cf["open_ok_wins"] = int(cf.get("open_ok_wins", 0)) + 1
+            else:
+                cf["open_brick_sides"] = int(cf.get("open_brick_sides", 0)) + 1
+                if won_s:
+                    cf["open_brick_wins"] = int(cf.get("open_brick_wins", 0)) + 1
+            if st_cur.cf_early_special:
+                cf["early_spec_sides"] = int(cf.get("early_spec_sides", 0)) + 1
+                if won_s:
+                    cf["early_spec_wins"] = int(cf.get("early_spec_wins", 0)) + 1
+            else:
+                cf["no_spec_sides"] = int(cf.get("no_spec_sides", 0)) + 1
+                if won_s:
+                    cf["no_spec_wins"] = int(cf.get("no_spec_wins", 0)) + 1
 
         if result.winner in (0, 1):
             wt = result.telemetry[result.winner]
@@ -642,6 +1280,8 @@ class StatsStore:
             t_num, tdmg, tkills, tswing, thi = ev[:5]
             t_hs = ev[5] if len(ev) > 5 else 0
             t_he = ev[6] if len(ev) > 6 else 0
+            t_exc = ev[7] if len(ev) > 7 else 0
+            t_brd = ev[8] if len(ev) > 8 else 0
             tk_s = str(min(25, max(1, t_num)))
             b = tc.get(tk_s)
             if b is not None:
@@ -654,6 +1294,8 @@ class StatsStore:
                 b["highlights"] += thi
                 b["hs"] = int(b.get("hs", 0)) + int(t_hs)
                 b["he"] = int(b.get("he", 0)) + int(t_he)
+                b["exc_sum"] = int(b.get("exc_sum", 0)) + int(t_exc)
+                b["board_sum"] = int(b.get("board_sum", 0)) + int(t_brd)
                 if t_he == 0 and len(ev) > 6:
                     b["hempty"] = int(b.get("hempty", 0)) + 1
         fin_key = str(min(25, max(1, result.turns)))
@@ -718,4 +1360,29 @@ class StatsStore:
             "winner": model_a_id if result.winner == 0 else (model_b_id if result.winner == 1 else "DRAW"),
             "turns": result.turns,
             "reason": result.win_reason,
-            "hp_a": result
+            "hp_a": result.final_hp[0],
+            "hp_b": result.final_hp[1],
+            "style_a": round(style_scores[0], 3),
+            "style_b": round(style_scores[1], 3),
+        }
+        pending_history.append(json.dumps(hist_row, ensure_ascii=False))
+
+    def flush_history(self, lines: List[str], max_lines_keep: int = 250000) -> None:
+        if not lines:
+            return
+        os.makedirs(self.logs_dir, exist_ok=True)
+        with open(self.history_path, "a", encoding="utf-8") as f:
+            for ln in lines:
+                f.write(ln + "\n")
+        lines.clear()
+        # Keep up to 250,000 matches (~55 MB) in match_history.jsonl so full overnight runs stay 100% intact
+        try:
+            if os.path.getsize(self.history_path) > 55_000_000:
+                with open(self.history_path, "r", encoding="utf-8") as rf:
+                    tail = rf.readlines()[-max_lines_keep:]
+                tmp = self.history_path + ".tmp"
+                with open(tmp, "w", encoding="utf-8") as wf:
+                    wf.writelines(tail)
+                os.replace(tmp, self.history_path)
+        except Exception:
+            pass

@@ -58,12 +58,15 @@ if errorlevel 1 (
 )
 
 echo.
-echo [4/4] Creating Desktop shortcuts on PC #2...
+echo [4/4] Creating Desktop & Startup shortcuts on PC #2 (including Headless Worker)...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ws = New-Object -ComObject WScript.Shell; " ^
   "$desk = [Environment]::GetFolderPath('Desktop'); " ^
-  "$s1 = $ws.CreateShortcut((Join-Path $desk 'Arena Lab V2 - Trainer (LAN).lnk')); " ^
-  "$s1.TargetPath = 'Z:\Start_Trainer.bat'; $s1.WorkingDirectory = 'Z:\'; $s1.Save(); " ^
+  "$startup = [Environment]::GetFolderPath('Startup'); " ^
+  "$s1 = $ws.CreateShortcut((Join-Path $desk 'Arena Lab V2 - PC2 Headless Worker.lnk')); " ^
+  "$s1.TargetPath = 'Z:\Start_PC2_Headless_Worker.bat'; $s1.WorkingDirectory = 'Z:\'; $s1.Save(); " ^
+  "$s_st = $ws.CreateShortcut((Join-Path $startup 'Arena Lab V2 - PC2 Headless Worker.lnk')); " ^
+  "$s_st.TargetPath = 'Z:\Start_PC2_Headless_Worker.bat'; $s_st.WorkingDirectory = 'Z:\'; $s_st.Save(); " ^
   "$s2 = $ws.CreateShortcut((Join-Path $desk 'Arena Lab V2 - Shared Folder (Z).lnk')); " ^
   "$s2.TargetPath = 'Z:\'; $s2.Save();"
 

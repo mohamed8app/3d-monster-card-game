@@ -147,11 +147,12 @@ def get_card_db(json_path: str = DEFAULT_CARDS_JSON) -> CardDB:
 
 
 class HandCard:
-    __slots__ = ("card_id", "cost_mod")
+    __slots__ = ("card_id", "cost_mod", "drawn_turn")
 
-    def __init__(self, card_id: int, cost_mod: int = 0) -> None:
+    def __init__(self, card_id: int, cost_mod: int = 0, drawn_turn: int = 0) -> None:
         self.card_id: int = int(card_id)
         self.cost_mod: int = int(cost_mod)
+        self.drawn_turn: int = int(drawn_turn)
 
 
 class MonsterUnit:
@@ -164,6 +165,8 @@ class MonsterUnit:
         "can_attack", "attacked_this_turn", "skills_used_this_turn", "skill_uses_this_turn",
         "double_skill_1t", "double_strike_temp",
         "own_turns_survived", "last_own_turn", "attacks_made",
+        "skills_used_total", "dmg_taken_total", "first_impact_turn", "had_impact",
+        "dmg_dealt_total", "hits_taken_total",
         "burn", "poison", "bleed", "frozen", "silenced", "rooted", "weakened",
         "stealth", "taunt", "haste", "double_strike", "evasion_pct", "life_leech_pct",
         "reflect_flat", "reflect_pct", "cleave_pct", "bypass_pct",
@@ -178,7 +181,7 @@ class MonsterUnit:
         "on_death_atk", "on_death_def", "on_death_dmg", "on_death_regen_def", "on_death_regen_hp",
         "on_hit_burn", "on_hit_poison", "on_hit_bleed", "strip_buffs_bonus",
         "turn_heal_def", "turn_heal_hp", "cleanse_aura_def", "dmg_reduce_flat",
-        "spell_ping_dmg",
+        "spell_ping_dmg", "leader_def_applied",
     )
 
     def __init__(
@@ -239,11 +242,18 @@ class MonsterUnit:
         self.perm_def_buff: int = 0
         self.temp_atk_buff: int = 0
         self.temp_def_buff: int = 0
+        self.leader_def_applied: int = 0
 
         self.summoned_turn: int = int(summoned_turn)
         self.own_turns_survived: int = 0
         self.last_own_turn: int = int(summoned_turn)
         self.attacks_made: int = 0
+        self.skills_used_total: int = 0
+        self.dmg_taken_total: int = 0
+        self.first_impact_turn: int = -1
+        self.had_impact: bool = False
+        self.dmg_dealt_total: int = 0
+        self.hits_taken_total: int = 0
         self.can_attack: bool = False
         self.attacked_this_turn: bool = False
         self.skills_used_this_turn: int = 0
@@ -402,6 +412,41 @@ class MatchTelemetry:
         "kills_by_counter", "kills_by_dot", "kills_by_passive",
         "dmg_m_by_active", "dmg_m_by_attack", "dmg_m_by_spell",
         "dmg_m_by_counter", "dmg_m_by_dot", "dmg_m_by_passive",
+        "pace_first_summon", "pace_first_attack", "pace_first_death", "pace_first_defense",
+        "pace_zero_card_turns", "pace_dead_turns", "pace_total_actions",
+        "pace_impact_gaps_sum", "pace_impact_gaps_cnt", "pace_decisive_turn",
+        "unit_life_hist", "unit_tier_sum", "unit_tier_cnt",
+        "unit_role_sum", "unit_role_cnt", "unit_tribe_sum", "unit_tribe_cnt",
+        "unit_elem_sum", "unit_elem_cnt",
+        "unit_dmg_absorbed_sum", "unit_base_def_sum", "unit_zero_impact_died",
+        "unit_attacks_died_sum", "unit_skill_holders_died", "unit_skills_died_sum",
+        "unit_first_impact_wait_sum", "unit_first_impact_cnt",
+        "empty_board_turns", "exits_sacrifice", "exits_recalled",
+        "cq_unit_dmg_dealt_sum", "cq_hits_to_kill_sum",
+        "cq_total_strikes", "cq_unit_clashes", "cq_face_strikes",
+        "cq_lethal_strikes", "cq_whiff_strikes", "cq_intercepted_strikes",
+        "cq_mutual_kills", "cq_fair_trades", "cq_clean_kills", "cq_swing_strikes",
+        "cq_overkill_dmg", "cq_raw_unit_dmg", "cq_barrier_dmg_absorbed",
+        "cq_near_death_hits", "cq_total_unit_hits", "cq_skill_dmg_total",
+        "cu_played_count", "cu_played_on_draw_turn", "cu_play_turn_sum",
+        "cu_played_by_type", "cu_cond_attempts", "cu_cond_success",
+        "cu_hand_end_remaining", "cu_hand_checks_cards", "cu_hand_unplayable_cards",
+        "cu_low_value_plays", "cu_deck_cycles_done",
+        "re_mana_avail", "re_mana_spent", "re_mana_wasted", "re_turns_unspent",
+        "re_early_mana_avail", "re_early_mana_spent",
+        "re_mana_spent_cards", "re_mana_spent_monsters", "re_mana_spent_spells",
+        "re_mana_spent_skills", "re_mana_spent_other", "re_aether_draws",
+        "re_mana_offense", "re_mana_defense",
+        "re_card_cost_played", "re_turn_mana_avail", "re_turn_mana_spent",
+        "re_turn_mana_cnt", "re_reach_cap_turn",
+        "mp_passive_triggers", "mp_env_upgrades", "mp_ascends", "mp_last_breaths",
+        "vc_face_by_ch", "vc_kill_channel", "vc_final_turn_face_dmg", "vc_end_board_cnt",
+        "si_legal_actions_sum", "si_distinct_choices_sum", "si_choice_hist",
+        "si_forced_pass_turns", "si_multi_action_turns", "si_decision_chain_sum",
+        "si_slot_summons", "si_sac_avail_turns", "si_restraint_passes",
+        "si_reactive_decisions", "si_total_decisions",
+        "en_close_hp_turns", "en_hp_turns",
+        "cf_open_playable", "cf_early_special", "cf_t4_hp_diff", "cf_t4_recorded",
     )
 
     def __init__(self) -> None:
@@ -471,12 +516,125 @@ class MatchTelemetry:
         self.dmg_m_by_counter: int = 0
         self.dmg_m_by_dot: int = 0
         self.dmg_m_by_passive: int = 0
+        # Pillar #1: Game Pace telemetry
+        self.pace_first_summon: int = 0
+        self.pace_first_attack: int = 0
+        self.pace_first_death: int = 0
+        self.pace_first_defense: int = 0
+        self.pace_zero_card_turns: int = 0
+        self.pace_dead_turns: int = 0
+        self.pace_total_actions: int = 0
+        self.pace_impact_gaps_sum: int = 0
+        self.pace_impact_gaps_cnt: int = 0
+        self.pace_decisive_turn: int = 0
+        # Pillar #2: Detailed Monster Survival & Battlefield telemetry
+        self.unit_life_hist: List[int] = [0, 0, 0, 0, 0, 0, 0]
+        self.unit_tier_sum: List[int] = [0] * 8
+        self.unit_tier_cnt: List[int] = [0] * 8
+        self.unit_role_sum: List[int] = [0] * 6
+        self.unit_role_cnt: List[int] = [0] * 6
+        self.unit_tribe_sum: List[int] = [0] * 10
+        self.unit_tribe_cnt: List[int] = [0] * 10
+        self.unit_elem_sum: List[int] = [0] * 10
+        self.unit_elem_cnt: List[int] = [0] * 10
+        self.unit_dmg_absorbed_sum: int = 0
+        self.unit_base_def_sum: int = 0
+        self.unit_zero_impact_died: int = 0
+        self.unit_attacks_died_sum: int = 0
+        self.unit_skill_holders_died: int = 0
+        self.unit_skills_died_sum: int = 0
+        self.unit_first_impact_wait_sum: int = 0
+        self.unit_first_impact_cnt: int = 0
+        self.empty_board_turns: int = 0
+        self.exits_sacrifice: int = 0
+        self.exits_recalled: int = 0
+        # Pillar #3: Combat Quality telemetry
+        self.cq_unit_dmg_dealt_sum: int = 0
+        self.cq_hits_to_kill_sum: int = 0
+        self.cq_total_strikes: int = 0
+        self.cq_unit_clashes: int = 0
+        self.cq_face_strikes: int = 0
+        self.cq_lethal_strikes: int = 0
+        self.cq_whiff_strikes: int = 0
+        self.cq_intercepted_strikes: int = 0
+        self.cq_mutual_kills: int = 0
+        self.cq_fair_trades: int = 0
+        self.cq_clean_kills: int = 0
+        self.cq_swing_strikes: int = 0
+        self.cq_overkill_dmg: int = 0
+        self.cq_raw_unit_dmg: int = 0
+        self.cq_barrier_dmg_absorbed: int = 0
+        self.cq_near_death_hits: int = 0
+        self.cq_total_unit_hits: int = 0
+        self.cq_skill_dmg_total: int = 0
+        # Pillar #4: Card Utilization telemetry
+        self.cu_played_count: int = 0
+        self.cu_played_on_draw_turn: int = 0
+        self.cu_play_turn_sum: int = 0
+        self.cu_played_by_type: List[int] = [0, 0, 0, 0, 0, 0]  # [monster, barrier, spell, leader, covenant, env]
+        self.cu_cond_attempts: int = 0
+        self.cu_cond_success: int = 0
+        self.cu_hand_end_remaining: int = 0
+        self.cu_hand_checks_cards: int = 0
+        self.cu_hand_unplayable_cards: int = 0
+        self.cu_low_value_plays: int = 0
+        self.cu_deck_cycles_done: int = 0
+        # Pillar #5: Resource Economy telemetry
+        self.re_mana_avail: int = 0
+        self.re_mana_spent: int = 0
+        self.re_mana_wasted: int = 0
+        self.re_turns_unspent: int = 0
+        self.re_early_mana_avail: int = 0
+        self.re_early_mana_spent: int = 0
+        self.re_mana_spent_cards: int = 0
+        self.re_mana_spent_monsters: int = 0
+        self.re_mana_spent_spells: int = 0
+        self.re_mana_spent_skills: int = 0
+        self.re_mana_spent_other: int = 0
+        self.re_aether_draws: int = 0
+        self.re_mana_offense: int = 0
+        self.re_mana_defense: int = 0
+        self.re_card_cost_played: List[int] = [0] * 8  # cost 0..7
+        self.re_turn_mana_avail: List[int] = [0] * 15  # turns 1..15+
+        self.re_turn_mana_spent: List[int] = [0] * 15
+        self.re_turn_mana_cnt: List[int] = [0] * 15
+        self.re_reach_cap_turn: int = 0
+        # Pillar #7: Mechanics Performance telemetry
+        self.mp_passive_triggers: int = 0
+        self.mp_env_upgrades: int = 0
+        self.mp_ascends: int = 0
+        self.mp_last_breaths: int = 0
+        # Pillar #8: Victory Conditions & Win Channels telemetry
+        self.vc_face_by_ch: List[int] = [0, 0, 0, 0, 0, 0]  # [attack, active, spell, dot, passive, self/sd]
+        self.vc_kill_channel: int = 5
+        self.vc_final_turn_face_dmg: int = 0
+        self.vc_end_board_cnt: int = 0
+        # Pillar #9: Strategic Intelligence & Decision Depth telemetry
+        self.si_legal_actions_sum: int = 0
+        self.si_distinct_choices_sum: int = 0
+        self.si_choice_hist: List[int] = [0, 0, 0, 0, 0, 0]  # [0, 1, 2-3, 4-5, 6-7, 8+]
+        self.si_forced_pass_turns: int = 0
+        self.si_multi_action_turns: int = 0
+        self.si_decision_chain_sum: int = 0
+        self.si_slot_summons: List[int] = [0, 0, 0, 0, 0, 0]
+        self.si_sac_avail_turns: int = 0
+        self.si_restraint_passes: int = 0
+        self.si_reactive_decisions: int = 0
+        self.si_total_decisions: int = 0
+        # Pillar #10: Gameplay Enjoyment & Tension telemetry
+        self.en_close_hp_turns: int = 0
+        self.en_hp_turns: int = 0
+        # Pillar #11: Competitive Fairness telemetry
+        self.cf_open_playable: bool = False
+        self.cf_early_special: bool = False
+        self.cf_t4_hp_diff: int = 0
+        self.cf_t4_recorded: bool = False
 
 
 class PlayerState:
     __slots__ = (
         "side", "hp", "max_hp", "mana", "max_mana", "temp_mana", "locked_mana_next",
-        "sacrificed_this_turn", "base_deck", "deck", "deck_cycles", "hand", "graveyard", "board",
+        "sacrificed_this_turn", "aether_drawn_this_turn", "base_deck", "deck", "deck_cycles", "hand", "graveyard", "board",
         "leader_card_id", "leader_active", "leader_muted_turns", "leader_exorcised",
         "leader_ops", "covenant_card_id", "covenant_active", "covenant_destroyed",
         "covenant_ops", "echo_next_spell", "spell_power_temp", "skill_bonus_temp",
@@ -488,11 +646,12 @@ class PlayerState:
         self.side: int = int(side)
         self.hp: int = LEADER_HP
         self.max_hp: int = LEADER_HP
-        self.mana: int = 1
-        self.max_mana: int = 1
+        self.mana: int = 0
+        self.max_mana: int = 0
         self.temp_mana: int = 0
         self.locked_mana_next: int = 0
         self.sacrificed_this_turn: bool = False
+        self.aether_drawn_this_turn: bool = False
         self.base_deck: List[int] = list(deck_ids)
         self.deck: List[int] = list(deck_ids)
         self.deck_cycles: int = 1
@@ -536,7 +695,7 @@ class PlayerState:
             return min(MAX_MANA_CAP, int(self.covenant_ops.get("max_mana_self", MAX_MANA_CAP)))
         return MAX_MANA_CAP
 
-    def add_to_hand(self, card_id: int, cost_mod: int = 0) -> Optional[int]:
+    def add_to_hand(self, card_id: int, cost_mod: int = 0, drawn_turn: int = 0) -> Optional[int]:
         """Adds card to hand. If hand is already at limit (Max 7), burns OLDEST card to graveyard."""
         burned: Optional[int] = None
         cap = self.hand_limit()
@@ -545,7 +704,7 @@ class PlayerState:
             self.graveyard.append(oldest.card_id)
             self.telemetry.cards_burned_hand7 += 1
             burned = oldest.card_id
-        self.hand.append(HandCard(card_id, cost_mod))
+        self.hand.append(HandCard(card_id, cost_mod, drawn_turn))
         return burned
 
     def board_units(self) -> List[MonsterUnit]:

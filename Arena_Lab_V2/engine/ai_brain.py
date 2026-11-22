@@ -359,11 +359,10 @@ class ModelBrain:
         fighter: FighterNet, saved_state: Dict[str, torch.Tensor]
     ) -> bool:
         """
-        Loads FighterNet weights with zero-forgetting input-layer expansion support.
-        If a legacy checkpoint has fewer input features (e.g. OBS_DIM 160 -> 220) while
-        all downstream layers match, copies 100% of trained weights into fc1[:, :old_dim]
-        and zero-initializes the newly appended optic-nerve columns so existing policy &
-        value outputs are preserved bit-for-bit and immediately learn on the new features!
+        Loads FighterNet weights with zero-forgetting input-layer (OBS_DIM 160 -> 220)
+        AND policy-head output-layer (ACTION_DIM 62 -> 63 for Aether Draw) expansion support!
+        Preserves 100% of trained weights bit-for-bit and zero-initializes newly appended
+        input columns or action rows so existing brains immediately learn the new features/actions.
         Returns True only on an exact shape match (safe to also load optimizer state).
         """
         curr_state = fighter.state_dict()
@@ -372,28 +371,54 @@ class ModelBrain:
         if saved_w is None or curr_w is None:
             return False
 
-        if tuple(saved_w.shape) == tuple(curr_w.shape):
+        all_exact = all(
+            (k in saved_state and tuple(saved_state[k].shape) == tuple(v_curr.shape))
+            for k, v_curr in curr_state.items()
+        )
+        if all_exact:
             try:
                 fighter.load_state_dict(saved_state)
                 return True
             except RuntimeError:
                 return False
 
-        # Seamless zero-padded expansion (e.g., 160 -> 220)
-        if saved_w.ndim == 2 and curr_w.ndim == 2 and saved_w.shape[0] == curr_w.shape[0] and saved_w.shape[1] < curr_w.shape[1]:
-            merged: Dict[str, torch.Tensor] = {}
-            for k, v_curr in curr_state.items():
-                if k == "fc1.weight":
-                    expanded = torch.zeros_like(v_curr)
-                    expanded[:, : saved_w.shape[1]] = saved_w.to(dtype=v_curr.dtype)
-                    merged[k] = expanded
-                elif k in saved_state and tuple(saved_state[k].shape) == tuple(v_curr.shape):
-                    merged[k] = saved_state[k].to(dtype=v_curr.dtype)
-                else:
-                    return False
-            fighter.load_state_dict(merged)
-            return False
-
+        # Seamless zero-padded expansion for OBS_DIM (fc1.weight) and/or ACTION_DIM (policy_head.*)
+        merged: Dict[str, torch.Tensor] = {}
+        for k, v_curr in curr_state.items():
+            if k not in saved_state:
+                return False
+            v_sav = saved_state[k]
+            if tuple(v_sav.shape) == tuple(v_curr.shape):
+                merged[k] = v_sav.to(dtype=v_curr.dtype)
+            elif (
+                k == "fc1.weight"
+                and v_sav.ndim == 2 and v_curr.ndim == 2
+                and v_sav.shape[0] == v_curr.shape[0]
+                and v_sav.shape[1] < v_curr.shape[1]
+            ):
+                expanded = torch.zeros_like(v_curr)
+                expanded[:, : v_sav.shape[1]] = v_sav.to(dtype=v_curr.dtype)
+                merged[k] = expanded
+            elif (
+                k == "policy_head.weight"
+                and v_sav.ndim == 2 and v_curr.ndim == 2
+                and v_sav.shape[1] == v_curr.shape[1]
+                and v_sav.shape[0] < v_curr.shape[0]
+            ):
+                expanded = torch.zeros_like(v_curr)
+                expanded[: v_sav.shape[0], :] = v_sav.to(dtype=v_curr.dtype)
+                merged[k] = expanded
+            elif (
+                k == "policy_head.bias"
+                and v_sav.ndim == 1 and v_curr.ndim == 1
+                and v_sav.shape[0] < v_curr.shape[0]
+            ):
+                expanded = torch.zeros_like(v_curr)
+                expanded[: v_sav.shape[0]] = v_sav.to(dtype=v_curr.dtype)
+                merged[k] = expanded
+            else:
+                return False
+        fighter.load_state_dict(merged)
         return False
 
     @staticmethod

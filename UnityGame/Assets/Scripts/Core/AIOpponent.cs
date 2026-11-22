@@ -78,6 +78,20 @@ namespace MonsterCardGame.Core
                 yield return CombatSystem.Instance.ExecuteActiveSkillsAnimated(aiPlayer, humanPlayer);
             }
             if (!aiPlayer.IsAlive || !humanPlayer.IsAlive) yield break;
+            // 5.5 Fallback Aether Draw: spend 2 spare Mana for +1 Card when hand is running low
+            if (aiPlayer.CanAetherDraw(out _) && aiPlayer.hand.Count <= 4)
+            {
+                if (aiPlayer.TryAetherDraw(out _))
+                {
+                    MonsterCardGame.Audio.SoundManager.Instance?.PlayCardDraw();
+                    if (MonsterCardGame.UI.BattleUIManager.Instance != null)
+                    {
+                        MonsterCardGame.UI.BattleUIManager.Instance.LogCombatMessage($"✨ Enemy channeled Aether Well (-{PlayerState.AetherDrawCost} Mana -> +1 Card | Mana: {aiPlayer.currentMana}, Aether: {aiPlayer.power}).");
+                        MonsterCardGame.UI.BattleUIManager.Instance.UpdateUI();
+                    }
+                    yield return new WaitForSeconds(0.28f);
+                }
+            }
             if (MonsterCardGame.UI.BattleUIManager.Instance != null) MonsterCardGame.UI.BattleUIManager.Instance.UpdateUI();
             yield return new WaitForSeconds(0.35f);
 
@@ -137,7 +151,7 @@ namespace MonsterCardGame.Core
                             MonsterCardGame.Audio.SoundManager.Instance?.PlayCardSacrifice();
                             if (ui != null)
                             {
-                                ui.LogCombatMessage($"🧠 [{modelLabel}] sacrificed a card (+1 Mana -> {aiPlayer.currentMana}/{aiPlayer.power} | Eval {valEst:+0.00;-0.00}, {confPct:0}%).");
+                                ui.LogCombatMessage($"🧠 [{modelLabel}] sacrificed a card (+1 Aether / +1 Mana -> {aiPlayer.currentMana}/{aiPlayer.power} | Eval {valEst:+0.00;-0.00}, {confPct:0}%).");
                                 ui.UpdateUI();
                             }
                             yield return new WaitForSeconds(0.32f);
@@ -265,6 +279,22 @@ namespace MonsterCardGame.Core
                     }
                 }
 
+                // 62: Aether Well Extra Draw (2 Mana -> +1 Card, once per turn)
+                else if (act == 62)
+                {
+                    if (aiPlayer.TryAetherDraw(out _))
+                    {
+                        executed = true;
+                        MonsterCardGame.Audio.SoundManager.Instance?.PlayCardDraw();
+                        if (ui != null)
+                        {
+                            ui.LogCombatMessage($"🧠 [{modelLabel}] channeled Aether Well (-{PlayerState.AetherDrawCost} Mana -> +1 Card | Mana: {aiPlayer.currentMana}/{aiPlayer.power} | {confPct:0}%).");
+                            ui.UpdateUI();
+                        }
+                        yield return new WaitForSeconds(0.30f);
+                    }
+                }
+
                 if (!executed)
                 {
                     blockedThisTurn.Add(act);
@@ -345,7 +375,7 @@ namespace MonsterCardGame.Core
                     if (ui != null)
                     {
                         ui.LogCombatMessage(
-                            $"🔥 Enemy sacrificed a card (+1 Power / +1 Mana -> Mana: {aiPlayer.currentMana}, Power: {aiPlayer.power}).");
+                            $"🔥 Enemy sacrificed a card (+1 Aether / +1 Mana -> Mana: {aiPlayer.currentMana}, Aether: {aiPlayer.power}).");
                         ui.UpdateUI();
                     }
                 }

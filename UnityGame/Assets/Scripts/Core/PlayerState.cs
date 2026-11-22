@@ -13,10 +13,13 @@ namespace MonsterCardGame.Core
         public int maxHp = 500;
         public int shield = 0;
 
-        [Header("Resources (Permanent Power ∞ -> Generates Turn Mana)")]
+        [Header("Resources (Permanent Aether -> Generates Turn Mana)")]
+        public const int AetherDrawCost = 2;
         public int power = 0;
+        public int Aether { get => power; set => power = value; }
         public int currentMana = 0;
         public bool hasSacrificedThisTurn = false;
+        public bool hasAetherDrawnThisTurn = false;
         public int fatigueCount = 0;
         public int monstersSummonedTotal = 0;
 
@@ -211,11 +214,13 @@ namespace MonsterCardGame.Core
 
         public void StartTurn(int turnNumber, bool skipDraw = false)
         {
-            // 1. Gain turn Mana equal to permanent Power (capped by Covenant max_mana_self if active)
+            // 1. Aether Well automatic 1+1 ramp: +1 permanent Aether (up to cap) & refill Turn Mana to Aether
             int manaCap = V2CardMechanicsEngine.GetPlayerManaCap(this);
+            if (power < manaCap) power++;
             if (power > manaCap) power = manaCap;
             currentMana = power;
             hasSacrificedThisTurn = false;
+            hasAetherDrawnThisTurn = false;
             cardsPlayedThisTurn = 0;
             monstersSummonedThisTurn = 0;
 
@@ -468,13 +473,20 @@ namespace MonsterCardGame.Core
                 return false;
             }
 
+            int manaCap = V2CardMechanicsEngine.GetPlayerManaCap(this);
+            if (power >= manaCap)
+            {
+                Debug.LogWarning($"Aether is already at maximum capacity ({manaCap})!");
+                return false;
+            }
+
             if (!hand.Contains(cardToSacrifice))
                 return false;
 
             hand.Remove(cardToSacrifice);
             graveyard.Add(cardToSacrifice);
 
-            power++;
+            power = Mathf.Min(manaCap, power + 1);
             currentMana++;
             hasSacrificedThisTurn = true;
 
@@ -484,7 +496,50 @@ namespace MonsterCardGame.Core
                 CommanderSpiritEffects.OnCardSacrificed(this, opponent);
             }
 
-            Debug.Log($"[{playerName}] sacrificed [{cardToSacrifice.name}]. +1 Power (Total Power: {power}), +1 Mana (Current Mana: {currentMana})");
+            Debug.Log($"[{playerName}] sacrificed [{cardToSacrifice.name}]. +1 Aether (Total Aether: {power}), +1 Mana (Current Mana: {currentMana})");
+            return true;
+        }
+
+        public bool CanAetherDraw(out string reason)
+        {
+            reason = string.Empty;
+            if (hasAetherDrawnThisTurn)
+            {
+                reason = "You already used Aether Draw this turn (1 per turn).";
+                return false;
+            }
+            if (denyDrawSacTurns > 0)
+            {
+                reason = "Card drawing is blocked this turn.";
+                return false;
+            }
+            if (V2CardMechanicsEngine.IsExtraDrawBanned(this))
+            {
+                reason = "Your active Covenant prevents extra card draws.";
+                return false;
+            }
+            if (currentMana < AetherDrawCost)
+            {
+                reason = $"Need {AetherDrawCost} Mana to draw an extra card (Available: {currentMana}).";
+                return false;
+            }
+            if (hand != null && hand.Count >= maxHandSize)
+            {
+                reason = $"Your hand is already full ({hand.Count}/{maxHandSize}).";
+                return false;
+            }
+            return true;
+        }
+
+        public bool TryAetherDraw(out string reason)
+        {
+            if (!CanAetherDraw(out reason))
+                return false;
+
+            currentMana -= AetherDrawCost;
+            hasAetherDrawnThisTurn = true;
+            DrawCard();
+            Debug.Log($"✨ [{playerName}] used Aether Draw (-{AetherDrawCost} Mana -> +1 Card | Mana: {currentMana}/{power}).");
             return true;
         }
 

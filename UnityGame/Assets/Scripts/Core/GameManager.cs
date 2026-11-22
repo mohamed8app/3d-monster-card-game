@@ -868,13 +868,13 @@ namespace MonsterCardGame.Core
             humanPlayer.activeCovenant = null;
             aiPlayer.activeCovenant = null;
 
-            // V1 Fair Starting Rule: Both players begin at 0 Power and 0 Mana (Player 2 receives +1 temp Mana once on Turn 2)
+            // V2.3 Aether Well Starting Rule: Both players begin at 0 Aether / 0 Mana, then StartTurn grants +1 Aether & full Mana refill automatically
             humanPlayer.power = 0;
             humanPlayer.currentMana = 0;
             aiPlayer.power = 0;
             aiPlayer.currentMana = 0;
 
-            Debug.Log($"🎲 Epic Battle Started! Decks: {defaultDeckSize} unique cards each | Opening Hands: P1={p1Draws}, P2={p2Draws} | Start Resources: 0 Power / 0 Mana (P2 +1 Mana on Turn 2).");
+            Debug.Log($"🎲 Epic Battle Started! Decks: {defaultDeckSize} unique cards each | Opening Hands: P1={p1Draws}, P2={p2Draws} | Aether Well: +1 Aether / +1 Mana per turn + 2-Mana Draw.");
             MonsterCardGame.Audio.SoundManager.Instance?.PlayMatchStart();
 
             StartTurn();
@@ -974,15 +974,21 @@ namespace MonsterCardGame.Core
             var usedIds = excludeIds != null ? new HashSet<int>(excludeIds) : new HashSet<int>();
 
             var playableLeaders = (allLeaders != null)
-                ? allLeaders.FindAll(l => l != null && MonsterArtLoader.HasCustomCardArt(l))
+                ? allLeaders.FindAll(l => l != null)
+                : new List<CardData>();
+            var playableCovenants = (allCovenants != null)
+                ? allCovenants.FindAll(c => c != null)
                 : new List<CardData>();
 
             int leaderTarget = (playableLeaders.Count > 0 && count >= 10)
-                ? Mathf.Min(playableLeaders.Count, count >= 40 ? 3 : (count >= 25 ? 2 : 1))
+                ? Mathf.Min(playableLeaders.Count, count >= 40 ? 2 : 1)
                 : 0;
-            int monsterTarget = Mathf.Max(0, Mathf.RoundToInt(count * 0.60f) - leaderTarget); // 27 Monsters + 3 Spirits out of 50
+            int covenantTarget = (playableCovenants.Count > 0 && count >= 15)
+                ? Mathf.Min(playableCovenants.Count, count >= 40 ? 2 : 1)
+                : 0;
+            int monsterTarget = Mathf.Max(0, Mathf.RoundToInt(count * 0.60f) - leaderTarget - covenantTarget);
             int spellTarget = Mathf.RoundToInt(count * 0.32f);   // 16 Spells out of 50
-            int envTarget = Mathf.Max(0, count - monsterTarget - spellTarget - leaderTarget); // 4 Environments out of 50
+            int envTarget = Mathf.Max(0, count - monsterTarget - spellTarget - leaderTarget - covenantTarget); // 4 Environments out of 50
 
             // 1. Stratified Monster selection without replacement (balanced early/mid/late costs + escalating unseen pity)
             int earlyCount = Mathf.RoundToInt(monsterTarget * 0.35f);
@@ -1039,10 +1045,14 @@ namespace MonsterCardGame.Core
                 }
             }
 
-            // 4. Commander Spirit Medallions without replacement (only Spirits with artwork ready)
+            // 4. Commander Spirit Medallions & Altar Covenants without replacement
             if (leaderTarget > 0 && playableLeaders.Count > 0)
             {
                 PickWeightedWithoutReplacement(playableLeaders, leaderTarget, usedIds, l => l.id, CloneLeaderCard, deck);
+            }
+            if (covenantTarget > 0 && playableCovenants.Count > 0)
+            {
+                PickWeightedWithoutReplacement(playableCovenants, covenantTarget, usedIds, c => c.id, CloneCovenantCard, deck);
             }
 
             // Top up to requested count from any remaining unseen monsters/spells if a pool ran dry during marathon refills
@@ -1416,7 +1426,7 @@ namespace MonsterCardGame.Core
                 }
                 if (BattleUIManager.Instance != null)
                 {
-                    BattleUIManager.Instance.ShowBanner($"🟢 YOUR TURN (Round {currentTurn} • Mana: {activePlayer.currentMana} | Power: {activePlayer.power} ∞)", new Color(0.2f, 0.95f, 0.5f));
+                    BattleUIManager.Instance.ShowBanner($"🟢 YOUR TURN (Round {currentTurn} • Mana: {activePlayer.currentMana} | Aether: {activePlayer.power} ∞)", new Color(0.2f, 0.95f, 0.5f));
                 }
                 EvaluateAutoEndTurn();
             }
@@ -5028,8 +5038,14 @@ namespace MonsterCardGame.Core
             if (!isPlayerTurn || currentPhase != GamePhase.ActionPhase || humanPlayer == null)
                 return false;
 
-            // 1. Sacrifice available
-            if (!humanPlayer.hasSacrificedThisTurn && humanPlayer.hand != null && humanPlayer.hand.Count > 0)
+            // 1. Sacrifice available (when Aether < cap)
+            if (!humanPlayer.hasSacrificedThisTurn && humanPlayer.denyDrawSacTurns <= 0 &&
+                humanPlayer.power < V2CardMechanicsEngine.GetPlayerManaCap(humanPlayer) &&
+                humanPlayer.hand != null && humanPlayer.hand.Count > 0)
+                return true;
+
+            // 1.5 Aether Draw button available (2 Mana -> +1 Card, once per turn)
+            if (humanPlayer.CanAetherDraw(out _))
                 return true;
 
             // 2. Affordable playable card in hand
@@ -5124,6 +5140,32 @@ namespace MonsterCardGame.Core
             }
 
             OnPlayerEndTurn();
+        }
+
+        public bool OnPlayerAetherDrawClicked()
+        {
+            if (!isPlayerTurn || currentPhase != GamePhase.ActionPhase || humanPlayer == null)
+                return false;
+
+            if (!humanPlayer.TryAetherDraw(out string reason))
+            {
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                if (BattleUIManager.Instance != null && !string.IsNullOrEmpty(reason))
+                {
+                    BattleUIManager.Instance.LogCombatMessage($"⚠️ [Aether Well] {reason}");
+                }
+                return false;
+            }
+
+            CancelAutoEndTurn();
+            MonsterCardGame.Audio.SoundManager.Instance?.PlayCardDraw();
+            if (BattleUIManager.Instance != null)
+            {
+                BattleUIManager.Instance.LogCombatMessage($"✨ [Aether Well] Spent {PlayerState.AetherDrawCost} Mana to draw an extra card! (Mana: {humanPlayer.currentMana} | Aether: {humanPlayer.power})");
+                BattleUIManager.Instance.UpdateUI();
+            }
+            EvaluateAutoEndTurn();
+            return true;
         }
 
         public void OnPlayerEndTurn()

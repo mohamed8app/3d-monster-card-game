@@ -37,6 +37,8 @@ namespace MonsterCardGame.UI
         public Button endTurnButton;
         public AstralHourglassControl hourglassControl;
         public Button sacrificeButton;
+        public Button aetherDrawButton;
+        public Text aetherDrawButtonText;
         public Button playCardButton;
         public Button quitButton;
 
@@ -655,7 +657,7 @@ namespace MonsterCardGame.UI
             if (gm == null || gm.humanPlayer == null) return;
 
             var loadedLeaders = (gm.allLeaders != null)
-                ? gm.allLeaders.FindAll(l => l != null && MonsterArtLoader.HasCustomCardArt(l))
+                ? gm.allLeaders.FindAll(l => l != null)
                 : new List<CardData>();
 
             int totalCount = loadedLeaders.Count > 0 ? loadedLeaders.Count : SpiritTribePresets.Length;
@@ -713,7 +715,7 @@ namespace MonsterCardGame.UI
             if (gm == null || gm.aiPlayer == null) return;
 
             var loadedLeaders = (gm.allLeaders != null)
-                ? gm.allLeaders.FindAll(l => l != null && MonsterArtLoader.HasCustomCardArt(l))
+                ? gm.allLeaders.FindAll(l => l != null)
                 : new List<CardData>();
 
             int totalCount = loadedLeaders.Count > 0 ? loadedLeaders.Count : SpiritTribePresets.Length;
@@ -828,6 +830,20 @@ namespace MonsterCardGame.UI
             {
                 sacrificeButton.interactable = gm.isPlayerTurn && !gm.humanPlayer.hasSacrificedThisTurn && selectedCardForAction != null;
             }
+            if (aetherDrawButton != null)
+            {
+                bool canDraw = gm.isPlayerTurn && gm.currentPhase == GamePhase.ActionPhase && gm.humanPlayer.CanAetherDraw(out _);
+                aetherDrawButton.interactable = canDraw;
+                if (aetherDrawButtonText != null)
+                {
+                    aetherDrawButtonText.text = gm.humanPlayer.hasAetherDrawnThisTurn
+                        ? "✓ DRAWN (1/1)"
+                        : $"✨ DRAW ({PlayerState.AetherDrawCost}💧)";
+                    aetherDrawButtonText.color = canDraw
+                        ? new Color(0.86f, 0.98f, 1.0f)
+                        : new Color(0.54f, 0.62f, 0.72f);
+                }
+            }
 
             UpdatePlayCardButtonState();
 
@@ -856,7 +872,7 @@ namespace MonsterCardGame.UI
             if (Mathf.Max(permPower, mana) > 8) crystals += "+";
             if (string.IsNullOrEmpty(crystals)) crystals = "◇";
 
-            return $"[ {crystals} ]  Mana: {mana}  |  Power: {permPower} (∞)";
+            return $"[ {crystals} ]  Mana: {mana}  |  Aether: {permPower} (∞)";
         }
 
         private void UpdateSlots()
@@ -1148,7 +1164,7 @@ namespace MonsterCardGame.UI
                 if (artImg != null)
                 {
                     artImg.gameObject.SetActive(true);
-                    Sprite sp = MonsterArtLoader.GetCardSprite(covenant);
+                    Sprite sp = MonsterArtLoader.GetCardSprite(covenant) ?? MonsterArtLoader.GetCovenantFrameSprite();
                     artImg.sprite = sp != null ? sp : GameBootstrapper.GetSpiritCrestSprite();
                     artImg.color = sp != null ? Color.white : new Color(0.96f, 0.74f, 0.28f);
                     artImg.preserveAspect = true;
@@ -1955,9 +1971,10 @@ namespace MonsterCardGame.UI
 
             Color cardBgColor = card.cardType switch
             {
-                CardType.Spell => new Color(0.12f, 0.08f, 0.20f, 0.98f),
+                CardType.Spell => new Color(0f, 0f, 0f, 0f),
                 CardType.Environment => new Color(0.06f, 0.12f, 0.16f, 0.98f),
                 CardType.Leader => new Color(0f, 0f, 0f, 0f),
+                CardType.Covenant => new Color(0f, 0f, 0f, 0f),
                 _ => new Color(0.09f, 0.10f, 0.15f, 0.98f)
             };
 
@@ -2391,6 +2408,13 @@ namespace MonsterCardGame.UI
                     crestArtImg.sprite = GameBootstrapper.GetSpiritCrestSprite();
                     crestArtImg.color = Color.Lerp(spiritCatCol, Color.white, 0.25f);
                     crestArtImg.raycastTarget = false;
+
+                    var rimObj = GameBootstrapper.CreatePanel(discObj.transform, "CircularTalismanRim",
+                        Color.Lerp(spiritCatCol, Color.white, 0.35f),
+                        new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(130f, 130f));
+                    var rimImg = rimObj.GetComponent<Image>();
+                    rimImg.sprite = GameBootstrapper.GetCircularSpiritRimSprite();
+                    rimImg.raycastTarget = false;
                 }
 
                 var tagBadge = GameBootstrapper.CreatePanel(cardObj.transform, "LeaderBadge", Color.Lerp(new Color(0.08f, 0.12f, 0.20f), spiritCatCol, 0.35f),
@@ -2440,98 +2464,120 @@ namespace MonsterCardGame.UI
             }
             else if (card.cardType == CardType.Covenant)
             {
-                // Right-Wing Altar Covenant Card (0-Mana Self-Restriction & Permanent Altar Reward)
-                Color covBg = new Color(0.18f, 0.06f, 0.08f, 0.98f);
+                // Right-Wing Altar Covenant Card (Octagonal Chained Blood Contract Frame)
+                Sprite covFrame = MonsterArtLoader.GetCovenantFrameSprite();
+                var cardImg = cardObj.GetComponent<Image>();
                 Color covGold = new Color(0.96f, 0.78f, 0.32f, 1f);
-                var bgImg = cardObj.GetComponent<Image>();
-                if (bgImg != null) bgImg.color = covBg;
 
-                if (customArt != null)
+                if (covFrame != null && cardImg != null)
                 {
-                    var artObj = new GameObject("CardArt");
-                    artObj.transform.SetParent(cardObj.transform, false);
-                    var rectArt = artObj.AddComponent<RectTransform>();
-                    rectArt.anchorMin = Vector2.zero;
-                    rectArt.anchorMax = Vector2.one;
-                    rectArt.sizeDelta = Vector2.zero;
-                    rectArt.anchoredPosition = Vector2.zero;
-                    var artImg = artObj.AddComponent<Image>();
-                    artImg.sprite = customArt;
-                    artImg.color = new Color(1f, 1f, 1f, 0.78f);
-                    artImg.raycastTarget = false;
+                    cardImg.sprite = covFrame;
+                    cardImg.color = Color.white;
+                    cardImg.preserveAspect = false;
+                    outline.enabled = false;
+
+                    // 1. Top Gray Octagonal Window (y = +33f): Card Emblem / Illustration area
+                    if (customArt != null)
+                    {
+                        var artObj = new GameObject("CardArt");
+                        artObj.transform.SetParent(cardObj.transform, false);
+                        var rectArt = artObj.AddComponent<RectTransform>();
+                        rectArt.anchorMin = new Vector2(0.5f, 0.5f);
+                        rectArt.anchorMax = new Vector2(0.5f, 0.5f);
+                        rectArt.sizeDelta = new Vector2(74f, 64f);
+                        rectArt.anchoredPosition = new Vector2(0f, 33f);
+                        var artImg = artObj.AddComponent<Image>();
+                        artImg.sprite = customArt;
+                        artImg.preserveAspect = true;
+                        artImg.color = Color.white;
+                        artImg.raycastTarget = false;
+                    }
+                    else
+                    {
+                        var emblem = GameBootstrapper.CreateText(cardObj.transform, "CovEmblem", $"⚖️\n#{card.id}", 16,
+                            new Color(0.95f, 0.82f, 0.48f), TextAnchor.MiddleCenter, new Vector2(0f, 38f), new Vector2(78f, 44f));
+                        emblem.fontStyle = FontStyle.Bold;
+                        emblem.resizeTextForBestFit = true;
+                        emblem.resizeTextMinSize = 11;
+                        emblem.resizeTextMaxSize = 16;
+                        emblem.raycastTarget = false;
+                        GameBootstrapper.AddTextShadow(emblem);
+
+                        string shortVowCat = string.IsNullOrEmpty(card.playstyle) ? "Altar Covenant" : card.playstyle;
+                        var catTxt = GameBootstrapper.CreateText(cardObj.transform, "CovCatText", $"{shortVowCat} • T{Mathf.Max(1, card.tier_num)}", 8,
+                            new Color(0.86f, 0.78f, 0.64f), TextAnchor.MiddleCenter, new Vector2(0f, 12f), new Vector2(76f, 16f));
+                        catTxt.fontStyle = FontStyle.Bold;
+                        catTxt.resizeTextForBestFit = true;
+                        catTxt.resizeTextMinSize = 6;
+                        catTxt.resizeTextMaxSize = 8;
+                        catTxt.raycastTarget = false;
+                        GameBootstrapper.AddTextShadow(catTxt);
+                    }
+
+                    // 2. Parchment Box directly above the Red Seal (y = -34f to -54f): Card Name & Pact Summary
+                    string covDisplayName = string.IsNullOrEmpty(card.name) ? $"Covenant #{card.id}" : card.name;
+                    var txtName = GameBootstrapper.CreateText(cardObj.transform, "NameText", covDisplayName, 9,
+                        new Color(0.18f, 0.08f, 0.04f), TextAnchor.MiddleCenter, new Vector2(0f, -35f), new Vector2(78f, 22f));
+                    txtName.fontStyle = FontStyle.Bold;
+                    txtName.resizeTextForBestFit = true;
+                    txtName.resizeTextMinSize = 6;
+                    txtName.resizeTextMaxSize = 9;
+                    txtName.horizontalOverflow = HorizontalWrapMode.Wrap;
+                    txtName.verticalOverflow = VerticalWrapMode.Truncate;
+                    txtName.raycastTarget = false;
+
+                    string covDesc = card.description ?? "";
+                    if (covDesc.Length > 52) covDesc = covDesc.Substring(0, 49) + "...";
+                    var txtDesc = GameBootstrapper.CreateText(cardObj.transform, "DescText", covDesc, 7,
+                        new Color(0.32f, 0.14f, 0.08f), TextAnchor.MiddleCenter, new Vector2(0f, -53f), new Vector2(76f, 16f));
+                    txtDesc.fontStyle = FontStyle.Bold;
+                    txtDesc.resizeTextForBestFit = true;
+                    txtDesc.resizeTextMinSize = 5;
+                    txtDesc.resizeTextMaxSize = 7;
+                    txtDesc.horizontalOverflow = HorizontalWrapMode.Wrap;
+                    txtDesc.verticalOverflow = VerticalWrapMode.Truncate;
+                    txtDesc.raycastTarget = false;
+
+                    // 3. Bottom Red Runic Circle (Exact center at y = 14.5f from bottom): Summon Cost Number
+                    var txtCost = GameBootstrapper.CreateText(cardObj.transform, "CostText", card.cost.ToString(), 15,
+                        new Color(1f, 0.95f, 0.85f), TextAnchor.MiddleCenter, new Vector2(0f, 14.5f), new Vector2(28f, 24f));
+                    txtCost.rectTransform.anchorMin = new Vector2(0.5f, 0f);
+                    txtCost.rectTransform.anchorMax = new Vector2(0.5f, 0f);
+                    txtCost.rectTransform.anchoredPosition = new Vector2(0f, 14.5f);
+                    txtCost.fontStyle = FontStyle.Bold;
+                    txtCost.raycastTarget = false;
+                    GameBootstrapper.AddTextShadow(txtCost);
                 }
-
-                var covOutline = cardObj.GetComponent<Outline>() ?? cardObj.AddComponent<Outline>();
-                covOutline.effectColor = covGold;
-                covOutline.effectDistance = new Vector2(2f, 2f);
-
-                // Top-left COVENANT tag
-                var tagBadge = GameBootstrapper.CreatePanel(cardObj.transform, "CovenantBadge", new Color(0.42f, 0.10f, 0.14f, 0.96f),
-                    new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(46f, -14f), new Vector2(84f, 18f));
-                tagBadge.GetComponent<Image>().raycastTarget = false;
-                var txtTag = GameBootstrapper.CreateText(tagBadge.transform, "TagText", "⚖️ COVENANT", 8,
-                    covGold, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(82f, 16f));
-                txtTag.fontStyle = FontStyle.Bold;
-                txtTag.raycastTarget = false;
-
-                // Top-right Mana Cost circle (0 Mana)
-                var costCircle = GameBootstrapper.CreateCirclePanel(cardObj.transform, "CostCircle", new Color(0.50f, 0.14f, 0.16f, 0.98f),
-                    new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-15f, -15f), new Vector2(28f, 28f));
-                costCircle.GetComponent<Image>().raycastTarget = false;
-                var costOut = costCircle.AddComponent<Outline>();
-                costOut.effectColor = covGold;
-                costOut.effectDistance = new Vector2(1.5f, 1.5f);
-                var txtCost = GameBootstrapper.CreateText(costCircle.transform, "CostText", card.cost.ToString(), 14,
-                    covGold, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(28f, 28f));
-                txtCost.fontStyle = FontStyle.Bold;
-                txtCost.raycastTarget = false;
-
-                // Center Emblem (when no custom art)
-                if (customArt == null)
+                else
                 {
-                    var emblem = GameBootstrapper.CreateText(cardObj.transform, "CovEmblem", "⚖️", 34,
-                        covGold, TextAnchor.MiddleCenter, new Vector2(0f, 32f), new Vector2(96f, 44f));
-                    emblem.raycastTarget = false;
+                    // Fallback when frame sprite is missing
+                    Color covBg = new Color(0.18f, 0.06f, 0.08f, 0.98f);
+                    var bgImg = cardObj.GetComponent<Image>();
+                    if (bgImg != null) bgImg.color = covBg;
+
+                    if (customArt != null)
+                    {
+                        var artObj = new GameObject("CardArt");
+                        artObj.transform.SetParent(cardObj.transform, false);
+                        var rectArt = artObj.AddComponent<RectTransform>();
+                        rectArt.anchorMin = Vector2.zero;
+                        rectArt.anchorMax = Vector2.one;
+                        rectArt.sizeDelta = Vector2.zero;
+                        rectArt.anchoredPosition = Vector2.zero;
+                        var artImg = artObj.AddComponent<Image>();
+                        artImg.sprite = customArt;
+                        artImg.color = new Color(1f, 1f, 1f, 0.78f);
+                        artImg.raycastTarget = false;
+                    }
+
+                    var costCircle = GameBootstrapper.CreateCirclePanel(cardObj.transform, "CostCircle", new Color(0.50f, 0.14f, 0.16f, 0.98f),
+                        new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 18f), new Vector2(28f, 28f));
+                    costCircle.GetComponent<Image>().raycastTarget = false;
+                    var txtCost = GameBootstrapper.CreateText(costCircle.transform, "CostText", card.cost.ToString(), 14,
+                        covGold, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(28f, 28f));
+                    txtCost.fontStyle = FontStyle.Bold;
+                    txtCost.raycastTarget = false;
                 }
-
-                // Name Plate
-                var namePanel = GameBootstrapper.CreatePanel(cardObj.transform, "NamePlate", new Color(0.10f, 0.04f, 0.06f, 0.95f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -6f), new Vector2(130f, 24f));
-                namePanel.GetComponent<Image>().raycastTarget = false;
-                var txtName = GameBootstrapper.CreateText(namePanel.transform, "NameText", $"{card.name}", 10,
-                    covGold, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(124f, 22f));
-                txtName.fontStyle = FontStyle.Bold;
-                txtName.resizeTextForBestFit = true;
-                txtName.resizeTextMinSize = 7;
-                txtName.resizeTextMaxSize = 10;
-                txtName.horizontalOverflow = HorizontalWrapMode.Wrap;
-                txtName.verticalOverflow = VerticalWrapMode.Truncate;
-                txtName.raycastTarget = false;
-
-                // Description box (trimmed cleanly on small hand card; full text shown in Detail Inspector on click)
-                var descPanel = GameBootstrapper.CreatePanel(cardObj.transform, "DescPanel", new Color(0.06f, 0.03f, 0.05f, 0.92f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -44f), new Vector2(130f, 44f));
-                descPanel.GetComponent<Image>().raycastTarget = false;
-                string covDesc = card.description ?? "";
-                if (covDesc.Length > 76) covDesc = covDesc.Substring(0, 73) + "...";
-                var txtDesc = GameBootstrapper.CreateText(descPanel.transform, "DescText", covDesc, 8,
-                    new Color(0.96f, 0.92f, 0.86f), TextAnchor.MiddleCenter, Vector2.zero, new Vector2(124f, 40f));
-                txtDesc.resizeTextForBestFit = true;
-                txtDesc.resizeTextMinSize = 6;
-                txtDesc.resizeTextMaxSize = 8;
-                txtDesc.horizontalOverflow = HorizontalWrapMode.Wrap;
-                txtDesc.verticalOverflow = VerticalWrapMode.Truncate;
-                txtDesc.raycastTarget = false;
-
-                // Bottom Style / Tier badge
-                var actionBadge = GameBootstrapper.CreatePanel(cardObj.transform, "ActionBadge", new Color(0.46f, 0.14f, 0.18f, 0.96f),
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -77f), new Vector2(128f, 18f));
-                actionBadge.GetComponent<Image>().raycastTarget = false;
-                string styleLabel = string.IsNullOrEmpty(card.playstyle) ? "Altar Vow" : $"{card.playstyle} • T{Mathf.Max(1, card.tier_num)}";
-                var txtAction = GameBootstrapper.CreateText(actionBadge.transform, "ActionText", $"📜 {styleLabel}", 9,
-                    covGold, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(124f, 16f));
-                txtAction.fontStyle = FontStyle.Bold;
-                txtAction.raycastTarget = false;
             }
 
             return cardRootObj;
@@ -2692,16 +2738,38 @@ namespace MonsterCardGame.UI
                 return;
             }
 
-            bool hasScrollShown = (data.cardType == CardType.Spell && detailCardArt.sprite != null);
-            if (!hasScrollShown)
+            if (data.cardType == CardType.Covenant)
             {
-                detailCardArt.sprite = null;
-                detailCardArt.color = MonsterArtLoader.GetEnvironmentAtmosphereColor(data.element);
+                Sprite covFrame = MonsterArtLoader.GetCovenantFrameSprite();
+                if (covFrame != null)
+                {
+                    detailCardArt.sprite = covFrame;
+                    detailCardArt.color = Color.white;
+                    detailCardArt.preserveAspect = true;
+                }
+            }
+
+            bool hasScrollShown = (data.cardType == CardType.Spell && detailCardArt.sprite != null);
+            bool hasCovenantShown = (data.cardType == CardType.Covenant && detailCardArt.sprite != null);
+            if (!hasScrollShown && !hasCovenantShown)
+            {
+                Sprite elemFrame = MonsterArtLoader.GetCardFrameOverlaySprite(data.element);
+                if (elemFrame != null)
+                {
+                    detailCardArt.sprite = elemFrame;
+                    detailCardArt.color = Color.white;
+                    detailCardArt.preserveAspect = true;
+                }
+                else
+                {
+                    detailCardArt.sprite = null;
+                    detailCardArt.color = MonsterArtLoader.GetEnvironmentAtmosphereColor(data.element);
+                }
             }
 
             Color textCol = hasScrollShown
                 ? new Color(0.22f, 0.12f, 0.05f)
-                : MonsterArtLoader.GetElementColor(data.element);
+                : (hasCovenantShown ? new Color(0.96f, 0.80f, 0.38f) : MonsterArtLoader.GetElementColor(data.element));
 
             string detailPlaceholderText = $"#{data.id}\n{data.name}";
             Text numTxt;
@@ -3262,7 +3330,7 @@ namespace MonsterCardGame.UI
                             CombatSystem.AbilityReadyState.Ready => $"⚡ Activate Ability ({cost})",
                             CombatSystem.AbilityReadyState.AlreadyUsed => "✓ Ability Used This Turn",
                             CombatSystem.AbilityReadyState.NotEnoughMana => $"💧 Need {cost}💧 Mana",
-                            CombatSystem.AbilityReadyState.NotEnoughPower => $"⚡ Need {cost}⚡ Power",
+                            CombatSystem.AbilityReadyState.NotEnoughPower => $"⚡ Need {cost}⚡ Aether",
                             CombatSystem.AbilityReadyState.NoValidTarget => "🎯 Needs Enemy Target",
                             CombatSystem.AbilityReadyState.Silenced => "🔒 Ability Silenced",
                             CombatSystem.AbilityReadyState.Frozen => "❄️ Monster Frozen",
@@ -4105,7 +4173,7 @@ namespace MonsterCardGame.UI
             if (gm.humanPlayer.SacrificeCard(card))
             {
                 MonsterCardGame.Audio.SoundManager.Instance.PlayCardSacrifice();
-                LogCombatMessage($"🔥 Sacrificed [{card.name}] via Right-Click! Gained +1 Power & +1 Mana.", card);
+                LogCombatMessage($"🔥 Sacrificed [{card.name}] via Right-Click! Gained +1 Aether & +1 Mana.", card);
                 LaunchSacrificeFlight(card, startPos);
                 DeselectHandCards();
                 UpdateUI();

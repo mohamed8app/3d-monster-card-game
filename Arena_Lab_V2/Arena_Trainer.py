@@ -29,13 +29,14 @@ ensure_venv(__file__, require_torch=True)
 from engine.ai_brain import get_warm_start_info, promote_model_to_warm_start_base
 from engine.card_model import get_card_db
 from engine.roster_40 import ROSTER_40, get_model_spec
+from pc2_headless_worker import perform_smart_v22_reset, resolve_pc2_remote_logs_dir
 from trainer.session_runner import (
     CPU_PRESETS,
     pick_next_auto_league_pair,
     run_match_session,
     suggest_matchups,
 )
-from trainer.stats_store import StatsStore
+from trainer.stats_store import StatsStore, _atomic_write_json, _read_json
 
 # === Dark Theme Palette ===
 BG_DARK = "#12151C"
@@ -78,6 +79,10 @@ class ArenaTrainerApp:
         self.league_block_var = tk.StringVar(value="1000")
         self.league_target_var = tk.StringVar(value="1000000")
         self.league_pool_var = tk.StringVar(value="All (41)")
+        self.exec_target_var = tk.StringVar(value="pc2")
+        self.pc2_badge_var = tk.StringVar(value="PC #2 Status: Checking...")
+        self._remote_monitoring = False
+        self._seen_remote_logs: List[str] = []
 
         self._label_to_id_a: Dict[str, str] = {}
         self._label_to_id_b: Dict[str, str] = {}
@@ -86,8 +91,9 @@ class ArenaTrainerApp:
         self._build_ui()
         self._refresh_model_lists(keep_selection=False)
         self._update_warm_start_badge()
-        self._log("Arena Lab V2 ready. Loaded 2,270 cards and 40 independent AI models.")
-        self._log("Tip: Train Free_01 vs Free_02 for 500 matches first, then click 'Set Model A as Warm-Start Base'.")
+        self._poll_pc2_heartbeat()
+        self._log("Arena Lab V2 ready. Loaded 2,270 V2.2 cards and 41 independent AI models.")
+        self._log("Remote PC #2 Control ready: Run Z:\\Start_PC2_Headless_Worker.bat once on PC #2, turn off its screen, and control everything from here!")
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -162,6 +168,40 @@ class ArenaTrainerApp:
             font=("Segoe UI", 9, "bold"), padx=10, pady=6,
         )
         self.ws_badge.pack(side="right")
+
+        # --- Remote PC #2 Headless Control & Clean/Reset Bar ---
+        rem_bar = tk.Frame(self.root, bg="#161D2B", highlightbackground="#2E3B52", highlightthickness=1, padx=14, pady=7)
+        rem_bar.pack(fill="x", padx=12, pady=(0, 4))
+
+        tk.Label(
+            rem_bar, text="EXECUTION TARGET:", bg="#161D2B", fg=ACCENT_GOLD, font=("Segoe UI", 9, "bold"),
+        ).pack(side="left", padx=(0, 8))
+
+        tk.Radiobutton(
+            rem_bar, text="Run on PC #2 (Headless Remote over Z:\\ — Screen OFF)",
+            variable=self.exec_target_var, value="pc2",
+            bg="#161D2B", fg="#38BDF8", selectcolor=BG_INPUT, activebackground="#161D2B", activeforeground="#38BDF8",
+            font=("Segoe UI", 9, "bold"), cursor="hand2",
+        ).pack(side="left", padx=(0, 12))
+
+        tk.Radiobutton(
+            rem_bar, text="Run on THIS PC (Local CPU)",
+            variable=self.exec_target_var, value="local",
+            bg="#161D2B", fg=FG_TEXT, selectcolor=BG_INPUT, activebackground="#161D2B", activeforeground=FG_TEXT,
+            font=("Segoe UI", 9, "bold"), cursor="hand2",
+        ).pack(side="left", padx=(0, 14))
+
+        self.pc2_badge_lbl = tk.Label(
+            rem_bar, textvariable=self.pc2_badge_var, bg=BG_INPUT, fg=ACCENT_GOLD,
+            font=("Segoe UI", 8, "bold"), padx=10, pady=4,
+        )
+        self.pc2_badge_lbl.pack(side="left")
+
+        tk.Button(
+            rem_bar, text="Smart Reset V2.2 (Clean Both PCs)", command=self._on_smart_reset_v22,
+            bg="#7F1D1D", fg="#FCA5A5", activebackground=ACCENT_RED, activeforeground="#FFFFFF",
+            font=("Segoe UI", 8, "bold"), relief="flat", padx=10, pady=4, cursor="hand2",
+        ).pack(side="right")
 
         # --- Matchup Selection ---
         pick_frame = tk.Frame(self.root, bg=BG_DARK)
@@ -663,6 +703,21 @@ class ArenaTrainerApp:
         pool_scope = self.league_pool_var.get().split(" ")[0]
         cpu_preset = self.cpu_var.get()
         use_ws = bool(self.warm_start_var.get())
+
+        if self.exec_target_var.get() == "pc2":
+            self._send_remote_command(
+                {
+                    "action": "start_auto_league",
+                    "pool_scope": pool_scope,
+                    "block_n": block_n,
+                    "target_n": target_n,
+                    "cpu_preset": cpu_preset,
+                    "use_warm_start": use_ws,
+                },
+                f"Dispatched PERPETUAL AUTO-LEAGUE to PC #2: Pool={pool_scope} | {block_n:,}/pair | Target={target_n:,} | CPU={cpu_preset}",
+            )
+            return
+
         self.stop_event.clear()
         self._set_controls_state(True)
 
@@ -747,6 +802,20 @@ class ArenaTrainerApp:
     def _launch_playlist(self, playlist: List[tuple], cycles: int = 1) -> None:
         cpu_preset = self.cpu_var.get()
         use_ws = bool(self.warm_start_var.get())
+
+        if self.exec_target_var.get() == "pc2":
+            self._send_remote_command(
+                {
+                    "action": "start_playlist",
+                    "playlist": [[a, b, n] for (a, b, n) in playlist],
+                    "cycles": cycles,
+                    "cpu_preset": cpu_preset,
+                    "use_warm_start": use_ws,
+                },
+                f"Dispatched playlist to PC #2: {len(playlist)} pair(s) x {cycles} cycle(s) | CPU={cpu_preset}",
+            )
+            return
+
         self.stop_event.clear()
         self._set_controls_state(True)
 
@@ -867,10 +936,110 @@ class ArenaTrainerApp:
         subprocess.Popen([sys.executable, analytics_py])
 
     def _stop_training(self) -> None:
+        if self._remote_monitoring:
+            self._send_remote_command({"action": "stop"}, "Sent remote STOP & SAVE signal to PC #2...")
+            self.prog_title_var.set("Sent STOP & SAVE to PC #2 — waiting for current match to finish...")
+            return
         if self.is_running:
             self.stop_event.set()
             self.prog_title_var.set("Stopping cleanly after current match & saving checkpoints...")
             self._log("Stop requested — finishing current match and flushing checkpoints cleanly...")
+
+    def _send_remote_command(self, payload: Dict[str, Any], log_msg: str) -> None:
+        rem_logs = resolve_pc2_remote_logs_dir(ROOT_DIR)
+        cmd_file = os.path.join(rem_logs, "pc2_remote_cmd.json")
+        cmd = dict(payload)
+        cmd["cmd_id"] = f"cmd_{int(time.time() * 1000)}"
+        cmd["status"] = "pending"
+        cmd["sent_ts"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        _atomic_write_json(cmd_file, cmd)
+        self._log(log_msg)
+        if payload.get("action") in ("start_playlist", "start_auto_league"):
+            self._remote_monitoring = True
+            self._set_controls_state(True)
+            self.prog_title_var.set("Command sent to PC #2 — waiting for PC #2 worker to pick it up...")
+
+    def _poll_pc2_heartbeat(self) -> None:
+        try:
+            rem_logs = resolve_pc2_remote_logs_dir(ROOT_DIR)
+            status_file = os.path.join(rem_logs, "pc2_status.json")
+            cmd_file = os.path.join(rem_logs, "pc2_remote_cmd.json")
+            st = _read_json(status_file, {})
+            if isinstance(st, dict) and st.get("hostname"):
+                age = time.time() - float(st.get("epoch", 0.0))
+                host = st.get("hostname", "PC2")
+                ip_s = st.get("ip", "")
+                r_state = str(st.get("state", "idle"))
+                if age <= 8.0:
+                    self.pc2_badge_var.set(f"PC #2 ONLINE ({host} {ip_s} — {r_state.upper()})")
+                    self.pc2_badge_lbl.configure(fg=ACCENT_GREEN if r_state == "idle" else "#38BDF8")
+                else:
+                    self.pc2_badge_var.set(f"PC #2 Worker Offline ({host} last seen {int(age)}s ago)")
+                    self.pc2_badge_lbl.configure(fg=ACCENT_GOLD)
+
+                # Stream live PC #2 progress & logs into Trainer UI!
+                for line in st.get("recent_logs", []):
+                    if line not in self._seen_remote_logs:
+                        self._seen_remote_logs.append(line)
+                        if len(self._seen_remote_logs) > 150:
+                            self._seen_remote_logs = self._seen_remote_logs[-150:]
+                        self.log_text.configure(state="normal")
+                        self.log_text.insert("end", f"{line}\n")
+                        self.log_text.see("end")
+                        self.log_text.configure(state="disabled")
+
+                if r_state in ("running", "stopping"):
+                    if not self.is_running:
+                        self._remote_monitoring = True
+                        self._set_controls_state(True)
+                    self.prog_title_var.set(str(st.get("prog_title", "PC #2 Running...")))
+                    self.progress["maximum"] = max(1, int(st.get("prog_total", 100)))
+                    self.progress["value"] = int(st.get("prog_done", 0))
+                    self.prog_stats_var.set(str(st.get("prog_stats", "")))
+                elif self._remote_monitoring and r_state == "idle":
+                    cmd_now = _read_json(cmd_file, {})
+                    if not isinstance(cmd_now, dict) or cmd_now.get("status") != "pending":
+                        self._remote_monitoring = False
+                        self._set_controls_state(False)
+                        self.prog_title_var.set(str(st.get("prog_title", "PC #2 Idle.")))
+                        self.prog_stats_var.set(str(st.get("prog_stats", "")))
+                        self._refresh_model_lists(keep_selection=True)
+            else:
+                self.pc2_badge_var.set("PC #2 Worker: Waiting (Run Setup_And_Clean_PC2_Once.bat once on PC #2)")
+                self.pc2_badge_lbl.configure(fg=ACCENT_GOLD)
+        except Exception:
+            pass
+        self.root.after(1500, self._poll_pc2_heartbeat)
+
+    def _on_smart_reset_v22(self) -> None:
+        if self.is_running:
+            messagebox.showwarning("Training Active", "Please click STOP & SAVE before performing Smart Reset.")
+            return
+        ok = messagebox.askyesno(
+            "Smart Reset V2.2 (Both PCs)",
+            "Archive all current logs & 41 model decks/brains into Archive_Pre_V22,\n"
+            "keep Warm-Start Base (fighter_base.pt), and start 100% clean for V2.2?\n\n"
+            "(Because PC #2 shares Z:\\ with this folder, this cleans BOTH PCs immediately!)",
+        )
+        if not ok:
+            return
+        res = perform_smart_v22_reset(ROOT_DIR)
+        self._send_remote_command(
+            {"action": "clean_reset"},
+            "Sent remote Smart V2.2 Clean & Reset command to PC #2's local D: drive as well!",
+        )
+        self._refresh_model_lists(keep_selection=False)
+        self._update_warm_start_badge()
+        self._log(
+            f"Smart V2.2 Reset complete! Archived {res['archived_logs']} logs & {res['archived_models']} models -> {res['archive_dir']}"
+        )
+        messagebox.showinfo(
+            "Smart Reset Complete",
+            f"Both PCs are now 100% clean for V2.2!\n"
+            f"- Archived logs: {res['archived_logs']}\n"
+            f"- Archived models: {res['archived_models']}\n"
+            f"- Warm-Start Base (fighter_base.pt): PRESERVED",
+        )
 
     def _promote_model_a(self) -> None:
         id_a = self._label_to_id_a.get(self.model_a_var.get())

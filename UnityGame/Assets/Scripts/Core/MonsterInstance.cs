@@ -16,6 +16,7 @@ namespace MonsterCardGame.Core
         public int baseDef;
         public int bonusAtk;
         public int permBonusDef;
+        public int leaderDefApplied = 0;
         public int summonedTurn;
         public bool canAttack;
         public BoardSlot currentSlot;

@@ -84,7 +84,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\Resources\Shaders\MonsterStandby25D.shader" />
-    <None Include="Assets\StreamingAssets\Environments\README_VIDEOS.txt" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">
