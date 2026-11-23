@@ -516,7 +516,7 @@ class ArenaAnalyticsApp:
         self.nb.bind("<<NotebookTabChanged>>", self._on_notebook_tab_changed)
 
     def _on_notebook_tab_changed(self, event: Optional[tk.Event] = None) -> None:
-        """Auto-expands all Treeviews in the newly selected tab so columns fit text perfectly."""
+        """Auto-expands all Treeviews in the newly selected tab and lazily refreshes dirty tabs."""
         try:
             sel = self.nb.select()
             if not sel:
@@ -524,6 +524,10 @@ class ArenaAnalyticsApp:
             idx = int(self.nb.index(sel))
             if 0 <= idx < len(self._all_tabs):
                 tab_obj = self._all_tabs[idx]
+                if getattr(tab_obj, "_is_dirty", False):
+                    tab_obj._is_dirty = False
+                    if hasattr(tab_obj, "refresh"):
+                        tab_obj.refresh()
                 for attr_name in dir(tab_obj):
                     if attr_name.endswith("_tree") or attr_name == "tree":
                         t = getattr(tab_obj, attr_name, None)
@@ -866,7 +870,7 @@ class ArenaAnalyticsApp:
         self.nb.add(tab, text=rtl("17. تسعير المهارات ⚡"))
         self.skill_pricing_tab = SkillPricingAdvisorTab(tab, self.db, self.store, on_probe_complete=self._on_probe_updated)
 
-    def refresh_all(self) -> None:
+    def refresh_all(self, force_all: bool = False) -> None:
         self.store.reload()
         total_entries = sum(r["matches"] for r in self.store.roster.values()) // 2
         trained_cnt = sum(1 for r in self.store.roster.values() if r["matches"] > 0)
@@ -878,23 +882,23 @@ class ArenaAnalyticsApp:
                 f"البطاقات المختبرة: {cards_seen:,} / 1,470  |  آخر تحديث: {now_s}"
             )
         )
-        self.pace_tab.refresh()
-        self.survival_tab.refresh()
-        self.combat_tab.refresh()
-        self.utilization_tab.refresh()
-        self.resource_tab.refresh()
-        self.balance_tab.refresh()
-        self.mechanics_tab.refresh()
-        self.victory_tab.refresh()
-        self.strategy_tab.refresh()
-        self.enjoyment_tab.refresh()
-        self.fairness_tab.refresh()
-        self.integrity_tab.refresh()
-        self.meta_tab.refresh()
-        self.decks_tab.refresh()
-        self.abilities_eval_tab.refresh()
-        self.master_fun_tab.refresh()
-        self.skill_pricing_tab.refresh()
+        cur_idx = -1
+        try:
+            sel = self.nb.select()
+            if sel:
+                cur_idx = int(self.nb.index(sel))
+        except Exception:
+            pass
+
+        for idx, tab in enumerate(self._all_tabs):
+            if force_all or idx == cur_idx:
+                try:
+                    tab.refresh()
+                    tab._is_dirty = False
+                except Exception:
+                    pass
+            else:
+                tab._is_dirty = True
 
 
 def main() -> None:

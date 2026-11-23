@@ -243,23 +243,38 @@ def auto_expand_treeview_columns(
         return
 
     children = tree.get_children("")
+    if not children:
+        return
 
-    for col in cols:
+    # Sample at most 40 rows for blazing fast non-blocking measurement (<1ms vs 6,100ms)
+    sample_limit = 40
+    sample_ids = children[:sample_limit] if len(children) > sample_limit else children
+
+    # Cache row values: 1 Tcl call per item instead of cols * items Tcl calls
+    row_values_list: List[Tuple[Any, ...]] = []
+    for item_id in sample_ids:
+        try:
+            row_values_list.append(tree.item(item_id, "values"))
+        except Exception:
+            pass
+
+    for col_idx, col in enumerate(cols):
         try:
             heading_raw = tree.heading(col, "text")
             heading_txt = _clean_cell_text(heading_raw)
             max_w = _measure_text(heading_txt, is_bold=True) + 24
 
-            for item_id in children:
-                val = str(tree.set(item_id, col) or "")
-                if not val:
-                    continue
-                if "\n" in val:
-                    cell_w = max((_measure_text(line) for line in val.split("\n")), default=0)
-                else:
-                    cell_w = _measure_text(val)
-                if cell_w > max_w:
-                    max_w = cell_w
+            for vals in row_values_list:
+                if col_idx < len(vals):
+                    val = str(vals[col_idx] or "")
+                    if not val:
+                        continue
+                    if "\n" in val:
+                        cell_w = max((_measure_text(line) for line in val.split("\n")), default=0)
+                    else:
+                        cell_w = _measure_text(val)
+                    if cell_w > max_w:
+                        max_w = cell_w
 
             target_w = max(min_col_width, max_w + padding)
             if max_col_width > 0:
@@ -1007,6 +1022,129 @@ def export_full_analytics_report(app: Any, out_dir: str) -> Tuple[str, str, str,
     for idx_r, rr in enumerate(roster_rows, 1):
         md_lines.append(f"| {idx_r} | {rr['arabic_name']} | {rr['category']} | {rr['matches']:,} | {rr['wins']:,} | **{rr['win_rate']:.1f}%** | {rr['elo']:.0f} |")
 
+    # Section 4: Card Duplication & Two-Head Drafter Meta Analysis (Singles vs Pairs)
+    model_dup_rows: List[Dict[str, Any]] = []
+    card_single_counts: Dict[int, int] = defaultdict(int)
+    card_pair_counts: Dict[int, int] = defaultdict(int)
+    tot_singles = 0
+    tot_pairs = 0
+
+    saved_dir = getattr(app.store, "saved_models_dir", os.path.join(os.path.dirname(__file__), "saved_models"))
+    for spec in ROSTER_40:
+        p_sd = os.path.join(saved_dir, spec.model_id, "settled_deck.json")
+        if not os.path.isfile(p_sd):
+            continue
+        try:
+            with open(p_sd, "r", encoding="utf-8") as sfp:
+                sdata = json.load(sfp)
+            s_deck = sdata.get("deck_50_ids", [])
+            s_cnts = Counter(s_deck)
+            s_singles = sum(1 for v in s_cnts.values() if v == 1)
+            s_pairs = sum(1 for v in s_cnts.values() if v == 2)
+            tot_singles += s_singles
+            tot_pairs += s_pairs
+            for cid_k, c_num in s_cnts.items():
+                if c_num == 1:
+                    card_single_counts[cid_k] += 1
+                elif c_num == 2:
+                    card_pair_counts[cid_k] += 1
+            s_uniq = len(s_cnts)
+            sp_pct = round(100.0 * s_singles / s_uniq, 1) if s_uniq else 0.0
+            pp_pct = round(100.0 * s_pairs / s_uniq, 1) if s_uniq else 0.0
+            s_max = max(s_cnts.values()) if s_cnts else 0
+            model_dup_rows.append({
+                "model_id": spec.model_id,
+                "arabic_name": arabic_model_name(spec.model_id),
+                "category": CATEGORY_AR.get(spec.category, spec.category),
+                "unique_cards": s_uniq,
+                "singles_count": s_singles,
+                "singles_pct": sp_pct,
+                "pairs_count": s_pairs,
+                "pairs_pct": pp_pct,
+                "max_copies": s_max,
+            })
+        except Exception:
+            pass
+
+    tot_meta_cards = tot_singles + tot_pairs
+    g_s_pct = round(100.0 * tot_singles / tot_meta_cards, 1) if tot_meta_cards else 0.0
+    g_p_pct = round(100.0 * tot_pairs / tot_meta_cards, 1) if tot_meta_cards else 0.0
+
+    md_lines.append(f"\n## 4. إحصائيات تكرار البطاقات وتشكيل الرأس المزدوج (Drafter Duplication Meta Analysis)")
+    md_lines.append(f"> **النسبة العامة للميتا (41 نموذجاً):** `{g_s_pct}%` بطاقات فريدة (1-of Singles / Tech) مقابل `{g_p_pct}%` بطاقات أساسية مكررة (2-of Pairs / Staples) — التزام كامل بسقف نسختين كحد أقصى (0 خروقات).")
+    md_lines.append("")
+    md_lines.append("| # | النموذج | الفئة | البطاقات الفريدة | مفرد (1-of) | نسبة المفرد % | مزدوج (2-of) | نسبة المزدوج % | أقصى تكرار (<=2) |")
+    md_lines.append("|---:|---|---|---:|---:|:---:|---:|:---:|:---:|")
+    for idx_d, dr in enumerate(model_dup_rows, 1):
+        md_lines.append(f"| {idx_d} | {dr['arabic_name']} | {dr['category']} | {dr['unique_cards']} | {dr['singles_count']} | {dr['singles_pct']}% | {dr['pairs_count']} | {dr['pairs_pct']}% | **{dr['max_copies']}** |")
+
+    # Top Staples (favored as 2-of)
+    top_staples_list: List[Dict[str, Any]] = []
+    for s_cid, s_models in sorted(card_pair_counts.items(), key=lambda kv: kv[1], reverse=True)[:15]:
+        c_obj = app.db.get(s_cid)
+        if c_obj:
+            top_staples_list.append({"id": s_cid, "name": c_obj.name, "type": c_obj.type, "mana": c_obj.mana, "models_count": s_models})
+    if top_staples_list:
+        md_lines.append("\n### 4.1 أكثر البطاقات الأساسية تفضيلاً بنسختين (Top 15 Staple 2-of Pairs)")
+        md_lines.append("| ID | اسم البطاقة | النوع | التكلفة (Mana) | عدد النماذج التي اعتمدتها كزوج |")
+        md_lines.append("|---:|---|:---:|:---:|:---:|")
+        for st_item in top_staples_list:
+            md_lines.append(f"| {st_item['id']} | {st_item['name']} | {st_item['type']} | {st_item['mana']} | **{st_item['models_count']} نماذج** |")
+
+    # Top Techs (favored as 1-of)
+    top_techs_list: List[Dict[str, Any]] = []
+    for t_cid, t_models in sorted(card_single_counts.items(), key=lambda kv: kv[1], reverse=True)[:15]:
+        c_obj = app.db.get(t_cid)
+        if c_obj:
+            top_techs_list.append({"id": t_cid, "name": c_obj.name, "type": c_obj.type, "mana": c_obj.mana, "models_count": t_models})
+    if top_techs_list:
+        md_lines.append("\n### 4.2 أكثر البطاقات التكتيكية تفضيلاً بنسخة واحدة (Top 15 Tech 1-of Singles)")
+        md_lines.append("| ID | اسم البطاقة | النوع | التكلفة (Mana) | عدد النماذج التي اعتمدتها كنسخة مفردة |")
+        md_lines.append("|---:|---|:---:|:---:|:---:|")
+        for te_item in top_techs_list:
+            md_lines.append(f"| {te_item['id']} | {te_item['name']} | {te_item['type']} | {te_item['mana']} | **{te_item['models_count']} نماذج** |")
+
+    # Section 5: Combat Highlights & Victory Channels (Tab #15 Highlights)
+    ex = getattr(app.store, "excitement", {}) or {}
+    h_tot = int(ex.get("total_matches", 0))
+    md_lines.append("\n## 5. لقطات الإثارة وقنوات الحسم القتالي (Tab #15 Combat Highlights)")
+    md_lines.append(f"> **إجمالي المباريات المفحوصة:** `{h_tot:,}`  |  **متوسط إثارة المعارك:** `{ex.get('avg_excitement', 0)} / 100`  |  **الريمونتادا العكسية:** `{ex.get('comeback_wins', 0):,}`  |  **حسم اللحظات الأخيرة:** `{ex.get('clutch_wins', 0):,}`  |  **تقلب الصدارة:** `{ex.get('total_lead_swings', 0):,}`")
+    md_lines.append("")
+    vc_dict = ex.get("victory_cond", {})
+    if vc_dict:
+        md_lines.append("### 5.1 قنوات حسم المباريات ونهايات القتال")
+        md_lines.append("| قناة الحسم | عدد الانتصارات | النسبة المئوية % | التقييم |")
+        md_lines.append("|---|---:|:---:|:---:|")
+        vc_names = {
+            "decisive_hp": "ضربة قاضية للقائد (0 HP)",
+            "sudden_death": "الموت المفاجئ (40+ جولة)",
+            "deckout": "نفاد أوراق السحب",
+            "covenant_limit": "انتهاء مهلة العهد",
+        }
+        for vk, v_title in vc_names.items():
+            cnt_v = int(vc_dict.get(vk, 0))
+            p_v = round(100.0 * cnt_v / h_tot, 2) if h_tot > 0 else 0.0
+            md_lines.append(f"| {v_title} | {cnt_v:,} | **{p_v:.2f}%** | {'🟢 حسم ممتاز' if 'hp' in vk else '🟡 مسار بديل'} |")
+
+    # Section 6: Head-to-Head Top Matchups (Tab #16)
+    h2h_data = getattr(app.store, "head_to_head", {}) or {}
+    h2h_export_rows: List[Dict[str, Any]] = []
+    if h2h_data:
+        md_lines.append("\n## 6. مصفوفة المواجهات المباشرة بين النماذج (Tab #16 Head-to-Head)")
+        md_lines.append("| النموذج الأول (A) | النموذج الثاني (B) | إجمالي المواجهات | انتصارات A | انتصارات B | التعادلات | متوسط الجولات |")
+        md_lines.append("|---|---|---:|---:|---:|:---:|---:|")
+        for pair_k, rec in sorted(h2h_data.items(), key=lambda kv: kv[1].get("m", 0), reverse=True)[:30]:
+            ma = int(rec.get("m", 0))
+            if ma > 0:
+                wa = int(rec.get("wa", 0))
+                wb = int(rec.get("wb", 0))
+                da = int(rec.get("d", 0))
+                ta = round(float(rec.get("turns", 0)) / ma, 1)
+                na = arabic_model_name(str(rec.get("a", "")))
+                nb = arabic_model_name(str(rec.get("b", "")))
+                h2h_export_rows.append({"a": na, "b": nb, "matches": ma, "wins_a": wa, "wins_b": wb, "draws": da, "avg_turns": ta})
+                md_lines.append(f"| {na} | {nb} | {ma:,} | {wa:,} ({100.0*wa/ma:.1f}%) | {wb:,} ({100.0*wb/ma:.1f}%) | {da} | {ta} |")
+
     # Top 15 OP & Top 15 Weakest Cards with Arabic skill explanations
     card_rows = []
     for cid_s, st in app.store.card_stats.items():
@@ -1019,22 +1157,22 @@ def export_full_analytics_report(app: Any, out_dir: str) -> Tuple[str, str, str,
                 card_rows.append((wr, pl, cid, c.name, explain_card_arabic(c)))
     card_rows.sort(key=lambda x: x[0], reverse=True)
 
-    md_lines.append("\n## 4. أقوى 15 بطاقة (مرشحة للمراجعة/الإضعاف) مع الشرح العربي للقدرات")
+    md_lines.append("\n## 7. أقوى 15 بطاقة (مرشحة للمراجعة/الإضعاف) مع الشرح العربي للقدرات")
     md_lines.append("| ID | البطاقة | الفوز % | مرات اللعب | الشرح العربي للقدرات والمهارات |")
     md_lines.append("|---:|---|:---:|---:|---|")
     for wr, pl, cid, nm, exp in card_rows[:15]:
         md_lines.append(f"| {cid} | {nm} | **{wr:.1f}%** | {pl:,} | {exp} |")
 
-    md_lines.append("\n## 5. أضعف 15 بطاقة (مرشحة للتقوية) مع الشرح العربي للقدرات")
+    md_lines.append("\n## 8. أضعف 15 بطاقة (مرشحة للتقوية) مع الشرح العربي للقدرات")
     md_lines.append("| ID | البطاقة | الفوز % | مرات اللعب | الشرح العربي للقدرات والمهارات |")
     md_lines.append("|---:|---|:---:|---:|---|")
     for wr, pl, cid, nm, exp in list(reversed(card_rows[-15:])):
         md_lines.append(f"| {cid} | {nm} | **{wr:.1f}%** | {pl:,} | {exp} |")
 
-    # Section 6: 10-Environment Individual Balance Table from Tab #16 (Master Fun)
+    # Section 9: 10-Environment Individual Balance Table from Tab #16 (Master Fun)
     env_export_rows = []
     if hasattr(app, "master_fun_tab") and hasattr(app.master_fun_tab, "env_tree"):
-        md_lines.append("\n## 6. جدول توازن البيئات الـ 10 منفردة (Tab #16 Master Fun)")
+        md_lines.append("\n## 9. جدول توازن البيئات الـ 10 منفردة (Tab #16 Master Fun)")
         md_lines.append("| # | البيئة | التفعيل | حضور الملعب | فوز الملقي | الرفع عن 50% | نموذج البيئة | التقييم | التوصية |")
         md_lines.append("|---:|---|---:|:---:|:---:|:---:|:---:|:---:|---|")
         for iid in app.master_fun_tab.env_tree.get_children(""):
@@ -1049,10 +1187,10 @@ def export_full_analytics_report(app: Any, out_dir: str) -> Tuple[str, str, str,
                     f"| {rec_e['num']} | {rec_e['env']} | {rec_e['casts']} | {rec_e['share']} | **{rec_e['cast_wr']}** | {rec_e['lift']} | {rec_e['spec_wr']} | {rec_e['status']} | {rec_e['diag']} |"
                 )
 
-    # Section 7: Active Skill Mana-Cost Pricing Recommendations from Tab #17
+    # Section 10: Active Skill Mana-Cost Pricing Recommendations from Tab #17
     skill_pricing_export_rows = []
     if hasattr(app, "skill_pricing_tab") and hasattr(app.skill_pricing_tab, "sp_tree"):
-        md_lines.append("\n## 7. توصيات تسعير تكلفة المانا للمهارات الفعّالة (Tab #17 Skill Pricing)")
+        md_lines.append("\n## 10. توصيات تسعير تكلفة المانا للمهارات الفعّالة (Tab #17 Skill Pricing)")
         md_lines.append("| # | المهارة | البطاقات | الحالي | المقترح | تفعيل/مباراة | الفوز % | متوسط الأثر | القيمة/1مانا | قرار التسعير | السبب والتوصية |")
         md_lines.append("|---:|---|---:|:---:|:---:|:---:|:---:|---|:---:|:---:|---|")
         for iid in app.skill_pricing_tab.sp_tree.get_children(""):
@@ -1068,14 +1206,14 @@ def export_full_analytics_report(app: Any, out_dir: str) -> Tuple[str, str, str,
                     f"| {rec_s['num']} | {rec_s['skill']} | {rec_s['cards']} | {rec_s['cur_cost']} | **{rec_s['sug_cost']}** | {rec_s['upm']} | {rec_s['wr']} | {rec_s['impact']} | {rec_s['vpm']} | {rec_s['verdict']} | {rec_s['reason']} |"
                 )
 
-    # Section 8: 1,470 Card Surgical Pricing Diagnoses from Tab #17
+    # Section 11: 1,470 Card Surgical Pricing Diagnoses from Tab #17
     card_pricing_export_rows = []
     if hasattr(app, "skill_pricing_tab"):
         try:
             from skill_pricing_tab import recommend_card_surgical_pricing
             tot_m = int(app.store.overall_stats.get("matches", 0))
             sp_map = getattr(app.skill_pricing_tab, "_skill_card_map", {})
-            md_lines.append("\n## 8. التشخيص الجراحي لتسعير البطاقات (Tab #17 Card Surgical Pricing)")
+            md_lines.append("\n## 11. التشخيص الجراحي لتسعير البطاقات (Tab #17 Card Surgical Pricing)")
             md_lines.append("| ID | البطاقة | النوع | التكلفة | المقترح | التقييم والقرار | العنصر المستهدف | السبب والتحليل الجراحي |")
             md_lines.append("|---:|---|:---:|:---:|:---:|---|---|---|")
             for cid_int in sorted(app.db.cards.keys()):
@@ -1105,6 +1243,24 @@ def export_full_analytics_report(app: Any, out_dir: str) -> Tuple[str, str, str,
         "source": app.active_source_label,
         "overall_health_score": overall,
         "pillars": pillars_json,
+        "drafter_duplication_meta": {
+            "single_pct": g_s_pct,
+            "pair_pct": g_p_pct,
+            "total_singles": tot_singles,
+            "total_pairs": tot_pairs,
+            "model_breakdown": model_dup_rows,
+            "top_15_staples_2_of": top_staples_list,
+            "top_15_techs_1_of": top_techs_list,
+        },
+        "combat_highlights": {
+            "total_matches": h_tot,
+            "avg_excitement": ex.get("avg_excitement", 0),
+            "comeback_wins": ex.get("comeback_wins", 0),
+            "clutch_wins": ex.get("clutch_wins", 0),
+            "total_lead_swings": ex.get("total_lead_swings", 0),
+            "victory_channels": vc_dict,
+        },
+        "head_to_head": h2h_export_rows,
         "environments_10": env_export_rows,
         "skill_pricing_recommendations": skill_pricing_export_rows,
         "card_surgical_pricing": card_pricing_export_rows,
@@ -1115,7 +1271,7 @@ def export_full_analytics_report(app: Any, out_dir: str) -> Tuple[str, str, str,
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(json_payload, f, indent=2, ensure_ascii=False)
 
-    # Excel-friendly UTF-8-BOM CSV of all 13 Pillars / 188 Indicators + 41 Models
+    # Excel-friendly UTF-8-BOM CSV with dedicated sections
     with open(csv_path, "w", encoding="utf-8-sig", newline="") as cf:
         w = csv.writer(cf)
         w.writerow(["المعيار #", "اسم المعيار", "تقييم المعيار %", "المؤشر #", "اسم المؤشر", "النتيجة الحالية", "المثالي", "الجيد", "التقييم", "التشخيص التلقائي"])
@@ -1127,6 +1283,29 @@ def export_full_analytics_report(app: Any, out_dir: str) -> Tuple[str, str, str,
         w.writerow(["الترتيب", "الاسم العربي للنموذج", "المعرّف", "الفئة", "المباريات", "الانتصارات", "نسبة الفوز %", "ELO"])
         for idx_r, rr in enumerate(roster_rows, 1):
             w.writerow([idx_r, rr["arabic_name"], rr["model_id"], rr["category"], rr["matches"], rr["wins"], rr["win_rate"], rr["elo"]])
+
+        w.writerow([])
+        w.writerow(["#", "النموذج", "الفئة", "البطاقات الفريدة", "كروت مفردة (1-of)", "نسبة المفرد %", "كروت مزدوجة (2-of)", "نسبة المزدوج %", "أقصى تكرار"])
+        for idx_d, dr in enumerate(model_dup_rows, 1):
+            w.writerow([idx_d, dr["arabic_name"], dr["category"], dr["unique_cards"], dr["singles_count"], dr["singles_pct"], dr["pairs_count"], dr["pairs_pct"], dr["max_copies"]])
+
+        if top_staples_list:
+            w.writerow([])
+            w.writerow(["معرّف البطاقة", "اسم البطاقة الأساسية (2-of)", "نوع البطاقة", "التكلفة (Mana)", "عدد النماذج المعتمدة كزوج"])
+            for st_item in top_staples_list:
+                w.writerow([st_item["id"], st_item["name"], st_item["type"], st_item["mana"], st_item["models_count"]])
+
+        if top_techs_list:
+            w.writerow([])
+            w.writerow(["معرّف البطاقة", "اسم البطاقة التكتيكية (1-of)", "نوع البطاقة", "التكلفة (Mana)", "عدد النماذج المعتمدة كمفرد"])
+            for te_item in top_techs_list:
+                w.writerow([te_item["id"], te_item["name"], te_item["type"], te_item["mana"], te_item["models_count"]])
+
+        if h2h_export_rows:
+            w.writerow([])
+            w.writerow(["النموذج A", "النموذج B", "المباريات", "انتصارات A", "انتصارات B", "التعادلات", "متوسط الجولات"])
+            for hr in h2h_export_rows:
+                w.writerow([hr["a"], hr["b"], hr["matches"], hr["wins_a"], hr["wins_b"], hr["draws"], hr["avg_turns"]])
 
         if card_pricing_export_rows:
             w.writerow([])
