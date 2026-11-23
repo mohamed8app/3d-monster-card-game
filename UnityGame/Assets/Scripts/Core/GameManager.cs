@@ -868,13 +868,13 @@ namespace MonsterCardGame.Core
             humanPlayer.activeCovenant = null;
             aiPlayer.activeCovenant = null;
 
-            // V2.3 Aether Well Starting Rule: Both players begin at 0 Aether / 0 Mana, then StartTurn grants +1 Aether & full Mana refill automatically
+            // V2.4 Pure-Sacrifice Aether Economy: Both players begin at 0 Aether / 0 Mana; StartTurn grants +1 Baseline Mana (Aether grows via Sacrifice)
             humanPlayer.power = 0;
             humanPlayer.currentMana = 0;
             aiPlayer.power = 0;
             aiPlayer.currentMana = 0;
 
-            Debug.Log($"🎲 Epic Battle Started! Decks: {defaultDeckSize} unique cards each | Opening Hands: P1={p1Draws}, P2={p2Draws} | Aether Well: +1 Aether / +1 Mana per turn + 2-Mana Draw.");
+            Debug.Log($"🎲 Epic Battle Started! Decks: {defaultDeckSize} unique cards each | Opening Hands: P1={p1Draws}, P2={p2Draws} | Aether Economy: +1 Baseline Mana/turn (Aether via Sacrifice) + 2-Mana Draw.");
             MonsterCardGame.Audio.SoundManager.Instance?.PlayMatchStart();
 
             StartTurn();
@@ -1410,6 +1410,8 @@ namespace MonsterCardGame.Core
             {
                 CombatSystem.Instance.TriggerStartOfTurnPassives(activePlayer, otherPlayer);
             }
+            V2CardMechanicsEngine.ApplyLeaderStartOfTurn(activePlayer, otherPlayer);
+            V2CardMechanicsEngine.ApplyCovenantStartOfTurn(activePlayer, otherPlayer, currentTurn);
 
             currentPhase = GamePhase.ActionPhase;
 
@@ -1490,6 +1492,11 @@ namespace MonsterCardGame.Core
                 var cov = V2CardMechanicsEngine.GetCovenantOps(caster.activeCovenant);
                 if (cov != null)
                 {
+                    if (cov.skip_every_3rd && currentTurn % 3 == 0)
+                    {
+                        reason = $"Your active Covenant [{caster.activeCovenant.name}] forbids playing cards on every 3rd turn!";
+                        return false;
+                    }
                     if (cov.ban_self_spells)
                     {
                         reason = $"Your active Covenant [{caster.activeCovenant.name}] forbids casting Magic Spells!";
@@ -1611,16 +1618,32 @@ namespace MonsterCardGame.Core
                 BattleUIManager.Instance.LogCombatMessage($"🔮 [{caster.playerName}] cast Spell #{spellCard.name} ({effSpellCost}💧): {spellCard.description}", spellCard);
             }
 
-            if (!string.IsNullOrEmpty(spellCard.v2_ops_json) &&
-                V2CardMechanicsEngine.TryExecuteV2Spell(caster, target, spellCard, primaryTargetSlot))
+            if (!string.IsNullOrEmpty(spellCard.v2_ops_json))
             {
-                CheckGameOver();
-                if (BattleUIManager.Instance != null)
+                int v2Repeats = 1;
+                var v2Op = V2CardMechanicsEngine.GetSpellOps(spellCard);
+                bool isEchoSetup = v2Op != null && v2Op.kind == "echo_next_spell";
+                if (!isEchoSetup && caster.nextSpellRepeats > 0)
                 {
-                    BattleUIManager.Instance.UpdateUI();
+                    v2Repeats += caster.nextSpellRepeats;
+                    caster.nextSpellRepeats = 0;
                 }
-                EvaluateAutoEndTurn();
-                return true;
+                bool anyV2Executed = false;
+                for (int r = 0; r < v2Repeats; r++)
+                {
+                    if (V2CardMechanicsEngine.TryExecuteV2Spell(caster, target, spellCard, primaryTargetSlot))
+                        anyV2Executed = true;
+                }
+                if (anyV2Executed)
+                {
+                    CheckGameOver();
+                    if (BattleUIManager.Instance != null)
+                    {
+                        BattleUIManager.Instance.UpdateUI();
+                    }
+                    EvaluateAutoEndTurn();
+                    return true;
+                }
             }
 
             int valBonus = 0;
@@ -5038,13 +5061,13 @@ namespace MonsterCardGame.Core
             if (!isPlayerTurn || currentPhase != GamePhase.ActionPhase || humanPlayer == null)
                 return false;
 
-            // 1. Sacrifice available (when Aether < cap)
+            // 1. Sacrifice available (1x/turn, UNBOUNDED Aether — never locks at 6/7/10!)
             if (!humanPlayer.hasSacrificedThisTurn && humanPlayer.denyDrawSacTurns <= 0 &&
                 humanPlayer.power < V2CardMechanicsEngine.GetPlayerManaCap(humanPlayer) &&
                 humanPlayer.hand != null && humanPlayer.hand.Count > 0)
                 return true;
 
-            // 1.5 Aether Draw button available (2 Mana -> +1 Card, once per turn)
+            // 1.5 Aether Draw button available (2 Mana -> +1 Card, 1x/turn every turn!)
             if (humanPlayer.CanAetherDraw(out _))
                 return true;
 
@@ -5077,7 +5100,7 @@ namespace MonsterCardGame.Core
                     }
                     else if (c.cardType == CardType.Monster)
                     {
-                        if (hasEmptySlot)
+                        if (hasEmptySlot && V2CardMechanicsEngine.CanPlayerSummonMonster(humanPlayer, c, out _))
                             return true;
                     }
                     else
@@ -5250,8 +5273,15 @@ namespace MonsterCardGame.Core
                 currentTurn++;
                 if (BattleUIManager.Instance != null)
                 {
-                    BattleUIManager.Instance.ClearBoardSelection();
-                    BattleUIManager.Instance.UpdateUI();
+                    try
+                    {
+                        BattleUIManager.Instance.ClearBoardSelection();
+                        BattleUIManager.Instance.UpdateUI();
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"⚠️ UI refresh error during EndTurn transition (recovered safely): {ex.Message}");
+                    }
                 }
                 StartTurn();
             }

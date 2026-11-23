@@ -141,7 +141,7 @@ namespace MonsterCardGame.Core
                 if (act >= 1 && act <= 7)
                 {
                     int h = act - 1;
-                    if (h < aiPlayer.hand.Count && aiPlayer.hand[h] != null && !aiPlayer.hasSacrificedThisTurn)
+                    if (h < aiPlayer.hand.Count && aiPlayer.hand[h] != null && !aiPlayer.hasSacrificedThisTurn && aiPlayer.denyDrawSacTurns <= 0)
                     {
                         var sacCard = aiPlayer.hand[h];
                         if (ui != null) yield return ui.AnimateEnemyCardSacrificeRoutine();

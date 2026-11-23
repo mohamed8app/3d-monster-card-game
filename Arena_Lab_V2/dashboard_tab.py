@@ -457,7 +457,7 @@ class VisualDashboardTab:
         shown_m = tm if self._is_probe_source() else max(tm, total_roster_m)
         v.config(text=rtl(f"{shown_m:,} مباراة"))
         s1.config(text=rtl(f"النماذج المدرّبة: {trained_cnt} / 41"))
-        s2.config(text=rtl(f"البطاقات المختبرة: {cards_seen:,} / 2,270"))
+        s2.config(text=rtl(f"البطاقات المختبرة: {cards_seen:,} / 1,470"))
 
     # ------------------------------------------------------------------
     # Chart 1: Match Excitement Curve Across Turns (Graphical Line + Area)

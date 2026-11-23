@@ -297,21 +297,21 @@ class ResourceEconomyTab:
         )
         rows.append((5, "متوسط تكلفة البطاقة الملعوبة فعلياً", f"{avg_card_cost:.2f} مانا", "2.6 – 4.2 مانا", "2.0 – 5.0 مانا", st, diag, tg, pts))
 
-        # 6. Sacrifice-for-Aether & Aether Draw (2 Mana) Rate / Match
-        st, tg, pts = self._grade_range(sac_per_side, 1.0, 4.5, 0.5, 6.0)
+        # 6. 1x/Turn Sacrifice (Unbounded Aether) & 1x/Turn Aether Draw (2 Mana) Rate / Match
+        st, tg, pts = self._grade_range(sac_per_side, 1.5, 6.5, 0.5, 9.5)
         diag = (
-            f"توازن ممتاز! التضحية ({sac_per_side:.1f}/مباراة) + زر سحب الأثير بـ 2 مانا ({aether_draw_per_side:.1f}/مباراة)." if tg == "ideal"
-            else (f"تضحية قليلة ({sac_per_side:.1f}) • سحب الأثير بـ 2 مانا ({aether_draw_per_side:.1f}/مباراة)." if sac_per_side < 1.0 else f"تضحية مفرطة ({sac_per_side:.1f}/مباراة) • سحب الأثير ({aether_draw_per_side:.1f}/مباراة).")
+            f"توازن ممتاز! التضحية (1×/دور بلا سقف: {sac_per_side:.1f}/مباراة) + سحب الأثير (1×/دور بـ 2 مانا: {aether_draw_per_side:.1f}/مباراة)." if tg == "ideal"
+            else (f"تضحية قليلة ({sac_per_side:.1f}) • سحب الأثير بـ 2 مانا ({aether_draw_per_side:.1f}/مباراة)." if sac_per_side < 1.5 else f"تضحية مرتفعة ({sac_per_side:.1f}/مباراة) • سحب الأثير ({aether_draw_per_side:.1f}/مباراة).")
         )
-        rows.append((6, "التضحية للأثير وسحب الأثير (Aether Well)", f"تضحية {sac_per_side:.1f} | سحب {aether_draw_per_side:.1f}", "1.0 – 4.5", "0.5 – 6.0", st, diag, tg, pts))
+        rows.append((6, "التضحية (1×/دور بلا سقف) وسحب الأثير (2 مانا)", f"حرق {sac_per_side:.1f} | سحب {aether_draw_per_side:.1f}", "1.5 – 6.5", "0.5 – 9.5", st, diag, tg, pts))
 
-        # 7. Turn Reaching Max Mana 10
-        st, tg, pts = self._grade_range(avg_cap_turn, 5.5, 8.5, 4.5, 10.5)
+        # 7. Turn Reaching 10 Aether Milestone (Unbounded Aether!)
+        st, tg, pts = self._grade_range(avg_cap_turn, 5.0, 8.5, 4.0, 10.5)
         diag = (
-            f"تصاعد مانا ممتع! يصل اللاعب لسقف 10 مانا عند الجولة {avg_cap_turn:.1f} بالمتوسط." if tg == "ideal"
-            else ("وصول سريع جداً لسقف المانا (قد يلغي أهمية قرارات المانا المبكرة)." if avg_cap_turn < 5.5 else "وصول بطيء لسقف المانا.")
+            f"تصاعد إيثر مفتوح متوازن! يصل اللاعب لـ 10 إيثر عند الجولة {avg_cap_turn:.1f} بالمتوسط (ويواصل النمو بلا سقف)." if tg == "ideal"
+            else ("وصول سريع جداً إلى 10 إيثر (قبل الجولة 5.0)." if avg_cap_turn < 5.0 else "وصول بطيء إلى 10 إيثر.")
         )
-        rows.append((7, "متوسط جولة الوصول لسقف المانا (10 مانا)", f"جولة {avg_cap_turn:.1f}", "جولة 5.5–8.5", "جولة 4.5–10.5", st, diag, tg, pts))
+        rows.append((7, "متوسط جولة بلوغ 10 إيثر (مفتوح بلا سقف)", f"جولة {avg_cap_turn:.1f}", "جولة 5.0–8.5", "جولة 4.0–10.5", st, diag, tg, pts))
 
         # 8. Active Skill Mana Share %
         st, tg, pts = self._grade_range(skill_mana_pct, 15.0, 34.0, 8.0, 45.0)

@@ -207,7 +207,7 @@ def enable_treeview_sorting(tree: ttk.Treeview) -> None:
 
 # ======================================================================
 # 3. Complete Arabic Explanations for ALL Passives, Actives, Spells,
-#    Covenants, Leaders, and Environments (100% Coverage of 2,270 Cards!)
+#    Covenants, Leaders, and Environments (100% Coverage of 1,470 Cards!)
 # ======================================================================
 PASSIVE_AR: Dict[str, Tuple[str, str]] = {
     "adj_buff_summon": ("تعزيز المجاورين عند النزول", "عند الاستدعاء يعزّز هجوم أو دفاع الحلفاء المجاورين له مباشرة."),
@@ -264,6 +264,7 @@ PASSIVE_AR: Dict[str, Tuple[str, str]] = {
     "spell_power_aura": ("هالة قوة السحر", "يزيد قوة وضرر جميع بطاقات السحر التي تلقيها."),
     "spy_plant": ("زرع جاسوس طفيلي", "يزرع وحدة جاسوس في ملعب الخصم تؤذي الوحوش المجاورة لها كل دور."),
     "status_immune": ("مناعة ضد الحالات", "لا يتأثر بالحرق أو السم أو النزيف أو التجميد أو الصمت."),
+    "steal_aether_face": ("نهب الإيثر عند ضرب القائد", "كلما ضرب هذا الوحش صحة قائد الخصم مباشرة يسرق منه 1 إيثر دائم ويضيفه لك."),
     "stealth": ("التخفّي والاختفاء", "لا يمكن استهدافه بالهجوم أو السحر حتى يهاجم أو يستخدم مهارته."),
     "strip_buffs_hit": ("نزع التعزيزات", "يمسح كل زيادات الهجوم عن الخصم ويلحق ضرراً إضافياً عند ضربه."),
     "summon_clone_self": ("استنساخ ذاتي", "يستدعي نسخة إضافية من نفسه في خانة فارغة عند النزول."),
@@ -283,28 +284,41 @@ PASSIVE_AR: Dict[str, Tuple[str, str]] = {
 }
 
 ACTIVE_AR: Dict[str, Tuple[str, str]] = {
+    "absorb_ally_atk": ("تعلّم هجوم الحلفاء", "يكتسب هذا الدور هجوماً مؤقتاً يساوي مجموع هجوم حلفائك الآخرين بالملعب (حتى +14)."),
+    "ally_atk_to_def": ("تحويل هجوم الحليف لدفاع", "يضيف كامل هجوم حليف آخر إلى نقاط دفاعه الدائمة ويصفّر هجومه ويمنحه استفزازاً."),
     "aoe_ally": ("تعزيز/شفاء جماعي للحلفاء", "يعزز هجوم ودفاع أو يشفي جميع وحوشك على الملعب دفعة واحدة."),
     "aoe_enemy": ("ضربة جماعية للأعداء", "يلحق ضرراً جماعياً بجميع وحوش الخصم على الملعب."),
+    "betray_commander": ("خيانة القائد", "يجبر وحشاً قتالياً للخصم على مهاجمة قائده فوراً بـ 100% من نقاط هجومه!"),
     "buff_ally": ("تعزيز حليف", "يمنح وحشاً حليفاً زيادة دائمة في الهجوم أو الدفاع أو الاستفزاز."),
     "buff_center": ("تحصين خانات الوسط", "يقوّي دفاع الوحوش المتمركزة في خانتي الوسط (2 و3) ويشفي القائد."),
     "cleave_enemy": ("ضربة كاسحة لثلاث خانات", "يضرب هدفاً معادياً والوحشين المجاورين له معاً."),
     "copy_enemy_hand": ("نسخ ورقة من يد الخصم", "ينسخ بطاقة عشوائية من يد الخصم إلى يدك بتكلفة أقل بـ 1 مانا."),
+    "def_to_atk": ("تحويل الدفاع إلى هجوم", "يضحّي بجزء من دفاعه (مع إبقاء 2 دفاع على الأقل) ليكتسب نفس القيمة هجوماً دائماً."),
     "detonate_dots": ("تفجير الحالات المستمرة", "يفجّر كل تراكمات الحرق والسم والنزيف على الأعداء كضرر فوري."),
     "devour_3": ("الالتهام والامتصاص", "يلتهم وحشاً ضعيفاً ويضيف نسبة من هجومه ودفاعه لنفسه دائماً."),
+    "discard_hand_2aether": ("طقس الإيثر المزدوج", "يرمي بطاقة من يدك للمقبرة ليمنحك +2 إيثر دائم و +1 مانا فورية."),
+    "discard_hand_mana": ("تضحية اليد للمانا", "يرمي بطاقة من يدك للمقبرة ليمنحك +3 مانا مؤقتة هذا الدور (+2 صافي)."),
     "discount_hand_spells": ("تخفيض تكلفة السحر باليد", "يقلل تكلفة جميع بطاقات السحر الموجودة في يدك بـ 1 مانا."),
+    "dmg_face_aether": ("انفجار الإيثر المباشر", "يلحق ضرراً مباشراً بصحة قائد الخصم يساوي عدد نقاط الإيثر لديك حالياً."),
     "dmg_leader": ("ضربة مباشرة للقائد", "يوجه ضرراً مباشراً لدم قائد الخصم (وقد يضاعف الحرق أو يشفيك)."),
     "dmg_single": ("ضربة مركّزة على هدف", "يلحق ضرراً بوحش معادٍ (أو القائد إذا خلا الملعب) وقد يطبق حالة سلبية."),
     "double_skill_1t": ("مضاعفة المهارات لدور واحد", "يسمح للوحش بتشغيل كل مهارة فعّالة مرتين في هذا الدور."),
     "drain_enemy_mana": ("استنزاف مانا الخصم", "يقفل نقاطاً من مانا الخصم في دوره القادم ويكبّده ضرراً."),
+    "flip_enemy_stats": ("عكس دفاع وهجوم الخصم", "يعكس نقاط هجوم ودفاع وحش قتالي للخصم فوراً (بحد أدنى 1 دفاع)."),
     "gain_temp_mana": ("توليد مانا فورية", "يمنحك مانا إضافية مؤقتة في هذا الدور."),
     "grant_double_strike": ("منح ضربة مزدوجة", "يجعل وحشاً حليفاً يهاجم مرتين في هذا الدور."),
     "grave_to_hand": ("استدعاء من المقبرة لليد", "يعيد أقوى وحش مناسب من مقبرتك إلى يدك بتخفيض مانا."),
     "heal_leader": ("علاج القائد", "يعيد نقاط دم لقائدك وقد يطهر الوحش من الحالات السلبية."),
     "mind_control_temp": ("سيطرة ذهنية مؤقتة", "يستولي على وحش معادٍ ليقاتل بصفك لدور واحد ثم يعود."),
+    "mirror_enemy_exact": ("المرآة المطلقة (تقمّص كامل)", "يحوّل نفسه إلى نسخة طبق الأصل من وحش معادٍ (الإحصائيات والقدرات والمهارات)."),
     "pull_hook": ("خطّاف السحب من الأطراف", "يسحب وحشاً من أطراف الخصم إلى المنتصف ويكبده ضرراً."),
     "recall_ally": ("إعادة حليف لليد", "يرجع وحشاً حليفاً مصاباً إلى يدك لإعادة استخدامه سليماً."),
     "recall_enemy": ("طرد عدو لليد", "يعيد وحشاً معادياً إلى يد الخصم ليفتح الخانة أمامك."),
+    "relocate_self": ("الانتقال التكتيكي", "ينقل هذا الوحش من خانته الحالية إلى خانة فارغة مثالية بملعبك."),
+    "reposition_ally": ("تحريك حليف للمواجهة", "ينقل حليفاً آخر إلى خانة فارغة مقابل عدو مباشرة (أو أي خانة فارغة إن لم يوجد)."),
     "revive_board": ("إحياء مباشر من المقبرة", "يُعيد وحشاً ساقطاً من المقبرة إلى الملعب مباشرة."),
+    "sac_ally_aether": ("قربان الإيثر", "يقتل وحشاً حليفاً آخر بالملعب ليمنحك +1 إيثر دائم و +1 مانا فورية."),
+    "sac_ally_draw2": ("قربان المعرفة", "يقتل وحشاً حليفاً آخر بالملعب لتسحب بطاقتين فوراً."),
     "shifting_curse": ("اللعنة المتنقلة", "يلقي لعنة ضرر مستمر تقفز لوحش آخر كلما مات حاملها!"),
     "spawn_token": ("توليد توكنز قتالية", "يستدعي وحوشاً تابعة (توكنز) لملء الخانات الفارغة."),
     "warrior_call": ("نداء المحارب من الديك", "يسحب أقوى وحش متاح من ديكك مباشرة إلى يدك أو الملعب."),
@@ -356,19 +370,20 @@ SPELL_AR: Dict[str, Tuple[str, str]] = {
     "swarm_bite": ("لدغة السرب", "تضرب بضرر يتضاعف بعدد الوحوش في ملعبك."),
     "temp_mana": ("دفعة مانا مؤقتة", "تمنحك مانا إضافية للاستخدام الفوري بهذا الدور."),
     "time_rewind": ("إرجاع الزمن (معجزة)", "تطهّر وحوشك وتعيد دفاعها لما كان عليه بالدور السابق وتشفي القائد!"),
+    "trigger_lb": ("تفعيل النفس الأخير", "يفعّل قدرة النفس الأخير (Last Breath) لوحش حليف دون قتله."),
 }
 
 ENV_AR_DESC: Dict[int, Tuple[str, str]] = {
-    0: ("ساحة النار", "تعزز هجوم وحوش النار وتشعل الأعداء بالحرق عند النزول والهجوم."),
-    1: ("ساحة الماء", "تشفي القائد وتطهر وحوش الماء وتزيد دفاعها الأقصى."),
-    2: ("ساحة الطبيعة", "تعالج القائد وتنمّي وحوش الطبيعة وتستدعي توكن شجري."),
-    3: ("ساحة الكهرباء", "تمنح مانا مؤقتة إضافية وصواعق برق وتعزز وحوش الكهرباء."),
-    4: ("ساحة الجليد", "تجمّد أخطر الأعداء وتمنح درعاً يقلل الضرر لوحوش الجليد."),
-    5: ("ساحة الأرض", "تحصّن دفاع وحوش الأرض وتمنحها عكس ضرر وتشفي القائد."),
-    6: ("ساحة الظلام", "تمتص دم قائد الخصم وتمنح وحوش الظلام سرقة حياة."),
-    7: ("ساحة النور", "تطهر وتحصّن وحوش النور وتشفي القائد بسخاء كل دور."),
-    8: ("ساحة الهواء", "تطلق عاصفة على الأعداء وتمنح وحوش الهواء سرعة وهجوماً."),
-    9: ("ساحة الصحراء", "عاصفة رملية تآكل دفاع الأعداء وتضيف نزيفاً لوحوش الصحراء."),
+    0: ("ساحة النار", "لوحوش النار: +3/+5/+8 هجوم و +2/+3/+5 حرق وقوة سحر | للأجانب: 1/2/3 ضرر حرق نهاية الدور."),
+    1: ("ساحة الماء", "لوحوش الماء: +3/+5/+7 دفاع عند النزول وتطهير وشفاء +3/+5/+8 دفاع | للأجانب: -1/-2/-3 هجوم."),
+    2: ("ساحة الطبيعة", "لوحوش الطبيعة: +2/+4/+6 دفاع عند النزول، نمو +1/+2/+3 دفاع، وشفاء +6/+10/+14 للقائد | للأجانب: تآكل -1/-2/-3 دفاع."),
+    3: ("ساحة الكهرباء", "لوحوش الكهرباء: +1/+1/+2 مانا مؤقتة، -1/-1/-2 خصم مهارات، و +2/+3/+5 قوة سحر | للأجانب: +1/+1/+2 تكلفة مهارات."),
+    4: ("ساحة الجليد", "لوحوش الجليد: تقليل ضرر -3/-5/-7 و 20%/30%/45% تجميد | للأجانب: -1/-2/-3 هجوم وإلغاء الاندفاع (Lv2+)."),
+    5: ("ساحة الأرض", "لوحوش الأرض: +3/+6/+9 دفاع عند النزول وعكس ضرر +3/+5/+8 | للأجانب: تثبيت ومنع التحريك مع +1/+2/+3 قابلية ضرر."),
+    6: ("ساحة الظلام", "لوحوش الظلام: +15%/+25%/+35% سرقة حياة و +8%/+12%/+18% تفادي | للأجانب: ارتداد 1/2/3 دفاع عند الهجوم."),
+    7: ("ساحة النور", "لوحوش النور: شفاء قائد +7/+12/+16 وتطهير وشفاء +3/+5/+8 دفاع | للأجانب: -1/-2/-3 قوة مهارات."),
+    8: ("ساحة الهواء", "لوحوش الهواء: +12%/+18%/+25% تفادي واندفاع فوري عند النزول | للأجانب: -6%/-10%/-15% تفادي و -1/-2/-3 هجوم ضد الهواء."),
+    9: ("ساحة الصحراء", "لوحوش الصحراء: +2/+3/+5 قوة مهارات و +2/+4/+6 نزيف | للأجانب: عاصفة رملية 2/3/4 ضرر + 1/1/2 نزيف."),
 }
 
 COVENANT_KEY_AR: Dict[str, str] = {
@@ -475,7 +490,7 @@ LEADER_KEY_AR: Dict[str, str] = {
 
 
 def explain_card_arabic(c: CardDef) -> str:
-    """Produces a clear, human-friendly Arabic explanation of ANY of the 2,270 cards."""
+    """Produces a clear, human-friendly Arabic explanation of ANY of the 1,470 cards."""
     parts: List[str] = []
     if c.type == "environment":
         nm, desc = ENV_AR_DESC.get(c.env_id, ("ساحة بيئة", "تغيّر خصائص ساحة القتال المشتركة."))
@@ -529,7 +544,7 @@ def explain_card_arabic(c: CardDef) -> str:
 
 
 # ======================================================================
-# 4. Interactive Arabic Skills, Passives, Spells & 2,270-Card Guide Window
+# 4. Interactive Arabic Skills, Passives, Spells & 1,470-Card Guide Window
 # ======================================================================
 def open_arabic_skills_guide(parent: tk.Tk, db: CardDB, store: Any) -> None:
     """Opens a clean Arabic RTL searchable & sortable guide explaining ALL skills, passives & cards."""
@@ -542,7 +557,7 @@ def open_arabic_skills_guide(parent: tk.Tk, db: CardDB, store: Any) -> None:
     hdr.pack(fill="x", padx=10, pady=(10, 4))
     tk.Label(
         hdr,
-        text=rtl("الدليل العربي الشامل لكل القدرات السلبية (70) والمهارات الفعّالة (25) والتعاويذ (45) والـ 2,270 بطاقة"),
+        text=rtl("الدليل العربي الشامل لكل القدرات السلبية (71) والمهارات الفعّالة (38) والتعاويذ (46) والـ 1,470 بطاقة"),
         bg=BG_PANEL, fg=FG_TEXT, font=(FONT_UI, 11, "bold"), anchor="e",
     ).pack(side="right")
     tk.Label(
@@ -581,9 +596,9 @@ def open_arabic_skills_guide(parent: tk.Tk, db: CardDB, store: Any) -> None:
             tree.insert("", "end", values=(rtl(desc), f"{cnts.get(k, 0)} بطاقة", k, rtl(nm), idx))
         enable_treeview_sorting(tree)
 
-    _build_dict_tab("القدرات السلبية (70 Passive)", PASSIVE_AR, p_cnts)
-    _build_dict_tab("المهارات الفعّالة (25 Active)", ACTIVE_AR, a_cnts)
-    _build_dict_tab("تأثيرات السحر (45 Spell)", SPELL_AR, s_cnts)
+    _build_dict_tab("القدرات السلبية (71 Passive)", PASSIVE_AR, p_cnts)
+    _build_dict_tab("المهارات الفعّالة (38 Active)", ACTIVE_AR, a_cnts)
+    _build_dict_tab("تأثيرات السحر (46 Spell)", SPELL_AR, s_cnts)
 
     # Tab 4: Covenants, Leaders & Environments Reference
     fr_sp = tk.Frame(nb, bg=BG_DARK)
@@ -606,9 +621,9 @@ def open_arabic_skills_guide(parent: tk.Tk, db: CardDB, store: Any) -> None:
         t_sp.insert("", "end", values=(rtl(desc), rtl("تميمة قائد"), k, rn)); rn += 1
     enable_treeview_sorting(t_sp)
 
-    # Tab 5: Live Searchable 2,270-Card Arabic Explainer
+    # Tab 5: Live Searchable 1,470-Card Arabic Explainer
     fr_c = tk.Frame(nb, bg=BG_DARK)
-    nb.add(fr_c, text=rtl("باحث البطاقات الـ 2,270 (شرح عربي)"))
+    nb.add(fr_c, text=rtl("باحث البطاقات الـ 1,470 (شرح عربي)"))
 
     sbar = tk.Frame(fr_c, bg=BG_PANEL, padx=10, pady=6)
     sbar.pack(fill="x", padx=4, pady=(4, 2))
@@ -677,7 +692,7 @@ def open_arabic_skills_guide(parent: tk.Tk, db: CardDB, store: Any) -> None:
             shown += 1
             if shown >= 400 and not q:
                 break
-        cnt_lbl.config(text=rtl(f"معروض: {shown:,} من 2,270 (ابحث بالرقم أو الاسم أو العشيرة أو وصف القدرة بالعربي)"))
+        cnt_lbl.config(text=rtl(f"معروض: {shown:,} من 1,470 (ابحث بالرقم أو الاسم أو العشيرة أو وصف القدرة بالعربي)"))
 
     q_var.trace_add("write", _populate_cards)
     _populate_cards()
@@ -718,6 +733,7 @@ def export_full_analytics_report(app: Any, out_dir: str) -> Tuple[str, str, str,
         (11, "معيار العدالة التنافسية", app.fairness_tab, app.fairness_tab.cf_tree),
         (12, "معيار سلامة المحاكي والقواعد", app.integrity_tab, app.integrity_tab.int_tree),
         (13, "معيار اكتشاف الميتا والتنوع الاستراتيجي", app.meta_tab, app.meta_tab.meta_tree),
+        (14, "معادلة المتعة القصوى وكشف الإحباط والبيئات الـ 10 (MFE)", app.master_fun_tab, app.master_fun_tab.mf_tree),
     ]
 
     scores = []
@@ -817,6 +833,43 @@ def export_full_analytics_report(app: Any, out_dir: str) -> Tuple[str, str, str,
     for wr, pl, cid, nm, exp in list(reversed(card_rows[-15:])):
         md_lines.append(f"| {cid} | {nm} | **{wr:.1f}%** | {pl:,} | {exp} |")
 
+    # Section 6: 10-Environment Individual Balance Table from Tab #16 (Master Fun)
+    env_export_rows = []
+    if hasattr(app, "master_fun_tab") and hasattr(app.master_fun_tab, "env_tree"):
+        md_lines.append("\n## 6. جدول توازن البيئات الـ 10 منفردة (Tab #16 Master Fun)")
+        md_lines.append("| # | البيئة | التفعيل | حضور الملعب | فوز الملقي | الرفع عن 50% | نموذج البيئة | التقييم | التوصية |")
+        md_lines.append("|---:|---|---:|:---:|:---:|:---:|:---:|:---:|---|")
+        for iid in app.master_fun_tab.env_tree.get_children(""):
+            ev = [_clean_cell_text(v) for v in app.master_fun_tab.env_tree.item(iid, "values")]
+            if len(ev) >= 9:
+                rec_e = {
+                    "num": ev[8], "env": ev[7], "casts": ev[6], "share": ev[5],
+                    "cast_wr": ev[4], "lift": ev[3], "spec_wr": ev[2], "status": ev[1], "diag": ev[0],
+                }
+                env_export_rows.append(rec_e)
+                md_lines.append(
+                    f"| {rec_e['num']} | {rec_e['env']} | {rec_e['casts']} | {rec_e['share']} | **{rec_e['cast_wr']}** | {rec_e['lift']} | {rec_e['spec_wr']} | {rec_e['status']} | {rec_e['diag']} |"
+                )
+
+    # Section 7: Active Skill Mana-Cost Pricing Recommendations from Tab #17
+    skill_pricing_export_rows = []
+    if hasattr(app, "skill_pricing_tab") and hasattr(app.skill_pricing_tab, "sp_tree"):
+        md_lines.append("\n## 7. توصيات تسعير تكلفة المانا للمهارات الفعّالة (Tab #17 Skill Pricing)")
+        md_lines.append("| # | المهارة | البطاقات | الحالي | المقترح | تفعيل/مباراة | الفوز % | متوسط الأثر | القيمة/1مانا | قرار التسعير | السبب والتوصية |")
+        md_lines.append("|---:|---|---:|:---:|:---:|:---:|:---:|---|:---:|:---:|---|")
+        for iid in app.skill_pricing_tab.sp_tree.get_children(""):
+            sv = [_clean_cell_text(v) for v in app.skill_pricing_tab.sp_tree.item(iid, "values")]
+            if len(sv) >= 11:
+                rec_s = {
+                    "num": sv[10], "skill": sv[9], "cards": sv[8], "cur_cost": sv[7],
+                    "sug_cost": sv[6], "upm": sv[5], "wr": sv[4], "impact": sv[3],
+                    "vpm": sv[2], "verdict": sv[1], "reason": sv[0],
+                }
+                skill_pricing_export_rows.append(rec_s)
+                md_lines.append(
+                    f"| {rec_s['num']} | {rec_s['skill']} | {rec_s['cards']} | {rec_s['cur_cost']} | **{rec_s['sug_cost']}** | {rec_s['upm']} | {rec_s['wr']} | {rec_s['impact']} | {rec_s['vpm']} | {rec_s['verdict']} | {rec_s['reason']} |"
+                )
+
     md_text = "\n".join(md_lines)
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(md_text)
@@ -827,6 +880,8 @@ def export_full_analytics_report(app: Any, out_dir: str) -> Tuple[str, str, str,
         "source": app.active_source_label,
         "overall_health_score": overall,
         "pillars": pillars_json,
+        "environments_10": env_export_rows,
+        "skill_pricing_recommendations": skill_pricing_export_rows,
         "roster_41": roster_rows,
         "top_15_cards": [{"id": cid, "name": nm, "wr": round(wr, 2), "played": pl, "arabic_desc": exp} for wr, pl, cid, nm, exp in card_rows[:15]],
         "bottom_15_cards": [{"id": cid, "name": nm, "wr": round(wr, 2), "played": pl, "arabic_desc": exp} for wr, pl, cid, nm, exp in list(reversed(card_rows[-15:]))],

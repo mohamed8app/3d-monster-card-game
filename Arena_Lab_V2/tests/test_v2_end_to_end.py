@@ -39,14 +39,14 @@ from trainer.stats_store import StatsStore
 
 
 def test_1_card_database(db: CardDB) -> None:
-    assert db.num_cards == 2270
+    assert db.num_cards == 1470
     assert len(db.envs) == 10
     assert len(db.leaders) == 60
     assert len(db.covenants) == 100
     assert len(db.spells) == 300
-    assert len(db.monsters) == 1800
+    assert len(db.monsters) == 1000
     assert len(db.barriers) == 200
-    assert len(db.combat_monsters) == 1600
+    assert len(db.combat_monsters) == 800
 
     for bid in db.barriers:
         c = db.get(bid)
@@ -54,7 +54,7 @@ def test_1_card_database(db: CardDB) -> None:
 
     all_atk_cards = [c for c in db.cards.values() if c.is_all_attack]
     assert len(all_atk_cards) == 10, f"Expected 10 All-Attack cards, got {len(all_atk_cards)}"
-    print("[PASS] Test 1: 2,270-card DB integrity (10 Envs, 60 Leaders, 100 Covenants, 300 Spells, 1,600 Tribal + 200 Neutral Barriers)")
+    print("[PASS] Test 1: 1,470-card DB integrity (10 Envs, 60 Leaders, 100 Covenants, 300 Spells, 800 Combat + 200 Neutral Barriers)")
 
 
 def test_2_constitution_rules(db: CardDB) -> None:
@@ -182,7 +182,7 @@ def test_3_all_40_models_and_free10_disjoint(db: CardDB) -> None:
 
         # Category-specific constraints
         if spec.category == "Playstyle":
-            assert int(lmask.sum()) == 2270
+            assert int(lmask.sum()) == 1470
         elif spec.category == "Environment":
             assert spec.required_card_id in deck
             for cid in deck:

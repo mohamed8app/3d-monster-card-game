@@ -828,7 +828,7 @@ namespace MonsterCardGame.UI
             if (hourglassControl != null) hourglassControl.SyncStateImmediate(gm.isPlayerTurn && gm.currentPhase == GamePhase.ActionPhase);
             if (sacrificeButton != null)
             {
-                sacrificeButton.interactable = gm.isPlayerTurn && !gm.humanPlayer.hasSacrificedThisTurn && selectedCardForAction != null;
+                sacrificeButton.interactable = gm.isPlayerTurn && !gm.humanPlayer.hasSacrificedThisTurn && gm.humanPlayer.denyDrawSacTurns <= 0 && selectedCardForAction != null;
             }
             if (aetherDrawButton != null)
             {
@@ -3101,17 +3101,10 @@ namespace MonsterCardGame.UI
 
                     if (EnvironmentCardData.TryGetProfile(elemName, out var prof))
                     {
-                        int atkPct = Mathf.RoundToInt(prof.atkBuff[lvl - 1] * 100f);
-                        int armPct = Mathf.RoundToInt(prof.defArmor[lvl - 1] * 100f);
-                        int debPct = Mathf.RoundToInt(prof.oppDebuff[lvl - 1] * 100f);
-                        string debList = string.Join(", ", prof.debuffs);
-                        string armStr = armPct > 0 ? $" & +{armPct}% Armor" : "";
-
-                        detailDescText.text = $"<color=#58E085><b>🌍 [ENVIRONMENT EFFECT - LEVEL {lvl}]:</b></color>\n" +
-                            $"<color=#FFD866>• Aligned Allies ({elemName}):</color> <color=#FFFFFF>+{atkPct}% ATK{armStr}</color>\n" +
-                            $"<color=#FF7B72>• Opposing Elements ({debList}):</color> <color=#FFFFFF>-{debPct}% ATK</color>\n" +
-                            $"<color=#79C0FF>• Unique Weather Perk:</color> <color=#FFFFFF>{prof.perkDesc}</color>\n" +
-                            $"<color=#8B949E><i>Permanent across turns until countered by an opponent environment card.</i></color>";
+                        int durTurns = lvl == 1 ? 10 : (lvl == 2 ? 6 : 3);
+                        detailDescText.text = $"<color=#58E085><b>🌍 [SHARED {elemName.ToUpper()} ARENA — LEVEL {lvl} ({durTurns}T)]:</b></color>\n" +
+                            $"<color=#FFD866>• Bespoke Arena Rules:</color> <color=#FFFFFF>{prof.perkDesc}</color>\n" +
+                            $"<color=#8B949E><i>Duration: Lv1=10T, Lv2=6T, Lv3=3T. Replay same element to upgrade, or play another element to overwrite!</i></color>";
                     }
                     else
                     {
@@ -3206,7 +3199,7 @@ namespace MonsterCardGame.UI
             if (sacrificeButton != null)
             {
                 var gm = GameManager.Instance;
-                sacrificeButton.interactable = gm != null && gm.isPlayerTurn && !gm.humanPlayer.hasSacrificedThisTurn;
+                sacrificeButton.interactable = gm != null && gm.isPlayerTurn && !gm.humanPlayer.hasSacrificedThisTurn && gm.humanPlayer.denyDrawSacTurns <= 0;
             }
         }
 
@@ -3293,7 +3286,8 @@ namespace MonsterCardGame.UI
             {
                 bool isInstantPlayType = selectedCardForAction.cardType == CardType.Spell ||
                                          selectedCardForAction.cardType == CardType.Environment ||
-                                         selectedCardForAction.cardType == CardType.Leader;
+                                         selectedCardForAction.cardType == CardType.Leader ||
+                                         selectedCardForAction.cardType == CardType.Covenant;
                 int effCost = gm != null && gm.humanPlayer != null ? gm.humanPlayer.GetEffectiveCardCost(selectedCardForAction) : selectedCardForAction.cost;
                 bool canPlaySelected = gm != null && gm.isPlayerTurn && isInstantPlayType && effCost <= gm.humanPlayer.currentMana;
                 string spellBlock = null;
@@ -3311,6 +3305,8 @@ namespace MonsterCardGame.UI
                         txt.text = $"Activate Environment ({effCost}💧)";
                     else if (selectedCardForAction.cardType == CardType.Leader)
                         txt.text = $"Summon Spirit ({effCost}💧)";
+                    else if (selectedCardForAction.cardType == CardType.Covenant)
+                        txt.text = $"📜 Activate Covenant ({effCost}💧)";
                     else
                         txt.text = "Select Slot to Summon";
                 }
@@ -3462,7 +3458,11 @@ namespace MonsterCardGame.UI
             else
             {
                 MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
-                LogCombatMessage($"❌ Cannot summon monster to Slot {slotIndex} (Check Mana & slot availability).");
+                string reason = !string.IsNullOrEmpty(gm.humanPlayer.lastSummonFailReason)
+                    ? gm.humanPlayer.lastSummonFailReason
+                    : $"Cannot summon monster to Slot {slotIndex + 1} (Check Mana & slot availability).";
+                LogCombatMessage($"❌ {reason}");
+                ShowBanner($"⚠️ {reason}", new Color(0.95f, 0.35f, 0.35f));
             }
         }
 
@@ -4147,37 +4147,54 @@ namespace MonsterCardGame.UI
         /// <summary>
         /// Direct sacrifice of any card in hand via Right-Click (+1 Power & +1 Mana).
         /// </summary>
-        public void SacrificeCardDirectly(CardData card, Vector3? explicitStartPos = null)
+        public bool SacrificeCardDirectly(CardData card, Vector3? explicitStartPos = null)
         {
             var gm = GameManager.Instance;
-            if (gm == null) return;
+            if (gm == null) return false;
 
-            if (!gm.isPlayerTurn)
+            if (!gm.isPlayerTurn || gm.currentPhase != GamePhase.ActionPhase)
             {
                 MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
-                LogCombatMessage("⚠️ You cannot sacrifice cards during the enemy turn!");
-                return;
+                LogCombatMessage("⚠️ You can only sacrifice cards during your Action Phase!");
+                return false;
             }
 
             if (gm.humanPlayer.hasSacrificedThisTurn)
             {
                 MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
-                LogCombatMessage("⚠️ You already sacrificed a card this turn (only 1 sacrifice allowed per turn).");
-                return;
+                LogCombatMessage("⚠️ You already sacrificed a card this turn (1 sacrifice per turn, unbounded Aether).");
+                return false;
+            }
+            if (gm.humanPlayer.denyDrawSacTurns > 0)
+            {
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                LogCombatMessage("⚠️ Card sacrifice is currently blocked this turn.");
+                return false;
             }
 
-            if (card == null) return;
+            if (card == null) return false;
 
             Vector3 startPos = explicitStartPos ?? GetPlayerHandCardWorldPos(card);
 
             if (gm.humanPlayer.SacrificeCard(card))
             {
                 MonsterCardGame.Audio.SoundManager.Instance.PlayCardSacrifice();
-                LogCombatMessage($"🔥 Sacrificed [{card.name}] via Right-Click! Gained +1 Aether & +1 Mana.", card);
+                LogCombatMessage($"🔥 Sacrificed [{card.name}] via Right-Click! Gained +1 Aether & +1 Mana (Total Aether: {gm.humanPlayer.power}).", card);
                 LaunchSacrificeFlight(card, startPos);
                 DeselectHandCards();
                 UpdateUI();
                 gm.EvaluateAutoEndTurn();
+                return true;
+            }
+            else
+            {
+                int cap = V2CardMechanicsEngine.GetPlayerManaCap(gm.humanPlayer);
+                MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
+                if (gm.humanPlayer.power >= cap)
+                    LogCombatMessage($"⚠️ Cannot sacrifice: Active Covenant [{gm.humanPlayer.activeCovenant?.name}] caps your Aether at {cap}!");
+                else
+                    LogCombatMessage("⚠️ Cannot sacrifice this card right now.");
+                return false;
             }
         }
 

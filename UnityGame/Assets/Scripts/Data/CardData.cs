@@ -7,7 +7,7 @@ namespace MonsterCardGame.Data
     [Serializable]
     public enum CardType
     {
-        Monster = 0,        // Field Monster Card occupying a tactical slot (IDs 471..2270)
+        Monster = 0,        // Field Monster Card occupying a tactical slot (IDs 471..1470)
         Spell = 1,          // Instant Tactical Magic Spell Card (IDs 171..470)
         Environment = 2,    // Shared Global Battlefield Environment Card (IDs 1..10)
         Leader = 3,         // Dedicated Owner-Only Commander Spirit Talisman Card (IDs 11..70)

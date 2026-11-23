@@ -7,7 +7,7 @@ using MonsterCardGame.UI;
 namespace MonsterCardGame.Core
 {
     /// <summary>
-    /// V2 Master Mechanics Engine implementing the 2,270-Card Database (IDs 1..2270)
+    /// V2 Master Mechanics Engine implementing the 1,470-Card Database (IDs 1..1470)
     /// and the 37 Constitution Rules (Strict Integer Rounding, 60 Owner-Only Leaders,
     /// 100 Right-Wing Altar Covenants, 300 Spells incl. 4 Counter-Tech Spells,
     /// 1,800 Monster Passives/Actives, Barrier 0-ATK Lock, All-Attack Lock, and Turn 40 Sudden Death).
@@ -70,6 +70,12 @@ namespace MonsterCardGame.Core
             public bool double_burn = false;
             public bool enemy_only = false;
             public bool to_board = false;
+            public bool refresh = false;
+            public bool from_enemy = false;
+            public bool enemy = false;
+            public bool sac = false;
+            public int fallback_dmg = 0;
+            public int[] spawn = null;
         }
 
         [Serializable]
@@ -150,7 +156,7 @@ namespace MonsterCardGame.Core
             public int max_summons_turn = 99;
             public int max_board_self = 6;
             public int max_hand_self = 7;
-            public int max_mana_self = 10;
+            public int max_mana_self = 0;
             public int turn_limit_lose = 0;
             public int self_def_cap = 0;
             public int rew_atk = 0;
@@ -175,6 +181,20 @@ namespace MonsterCardGame.Core
             public bool rew_double_skill = false;
             public int rew_stat_pct = 0;
             public int rew_enemy_face = 0;
+            public int ban_hand_monster_ge = 99;
+            public bool ban_self_dots = false;
+            public bool ban_self_revive = false;
+            public bool delay_leader_turn5 = false;
+            public int rew_disrupt_eot = 0;
+            public int rew_dmg_reduce = 0;
+            public int rew_enemy_mana_loss = 0;
+            public int rew_revive_disc = 0;
+            public int rew_steal_copy = 0;
+            public bool sac_every_2nd = false;
+            public int self_hp_extra_spell_dmg = 0;
+            public int self_mana_tax_if_lt2 = 0;
+            public bool self_minor_restriction = false;
+            public bool skip_every_3rd = false;
         }
 
         private static readonly Dictionary<int, V2MonsterOps> monsterOpsCache = new Dictionary<int, V2MonsterOps>();
@@ -213,6 +233,20 @@ namespace MonsterCardGame.Core
             if (mops == null || mops.actives == null || skillIndex >= mops.actives.Count) return null;
             var op = mops.actives[skillIndex];
             return (op != null && !string.IsNullOrEmpty(op.kind)) ? op : null;
+        }
+
+        public static bool UnitHasPassiveKind(MonsterInstance unit, string kind)
+        {
+            if (unit == null || unit.data == null || string.IsNullOrEmpty(kind)) return false;
+            var mops = GetMonsterOps(unit.data);
+            if (mops == null || mops.passives == null) return false;
+            for (int i = 0; i < mops.passives.Count; i++)
+            {
+                var p = mops.passives[i];
+                if (p != null && string.Equals(p.kind, kind, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
         }
 
         public static V2LeaderOps GetLeaderOps(CardData card)
@@ -265,7 +299,14 @@ namespace MonsterCardGame.Core
 
         public static bool IsLeaderActiveForPlayer(PlayerState p)
         {
-            return p != null && p.activeLeader != null && !p.leaderExorcised && p.leaderMutedTurns <= 0;
+            if (p == null || p.activeLeader == null || p.leaderExorcised || p.leaderMutedTurns > 0) return false;
+            if (IsCovenantActiveForPlayer(p))
+            {
+                var cov = GetCovenantOps(p.activeCovenant);
+                if (cov != null && cov.delay_leader_turn5 && GameManager.Instance != null && GameManager.Instance.currentTurn < 5)
+                    return false;
+            }
+            return true;
         }
 
         public static bool IsCovenantActiveForPlayer(PlayerState p)
@@ -290,7 +331,7 @@ namespace MonsterCardGame.Core
                 if (cov != null && cov.max_mana_self > 0 && cov.max_mana_self < 10)
                     return cov.max_mana_self;
             }
-            return 10;
+            return 999; // Unbounded Aether (no global cap!)
         }
 
         public static bool IsSelfHealBanned(PlayerState p)
@@ -311,6 +352,46 @@ namespace MonsterCardGame.Core
                 if (cov != null && cov.ban_self_extra_draw) return true;
             }
             return false;
+        }
+
+        public static bool IsSelfDotsBanned(PlayerState p)
+        {
+            if (IsCovenantActiveForPlayer(p))
+            {
+                var cov = GetCovenantOps(p.activeCovenant);
+                if (cov != null && cov.ban_self_dots) return true;
+            }
+            return false;
+        }
+
+        public static bool IsSelfReviveBanned(PlayerState p)
+        {
+            if (IsCovenantActiveForPlayer(p))
+            {
+                var cov = GetCovenantOps(p.activeCovenant);
+                if (cov != null && cov.ban_self_revive) return true;
+            }
+            return false;
+        }
+
+        public static int GetCovenantIncomingReduction(PlayerState p)
+        {
+            if (IsCovenantActiveForPlayer(p))
+            {
+                var cov = GetCovenantOps(p.activeCovenant);
+                if (cov != null && cov.rew_dmg_reduce > 0) return cov.rew_dmg_reduce;
+            }
+            return 0;
+        }
+
+        public static int GetCovenantReviveDiscount(PlayerState p)
+        {
+            if (IsCovenantActiveForPlayer(p))
+            {
+                var cov = GetCovenantOps(p.activeCovenant);
+                if (cov != null && cov.rew_revive_disc > 0) return cov.rew_revive_disc;
+            }
+            return 0;
         }
 
         public static bool HasMatchingTribeAlly(PlayerState owner)
@@ -416,6 +497,17 @@ namespace MonsterCardGame.Core
                 var cov = GetCovenantOps(p.activeCovenant);
                 if (cov != null)
                 {
+                    int curTurn = GameManager.Instance != null ? GameManager.Instance.currentTurn : 1;
+                    if (cov.skip_every_3rd && curTurn % 3 == 0)
+                    {
+                        reason = $"Covenant [{p.activeCovenant.name}] forbids plays on every 3rd turn!";
+                        return false;
+                    }
+                    if (cov.ban_hand_monster_ge > 0 && cov.ban_hand_monster_ge < 99 && card.cost >= cov.ban_hand_monster_ge)
+                    {
+                        reason = $"Covenant [{p.activeCovenant.name}] forbids summoning monsters costing {cov.ban_hand_monster_ge}+ Mana!";
+                        return false;
+                    }
                     if (p.cardsPlayedThisTurn >= cov.max_plays_turn)
                     {
                         reason = $"Covenant [{p.activeCovenant.name}] limits you to {cov.max_plays_turn} card play(s) per turn!";
@@ -522,6 +614,40 @@ namespace MonsterCardGame.Core
                     instance.baseDef += lops.aura_def;
                     instance.currentDef += lops.aura_def;
                     instance.leaderDefApplied = lops.aura_def;
+                }
+            }
+
+            // 1.5 Shared Environment Bespoke On-Summon Effects (Home Element Bonus + Ice Lv2+ Foreign Haste Suppress)
+            var activeEnv = GameManager.Instance != null ? GameManager.Instance.activeEnvironment : null;
+            if (activeEnv != null && instance.data != null)
+            {
+                int eIdx = Mathf.Clamp(activeEnv.level - 1, 0, 2);
+                bool sameEl = EnvironmentCardData.AreSameElement(activeEnv.element, instance.data.element);
+                if (sameEl)
+                {
+                    if (EnvironmentCardData.AreSameElement(activeEnv.element, "Water"))
+                    {
+                        int ed = new[] { 3, 5, 7 }[eIdx];
+                        instance.baseDef += ed; instance.currentDef += ed;
+                    }
+                    else if (EnvironmentCardData.AreSameElement(activeEnv.element, "Nature"))
+                    {
+                        int ed = new[] { 2, 4, 6 }[eIdx];
+                        instance.baseDef += ed; instance.currentDef += ed;
+                    }
+                    else if (EnvironmentCardData.AreSameElement(activeEnv.element, "Earth"))
+                    {
+                        int ed = new[] { 3, 6, 9 }[eIdx];
+                        instance.baseDef += ed; instance.currentDef += ed;
+                    }
+                    else if (EnvironmentCardData.AreSameElement(activeEnv.element, "Air") && !instance.IsBarrier)
+                    {
+                        instance.canAttack = true;
+                    }
+                }
+                else if (EnvironmentCardData.AreSameElement(activeEnv.element, "Ice") && activeEnv.level >= 2)
+                {
+                    instance.canAttack = false;
                 }
             }
 
@@ -924,7 +1050,12 @@ namespace MonsterCardGame.Core
             if (IsCovenantActiveForPlayer(caster))
             {
                 var cov = GetCovenantOps(caster.activeCovenant);
-                if (cov != null) spBonus += cov.rew_spell_power;
+                if (cov != null)
+                {
+                    spBonus += cov.rew_spell_power;
+                    if (cov.self_hp_extra_spell_dmg > 0)
+                        caster.TakeLeaderDamage(cov.self_hp_extra_spell_dmg);
+                }
             }
             int v1 = Mathf.Max(0, op.v1 + spBonus);
             int v2 = Mathf.Max(0, op.v2 + spBonus);
@@ -1049,7 +1180,7 @@ namespace MonsterCardGame.Core
                     break;
 
                 case "reduce_enemy_max_mana":
-                    target.power = Mathf.Max(1, target.power - Mathf.Max(1, op.v1));
+                    target.power = Mathf.Max(0, target.power - Mathf.Max(1, op.v1));
                     if (target.slots != null)
                     {
                         foreach (var s in target.slots)
@@ -1301,6 +1432,7 @@ namespace MonsterCardGame.Core
 
                 case "revive_board":
                 case "revive_grave":
+                    if (IsSelfReviveBanned(caster)) break;
                     var revSlot = FindFirstEmptySlot(caster);
                     if (revSlot != null && caster.graveyard != null)
                     {
@@ -1319,8 +1451,376 @@ namespace MonsterCardGame.Core
                             inst.baseDef = Mathf.Max(1, StrictRoundPct(inst.baseDef, revPct));
                             inst.currentDef = inst.baseDef;
                             revSlot.PlaceMonster(inst);
+                            int revDisc = GetCovenantReviveDiscount(caster);
+                            if (revDisc > 0) caster.currentMana += revDisc;
                         }
                     }
+                    break;
+
+                case "boost_skills":
+                    caster.freeSkillBonus += Mathf.Max(1, op.v1 > 0 ? op.v1 : 6);
+                    if (op.disc >= 2) caster.freeSkillManaZero = true;
+                    else if (op.disc == 1) caster.currentMana += 1;
+                    if (op.mana > 0) caster.currentMana += op.mana;
+                    if (op.refresh && caster.slots != null)
+                    {
+                        foreach (var s in caster.slots)
+                            if (s != null && s.IsOccupied && s.currentMonster != null && s.currentMonster.IsAlive)
+                                s.currentMonster.ResetActiveSkillsUsage();
+                    }
+                    break;
+
+                case "clone_board":
+                {
+                    int cCnt = Mathf.Max(1, op.cnt);
+                    int cPct = op.pct > 0 ? op.pct : 100;
+                    int cCap = op.cap > 0 ? op.cap : 99;
+                    BoardSlot srcSlot = op.from_enemy ? PickBestEnemySlotByCost(target, cCap) : PickAllySlot(caster, targetSlotIdx);
+                    if (srcSlot != null && srcSlot.currentMonster != null && srcSlot.currentMonster.data != null)
+                    {
+                        var srcData = srcSlot.currentMonster.data;
+                        for (int ci = 0; ci < cCnt; ci++)
+                        {
+                            var clEmpty = FindFirstEmptySlot(caster);
+                            if (clEmpty == null) break;
+                            var clInst = new MonsterInstance(srcData, GameManager.Instance != null ? GameManager.Instance.currentTurn : 1);
+                            if (cPct != 100)
+                            {
+                                if (!clInst.IsBarrier) clInst.baseAtk = Mathf.Max(0, StrictRoundPct(clInst.baseAtk, cPct));
+                                clInst.baseDef = Mathf.Max(1, StrictRoundPct(clInst.baseDef, cPct));
+                                clInst.currentDef = clInst.baseDef;
+                            }
+                            if (op.haste && !clInst.IsBarrier) clInst.canAttack = true;
+                            clEmpty.PlaceMonster(clInst);
+                        }
+                    }
+                    break;
+                }
+
+                case "deck_burn_spell":
+                {
+                    int burnCnt = Mathf.Max(1, op.v1 > 0 ? op.v1 : 4);
+                    for (int bi = 0; bi < burnCnt && target.deck != null && target.deck.Count > 0; bi++)
+                    {
+                        int last = target.deck.Count - 1;
+                        var milled = target.deck[last];
+                        target.deck.RemoveAt(last);
+                        if (milled != null) target.graveyard.Add(milled);
+                    }
+                    if (target.slots != null)
+                    {
+                        foreach (var s in target.slots)
+                        {
+                            if (s == null || !s.IsOccupied || s.currentMonster == null || !s.currentMonster.IsAlive) continue;
+                            if (op.burn > 0 && !IsSelfDotsBanned(caster)) s.currentMonster.burnDmg += op.burn;
+                            if (op.weaken > 0) s.currentMonster.weakenedAtkFlat += op.weaken;
+                        }
+                    }
+                    break;
+                }
+
+                case "doppelganger_spell":
+                {
+                    var dSrc = PickBestEnemySlotByCost(target, op.cap > 0 ? op.cap : 99);
+                    var dEmpty = FindFirstEmptySlot(caster);
+                    if (dSrc != null && dSrc.currentMonster != null && dSrc.currentMonster.data != null && dEmpty != null)
+                    {
+                        var dInst = new MonsterInstance(dSrc.currentMonster.data, GameManager.Instance != null ? GameManager.Instance.currentTurn : 1);
+                        if (op.haste && !dInst.IsBarrier) dInst.canAttack = true;
+                        dEmpty.PlaceMonster(dInst);
+                    }
+                    break;
+                }
+
+                case "echo_next_spell":
+                    caster.nextSpellRepeats = Mathf.Max(1, caster.nextSpellRepeats + 1);
+                    break;
+
+                case "hand_discard_spell":
+                    if (target.hand != null && target.hand.Count > 0)
+                    {
+                        int rIdx = UnityEngine.Random.Range(0, target.hand.Count);
+                        var disc = target.hand[rIdx];
+                        target.hand.RemoveAt(rIdx);
+                        if (disc != null) target.graveyard.Add(disc);
+                    }
+                    if (op.dmg > 0) target.TakeLeaderDamage(op.dmg + spBonus);
+                    break;
+
+                case "polymorph":
+                {
+                    var pSlot = PickBestEnemySlotByCost(target, op.cap > 0 ? op.cap : 99, targetSlotIdx);
+                    if (pSlot != null && pSlot.IsOccupied && pSlot.currentMonster != null)
+                    {
+                        var sheepData = new CardData
+                        {
+                            id = 0,
+                            name = "Sheep Token",
+                            cardType = CardType.Monster,
+                            card_type = "monster",
+                            element = "None",
+                            tribe = "None",
+                            cost = 1,
+                            atk = 1,
+                            def = 1
+                        };
+                        pSlot.ClearSlot();
+                        pSlot.PlaceMonster(new MonsterInstance(sheepData, GameManager.Instance != null ? GameManager.Instance.currentTurn : 1));
+                    }
+                    break;
+                }
+
+                case "pull_hook_spell":
+                {
+                    if (target.slots != null)
+                    {
+                        BoardSlot flankPick = null;
+                        int bestScore = -1;
+                        foreach (int fi in new[] { 0, 1, 4, 5 })
+                        {
+                            if (fi < target.slots.Length && target.slots[fi] != null && target.slots[fi].IsOccupied && target.slots[fi].currentMonster != null && target.slots[fi].currentMonster.IsAlive)
+                            {
+                                int sc = target.slots[fi].currentMonster.baseAtk + target.slots[fi].currentMonster.currentDef;
+                                if (sc > bestScore) { bestScore = sc; flankPick = target.slots[fi]; }
+                            }
+                        }
+                        if (flankPick != null)
+                        {
+                            int destIdx = (targetSlotIdx >= 0 && targetSlotIdx < target.slots.Length) ? targetSlotIdx : 2;
+                            var victim = flankPick.currentMonster;
+                            if (flankPick.slotIndex != destIdx && target.slots[destIdx] != null)
+                            {
+                                var displaced = target.slots[destIdx].currentMonster;
+                                flankPick.ClearSlot();
+                                target.slots[destIdx].ClearSlot();
+                                target.slots[destIdx].PlaceMonster(victim);
+                                if (displaced != null) flankPick.PlaceMonster(displaced);
+                            }
+                            if (op.burn > 0 && !IsSelfDotsBanned(caster)) victim.burnDmg += op.burn;
+                            if (op.root) victim.rootedTurns = Mathf.Max(victim.rootedTurns, 1);
+                        }
+                    }
+                    break;
+                }
+
+                case "recall_spell":
+                {
+                    int rCnt = Mathf.Max(1, op.cnt);
+                    for (int ri = 0; ri < rCnt; ri++)
+                    {
+                        if (op.enemy)
+                        {
+                            var rEs = PickBestEnemySlotByCost(target, op.cap > 0 ? op.cap : 99, targetSlotIdx);
+                            if (rEs != null && rEs.currentMonster != null && !rEs.currentMonster.IsLocked)
+                            {
+                                if (rEs.currentMonster.data != null && rEs.currentMonster.data.id > 0)
+                                    target.AddCardToHandWithBurnLimit(rEs.currentMonster.data);
+                                rEs.ClearSlot();
+                            }
+                        }
+                        else
+                        {
+                            var rAs = PickAllySlot(caster, targetSlotIdx);
+                            if (rAs != null && rAs.currentMonster != null && !rAs.currentMonster.IsLocked)
+                            {
+                                if (rAs.currentMonster.data != null && rAs.currentMonster.data.id > 0)
+                                    caster.AddCardToHandWithBurnLimit(rAs.currentMonster.data);
+                                rAs.ClearSlot();
+                            }
+                        }
+                    }
+                    if (op.hp > 0) caster.HealLeader(op.hp, target);
+                    if (op.mana > 0) caster.currentMana += op.mana;
+                    if (op.spawn != null && op.spawn.Length >= 2)
+                    {
+                        var spEmpty = FindFirstEmptySlot(caster);
+                        if (spEmpty != null)
+                        {
+                            var tok = new CardData { id = 0, name = "Recall Token", cardType = CardType.Monster, card_type = "monster", element = "None", tribe = "None", cost = 1, atk = op.spawn[0], def = op.spawn[1] };
+                            spEmpty.PlaceMonster(new MonsterInstance(tok, GameManager.Instance != null ? GameManager.Instance.currentTurn : 1));
+                        }
+                    }
+                    break;
+                }
+
+                case "solar_sacrifice":
+                {
+                    BoardSlot bestNonBar = null;
+                    int bestAtk = -1;
+                    if (caster.slots != null)
+                    {
+                        foreach (var s in caster.slots)
+                        {
+                            if (s != null && s.IsOccupied && s.currentMonster != null && s.currentMonster.IsAlive && !s.currentMonster.IsBarrier)
+                            {
+                                int ea = s.currentMonster.GetEffectiveAtk(GameManager.Instance != null ? GameManager.Instance.activeEnvironment : null, caster);
+                                if (ea > bestAtk) { bestAtk = ea; bestNonBar = s; }
+                            }
+                        }
+                    }
+                    if (bestNonBar != null)
+                    {
+                        int solarDmg = Mathf.Max(1, StrictRoundPct(bestAtk, op.pct > 0 ? op.pct : 150)) + spBonus;
+                        caster.graveyard.Add(bestNonBar.currentMonster.data);
+                        bestNonBar.ClearSlot();
+                        var eSl = PickEnemySlot(target, targetSlotIdx);
+                        if (eSl != null && eSl.currentMonster != null)
+                        {
+                            eSl.currentMonster.TakeDamage(solarDmg);
+                            if (!eSl.currentMonster.IsAlive) { target.graveyard.Add(eSl.currentMonster.data); eSl.ClearSlot(); }
+                        }
+                        else
+                        {
+                            target.TakeLeaderDamage(solarDmg);
+                        }
+                    }
+                    break;
+                }
+
+                case "spawn_tokens":
+                {
+                    if (op.sac)
+                    {
+                        var sacSl = PickAllySlot(caster, targetSlotIdx);
+                        if (sacSl != null && sacSl.currentMonster != null)
+                        {
+                            caster.graveyard.Add(sacSl.currentMonster.data);
+                            sacSl.ClearSlot();
+                        }
+                    }
+                    int tCnt = Mathf.Max(1, op.cnt);
+                    int tAtk = op.v1 > 0 ? op.v1 : 5;
+                    int tDef = op.v2 > 0 ? op.v2 : 5;
+                    for (int ti = 0; ti < tCnt; ti++)
+                    {
+                        var te = FindFirstEmptySlot(caster);
+                        if (te == null) break;
+                        var tCard = new CardData { id = 0, name = "Swarm Token", cardType = CardType.Monster, card_type = "monster", element = "None", tribe = "Insects", cost = 1, atk = tAtk, def = tDef };
+                        var tInst = new MonsterInstance(tCard, GameManager.Instance != null ? GameManager.Instance.currentTurn : 1);
+                        if (op.haste) tInst.canAttack = true;
+                        te.PlaceMonster(tInst);
+                    }
+                    if (op.atk > 0 && caster.slots != null)
+                    {
+                        foreach (var s in caster.slots)
+                            if (s != null && s.IsOccupied && s.currentMonster != null && s.currentMonster.IsAlive && !s.currentMonster.IsBarrier && !s.currentMonster.IsAllAttack)
+                                s.currentMonster.tempTurnAtk += op.atk;
+                    }
+                    break;
+                }
+
+                case "spy_plant_spell":
+                {
+                    BoardSlot spyEmpty = (target.slots != null && targetSlotIdx >= 0 && targetSlotIdx < target.slots.Length && target.slots[targetSlotIdx] != null && !target.slots[targetSlotIdx].IsOccupied)
+                        ? target.slots[targetSlotIdx]
+                        : FindFirstEmptySlot(target);
+                    if (spyEmpty != null)
+                    {
+                        bool spyPoison = op.poison > 0 || (!string.IsNullOrEmpty(spellCard.v2_ops_json) && spellCard.v2_ops_json.Contains("\"poison\": true"));
+                        var spyCard = new CardData
+                        {
+                            id = 0,
+                            name = "Spy Parasite",
+                            cardType = CardType.Monster,
+                            card_type = "monster",
+                            element = "None",
+                            tribe = "None",
+                            role = "Disruptor",
+                            cost = 1,
+                            atk = 0,
+                            def = Mathf.Max(5, op.v1 > 0 ? op.v1 : 15),
+                            is_barrier = true,
+                            description = spyPoison ? $"Spy Parasite: Deals {Mathf.Max(2, op.v2)} damage and Poison to adjacent allies." : $"Spy Parasite: Deals {Mathf.Max(2, op.v2)} damage to adjacent allies."
+                        };
+                        spyEmpty.PlaceMonster(new MonsterInstance(spyCard, GameManager.Instance != null ? GameManager.Instance.currentTurn : 1));
+                    }
+                    else
+                    {
+                        var fbEs = PickEnemySlot(target, targetSlotIdx);
+                        int fbDmg = (op.fallback_dmg > 0 ? op.fallback_dmg : 14) + spBonus;
+                        if (fbEs != null && fbEs.currentMonster != null)
+                        {
+                            fbEs.currentMonster.TakeDamage(fbDmg);
+                            if (!fbEs.currentMonster.IsAlive) { target.graveyard.Add(fbEs.currentMonster.data); fbEs.ClearSlot(); }
+                        }
+                    }
+                    break;
+                }
+
+                case "swap_atk_enemy":
+                {
+                    var aSwap = PickAllySlot(caster, targetSlotIdx);
+                    var eSwap = PickEnemySlot(target, -1);
+                    if (aSwap != null && eSwap != null && aSwap.currentMonster != null && eSwap.currentMonster != null &&
+                        !aSwap.currentMonster.IsBarrier && !aSwap.currentMonster.IsAllAttack &&
+                        !eSwap.currentMonster.IsBarrier && !eSwap.currentMonster.IsAllAttack)
+                    {
+                        int tmpA = aSwap.currentMonster.baseAtk;
+                        aSwap.currentMonster.baseAtk = eSwap.currentMonster.baseAtk;
+                        eSwap.currentMonster.baseAtk = tmpA;
+                    }
+                    break;
+                }
+
+                case "swap_lanes":
+                {
+                    var slSlot = PickAllySlot(caster, targetSlotIdx);
+                    if (slSlot != null && slSlot.currentMonster != null && caster.slots != null && caster.slots.Length >= 6)
+                    {
+                        int otherIdx = (slSlot.slotIndex + 3) % 6;
+                        var m1 = slSlot.currentMonster;
+                        var m2 = caster.slots[otherIdx].currentMonster;
+                        slSlot.ClearSlot();
+                        caster.slots[otherIdx].ClearSlot();
+                        caster.slots[otherIdx].PlaceMonster(m1);
+                        if (m2 != null) slSlot.PlaceMonster(m2);
+                        m1.ApplyPermBuff(op.atk > 0 ? op.atk : 4, op.deff);
+                    }
+                    break;
+                }
+
+                case "swarm_bite":
+                {
+                    int biteDmg = Mathf.Max(1, (op.v1 > 0 ? op.v1 : 4) + (spBonus > 0 ? 1 : 0));
+                    if (caster.slots != null && target.slots != null)
+                    {
+                        for (int si = 0; si < caster.slots.Length; si++)
+                        {
+                            if (caster.slots[si] == null || !caster.slots[si].IsOccupied || caster.slots[si].currentMonster == null || !caster.slots[si].currentMonster.IsAlive) continue;
+                            if (si < target.slots.Length && target.slots[si] != null && target.slots[si].IsOccupied && target.slots[si].currentMonster != null && target.slots[si].currentMonster.IsAlive)
+                            {
+                                target.slots[si].currentMonster.TakeDamage(biteDmg);
+                                if (!target.slots[si].currentMonster.IsAlive) { target.graveyard.Add(target.slots[si].currentMonster.data); target.slots[si].ClearSlot(); }
+                            }
+                            else
+                            {
+                                target.TakeLeaderDamage(biteDmg);
+                            }
+                        }
+                    }
+                    break;
+                }
+
+                case "time_rewind":
+                    if (caster.slots != null)
+                    {
+                        foreach (var s in caster.slots)
+                        {
+                            if (s == null || !s.IsOccupied || s.currentMonster == null || !s.currentMonster.IsAlive) continue;
+                            var m = s.currentMonster;
+                            m.burnDmg = 0;
+                            m.poisonDmg = 0;
+                            m.bleedDmg = 0;
+                            m.frozenTurns = 0;
+                            m.silencedTurns = 0;
+                            m.rootedTurns = 0;
+                            m.weakenedTurns = 0;
+                            m.weakenedAtkFlat = 0;
+                            if (m.prevTurnDef > m.currentDef)
+                                m.HealDefense(m.prevTurnDef - m.currentDef);
+                        }
+                    }
+                    caster.HealLeader(op.hp > 0 ? op.hp : 35, target);
                     break;
 
                 default:
@@ -1345,6 +1845,12 @@ namespace MonsterCardGame.Core
                     break;
             }
 
+            // Draw riders attached to spells (e.g., Spartan Hook draw: 1)
+            if (op.draw > 0 && op.kind != "draw_cards" && op.kind != "pure_draw" && !IsExtraDrawBanned(caster))
+            {
+                for (int di = 0; di < op.draw; di++) caster.DrawCard();
+            }
+
             // Trigger Leader Spell-Ping Aura if active and controlling a matching-Tribe ally
             if (HasMatchingTribeAlly(caster))
             {
@@ -1356,6 +1862,83 @@ namespace MonsterCardGame.Core
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// V2 Covenant Start-of-Turn triggers (matching Python BattleEngine._begin_turn 1-to-1).
+        /// </summary>
+        public static void ApplyCovenantStartOfTurn(PlayerState activePlayer, PlayerState otherPlayer, int currentTurn)
+        {
+            if (!IsCovenantActiveForPlayer(activePlayer)) return;
+            var cov = GetCovenantOps(activePlayer.activeCovenant);
+            if (cov == null) return;
+
+            if (cov.turn_limit_lose > 0 && currentTurn > cov.turn_limit_lose)
+            {
+                BattleUIManager.Instance?.LogCombatMessage($"💀 Covenant [{activePlayer.activeCovenant.name}] turn limit ({cov.turn_limit_lose}) expired!");
+                activePlayer.TakeLeaderDamage(activePlayer.currentHp + 999);
+                return;
+            }
+            if (cov.sac_every_2nd && currentTurn % 2 == 0 && activePlayer.slots != null)
+            {
+                BoardSlot weakest = null;
+                int minScore = int.MaxValue;
+                foreach (var s in activePlayer.slots)
+                {
+                    if (s != null && s.IsOccupied && s.currentMonster != null && s.currentMonster.IsAlive)
+                    {
+                        int sc = s.currentMonster.baseAtk + s.currentMonster.currentDef;
+                        if (sc < minScore) { minScore = sc; weakest = s; }
+                    }
+                }
+                if (weakest != null)
+                {
+                    activePlayer.graveyard.Add(weakest.currentMonster.data);
+                    weakest.ClearSlot();
+                }
+            }
+            if (cov.rew_enemy_mana_loss > 0 && otherPlayer != null)
+            {
+                otherPlayer.lockedManaNext = Mathf.Min(3, otherPlayer.lockedManaNext + cov.rew_enemy_mana_loss);
+            }
+            if (cov.rew_temp_mana > 0)
+            {
+                activePlayer.currentMana += cov.rew_temp_mana;
+            }
+            if (cov.rew_disrupt_eot > 0 && currentTurn % 2 == 0 && otherPlayer != null && otherPlayer.hand != null && otherPlayer.hand.Count > 0)
+            {
+                int rIdx = UnityEngine.Random.Range(0, otherPlayer.hand.Count);
+                var disc = otherPlayer.hand[rIdx];
+                otherPlayer.hand.RemoveAt(rIdx);
+                if (disc != null) otherPlayer.graveyard.Add(disc);
+            }
+            if (cov.rew_steal_copy > 0 && currentTurn % 2 == 0 && otherPlayer != null && otherPlayer.hand != null && otherPlayer.hand.Count > 0)
+            {
+                var stolen = otherPlayer.hand[UnityEngine.Random.Range(0, otherPlayer.hand.Count)];
+                if (stolen != null)
+                {
+                    activePlayer.AddCardToHandWithBurnLimit(stolen);
+                    activePlayer.discountedCardIds[stolen.id] = (activePlayer.discountedCardIds.TryGetValue(stolen.id, out int cc) ? cc : 0) + 1;
+                }
+            }
+            if (cov.self_mana_tax_if_lt2 > 0 && activePlayer.slots != null)
+            {
+                int occ = 0;
+                foreach (var s in activePlayer.slots) if (s != null && s.IsOccupied && s.currentMonster != null && s.currentMonster.IsAlive) occ++;
+                if (occ < 2) activePlayer.currentMana = Mathf.Max(0, activePlayer.currentMana - cov.self_mana_tax_if_lt2);
+            }
+            if (cov.rew_token_turn > 0)
+            {
+                for (int ti = 0; ti < cov.rew_token_turn; ti++)
+                {
+                    var emp = FindFirstEmptySlot(activePlayer);
+                    if (emp == null) break;
+                    var tCard = new CardData { id = 0, name = "Covenant Token", cardType = CardType.Monster, card_type = "monster", element = "None", tribe = "None", cost = 1, atk = 4, def = 5 };
+                    var tInst = new MonsterInstance(tCard, currentTurn);
+                    if (cov.rew_haste) tInst.canAttack = true;
+                    emp.PlaceMonster(tInst);
+                }
+            }
         }
 
         /// <summary>
@@ -1455,6 +2038,34 @@ namespace MonsterCardGame.Core
                     return s;
             }
             return null;
+        }
+
+        private static BoardSlot PickBestEnemySlotByCost(PlayerState opp, int maxCost, int preferredIdx = -1)
+        {
+            if (opp == null || opp.slots == null) return null;
+            if (preferredIdx >= 0 && preferredIdx < opp.slots.Length &&
+                opp.slots[preferredIdx] != null && opp.slots[preferredIdx].IsOccupied &&
+                opp.slots[preferredIdx].currentMonster != null && opp.slots[preferredIdx].currentMonster.IsAlive &&
+                (opp.slots[preferredIdx].currentMonster.data == null || opp.slots[preferredIdx].currentMonster.data.cost <= maxCost))
+            {
+                return opp.slots[preferredIdx];
+            }
+            BoardSlot best = null;
+            int bestScore = -1;
+            foreach (var s in opp.slots)
+            {
+                if (s != null && s.IsOccupied && s.currentMonster != null && s.currentMonster.IsAlive)
+                {
+                    if (s.currentMonster.data != null && s.currentMonster.data.cost > maxCost) continue;
+                    int sc = s.currentMonster.baseAtk + s.currentMonster.currentDef;
+                    if (sc > bestScore)
+                    {
+                        bestScore = sc;
+                        best = s;
+                    }
+                }
+            }
+            return best;
         }
 
         private static BoardSlot FindFirstEmptySlot(PlayerState p)

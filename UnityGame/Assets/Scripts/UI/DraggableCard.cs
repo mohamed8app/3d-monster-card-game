@@ -299,9 +299,12 @@ namespace MonsterCardGame.UI
                 {
                     if (BattleUIManager.Instance != null)
                     {
-                        BattleUIManager.Instance.SacrificeCardDirectly(cardData, transform.position);
-                        Destroy(gameObject);
-                        return;
+                        if (BattleUIManager.Instance.SacrificeCardDirectly(cardData, transform.position))
+                        {
+                            Destroy(gameObject);
+                            return;
+                        }
+                        break;
                     }
                 }
 
@@ -437,7 +440,11 @@ namespace MonsterCardGame.UI
                 MonsterCardGame.Audio.SoundManager.Instance?.PlayInvalidAction();
                 if (BattleUIManager.Instance != null)
                 {
-                    BattleUIManager.Instance.LogCombatMessage($"❌ Cannot summon monster to Slot {slotIndex} (Check Mana & slot availability).");
+                    string reason = !string.IsNullOrEmpty(gm.humanPlayer.lastSummonFailReason)
+                        ? gm.humanPlayer.lastSummonFailReason
+                        : $"Cannot summon monster to Slot {slotIndex + 1} (Check Mana & slot availability).";
+                    BattleUIManager.Instance.LogCombatMessage($"❌ {reason}");
+                    BattleUIManager.Instance.ShowBanner($"⚠️ {reason}", new Color(0.95f, 0.35f, 0.35f));
                 }
                 return false;
             }

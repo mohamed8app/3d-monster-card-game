@@ -4,7 +4,7 @@ Pure-PyTorch Actor-Critic PPO Fighter + Neural Card Drafter for Arena_Lab_V2.
 Designed specifically for CPU-only Windows training machines:
   - Compact ~80K-param Fighter MLP (~320 KB checkpoint per model)
   - Fast masked action sampling & clipped PPO updates
-  - Learnable 2,270-card Neural Drafter enforcing all 50-card Constitution rules
+  - Learnable 1,470-card Neural Drafter enforcing all 50-card Constitution rules
   - 1-click Warm-Start Base support (transfers Fighter tactical skills without polluting Deck preferences)
 """
 
@@ -60,7 +60,7 @@ class FighterNet(nn.Module):
 
 class DeckDrafter:
     """
-    Learnable preference-logit drafter over all 2,270 cards.
+    Learnable preference-logit drafter over all 1,470 cards.
     Generates valid 50-card Constitution decks respecting:
       - Exact 50 cards, Max 2 copies per Card ID
       - 1 Leader, 1 Covenant, 1-2 Environments (forced required_card_id if applicable)
@@ -572,15 +572,29 @@ class ModelBrain:
                     pass
             if "drafter_logits" in data:
                 saved_lg = data["drafter_logits"].float()
-                # Auto-sanitize any legacy checkpoint affected by the old log_softmax +5.5 saturation bug
-                if "drafter_visits" not in data and float(saved_lg.abs().max().item()) >= 4.8:
-                    cleaned = torch.from_numpy(brain.drafter.prior) + 0.18 * (saved_lg - saved_lg.mean())
-                    cleaned.clamp_(-1.5, 1.5)
-                    brain.drafter.logits.copy_(cleaned)
+                if saved_lg.numel() == brain.drafter.logits.numel():
+                    # Auto-sanitize any legacy checkpoint affected by the old log_softmax +5.5 saturation bug
+                    if "drafter_visits" not in data and float(saved_lg.abs().max().item()) >= 4.8:
+                        cleaned = torch.from_numpy(brain.drafter.prior) + 0.18 * (saved_lg - saved_lg.mean())
+                        cleaned.clamp_(-1.5, 1.5)
+                        brain.drafter.logits.copy_(cleaned)
+                    else:
+                        brain.drafter.logits.copy_(saved_lg)
                 else:
-                    brain.drafter.logits.copy_(saved_lg)
+                    # Seamless DB-resize migration (e.g., __KEEP_MIGRATION_1470_TO_1470__ cards):
+                    # preserve trained FighterNet + non-monster logits (1..470) & restore monster priors from settled_deck!
+                    n_pre = min(470, int(saved_lg.numel()), int(brain.drafter.logits.numel()))
+                    if n_pre > 0:
+                        brain.drafter.logits[:n_pre].copy_(saved_lg[:n_pre])
+                    brain._restore_drafter_from_settled_deck()
             if "drafter_visits" in data:
-                brain.drafter.visits = np.asarray(data["drafter_visits"], dtype=np.float32)
+                sav_v = np.asarray(data["drafter_visits"], dtype=np.float32)
+                if sav_v.shape == brain.drafter.visits.shape:
+                    brain.drafter.visits = sav_v
+                else:
+                    n_pre = min(470, int(sav_v.size), int(brain.drafter.visits.size))
+                    if n_pre > 0:
+                        brain.drafter.visits[:n_pre] = sav_v[:n_pre]
             brain.drafter.reward_baseline = float(data.get("drafter_baseline", 0.0))
             brain.matches_trained = int(data.get("matches_trained", 0))
             brain.warm_started = bool(data.get("warm_started", False))

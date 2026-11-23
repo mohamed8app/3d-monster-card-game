@@ -92,7 +92,7 @@ class ArenaTrainerApp:
         self._refresh_model_lists(keep_selection=False)
         self._update_warm_start_badge()
         self._poll_pc2_heartbeat()
-        self._log("Arena Lab V2 ready. Loaded 2,270 V2.2 cards and 41 independent AI models.")
+        self._log("Arena Lab V2 ready. Loaded 1,470 V2.2 cards and 41 independent AI models.")
         self._log("Remote PC #2 Control ready: Run Z:\\Start_PC2_Headless_Worker.bat once on PC #2, turn off its screen, and control everything from here!")
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -150,7 +150,7 @@ class ArenaTrainerApp:
         ).pack(anchor="w")
         tk.Label(
             left_h,
-            text="Pure-Python CPU RL Simulator | 2,270 Cards | Strict Integer Rules | Zero Live-Chart Overhead",
+            text="Pure-Python CPU RL Simulator | 1,470 Cards | Strict Integer Rules | Zero Live-Chart Overhead",
             bg=BG_PANEL, fg=FG_MUTED, font=("Segoe UI", 9),
         ).pack(anchor="w")
 

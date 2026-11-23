@@ -20,7 +20,7 @@ CENTER_SLOTS = (2, 3)
 FLANK_SLOTS = (0, 1, 4, 5)
 BUFF_CAP_ATK = 10
 BUFF_CAP_DEF = 15
-MAX_MANA_CAP = 10
+MAX_MANA_CAP = 999  # Unbounded Aether (unless restricted by an explicit Covenant cap)
 MAX_TURNS = 60
 
 ELEMENTS = ("Fire", "Water", "Nature", "Electric", "Ice", "Earth", "Dark", "Light", "Air", "Desert")
@@ -81,7 +81,7 @@ class CardDef:
 
 
 class CardDB:
-    """Fast in-memory database of all 2,270 compiled cards (IDs 1..2270)."""
+    """Fast in-memory database of all 1,470 compiled cards (IDs 1..1470)."""
 
     def __init__(self, json_path: str = DEFAULT_CARDS_JSON) -> None:
         with open(json_path, "r", encoding="utf-8") as f:
@@ -130,7 +130,7 @@ class CardDB:
 
         self.all_ids.sort()
         self.num_cards: int = len(self.all_ids)
-        assert self.num_cards == 2270, f"Expected 2270 cards, found {self.num_cards}"
+        assert self.num_cards == 1470, f"Expected 1470 cards, found {self.num_cards}"
 
     def get(self, card_id: int) -> CardDef:
         return self.cards[card_id]
@@ -181,7 +181,7 @@ class MonsterUnit:
         "on_death_atk", "on_death_def", "on_death_dmg", "on_death_regen_def", "on_death_regen_hp",
         "on_hit_burn", "on_hit_poison", "on_hit_bleed", "strip_buffs_bonus",
         "turn_heal_def", "turn_heal_hp", "cleanse_aura_def", "dmg_reduce_flat",
-        "spell_ping_dmg", "leader_def_applied",
+        "spell_ping_dmg", "leader_def_applied", "steal_aether_face",
     )
 
     def __init__(
@@ -331,6 +331,7 @@ class MonsterUnit:
         self.cleanse_aura_def: int = 0
         self.dmg_reduce_flat: int = 0
         self.spell_ping_dmg: int = 0
+        self.steal_aether_face: bool = False
 
     def apply_perm_buff(self, d_atk: int = 0, d_def: int = 0) -> Tuple[int, int]:
         """Applies permanent buff respecting Constitution caps (+10 ATK / +15 DEF) & Barrier/All-Attack ATK Lock."""
@@ -447,6 +448,13 @@ class MatchTelemetry:
         "si_reactive_decisions", "si_total_decisions",
         "en_close_hp_turns", "en_hp_turns",
         "cf_open_playable", "cf_early_special", "cf_t4_hp_diff", "cf_t4_recorded",
+        "mf_t6_lead_side", "mf_garbage_turns",
+        "mf_lockout_unit_turns", "mf_active_unit_turns",
+        "mf_stalemate_turns", "mf_solitaire_loss",
+        "mf_lane_occ", "mf_lane_moves", "mf_open_lane_strikes",
+        "mf_env_flips", "mf_env_played_mask", "mf_env_active_turns",
+        "mf_peak_aether", "mf_new15_uses",
+        "skill_telemetry",
     )
 
     def __init__(self) -> None:
@@ -629,6 +637,23 @@ class MatchTelemetry:
         self.cf_early_special: bool = False
         self.cf_t4_hp_diff: int = 0
         self.cf_t4_recorded: bool = False
+        # Pillar #16: Master Fun, Anti-Frustration, Spatial Lanes & 10-Environment Radar telemetry
+        self.mf_t6_lead_side: int = -1
+        self.mf_garbage_turns: int = 0
+        self.mf_lockout_unit_turns: int = 0
+        self.mf_active_unit_turns: int = 0
+        self.mf_stalemate_turns: int = 0
+        self.mf_solitaire_loss: int = 0
+        self.mf_lane_occ: List[int] = [0, 0, 0, 0, 0, 0]
+        self.mf_lane_moves: int = 0
+        self.mf_open_lane_strikes: int = 0
+        self.mf_env_flips: int = 0
+        self.mf_env_played_mask: int = 0
+        self.mf_env_active_turns: List[int] = [0] * 10
+        self.mf_peak_aether: int = 0
+        self.mf_new15_uses: int = 0
+        # Pillar #17: Per-Active-Skill Mana Pricing & Impact Telemetry ("kind|base_cost" -> [uses, mana, dmg_mon, dmg_face, heal_buff, kills, disrupt, util])
+        self.skill_telemetry: Dict[str, List[int]] = {}
 
 
 class PlayerState:
@@ -692,7 +717,9 @@ class PlayerState:
 
     def mana_cap(self) -> int:
         if self.covenant_active and self.covenant_ops:
-            return min(MAX_MANA_CAP, int(self.covenant_ops.get("max_mana_self", MAX_MANA_CAP)))
+            cm = int(self.covenant_ops.get("max_mana_self", 0))
+            if 0 < cm < 10:
+                return cm
         return MAX_MANA_CAP
 
     def add_to_hand(self, card_id: int, cost_mod: int = 0, drawn_turn: int = 0) -> Optional[int]:

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Arena_Lab_V2 — Pillar #13: Meta Discovery, Strategic Entropy & Synergy Explorer Tab (Arabic RTL).
-Analyzes all 41 settled 50-card decks, 2,270 card win rates, Glitch_41 anomaly hunter, and pairwise synergies:
+Analyzes all 41 settled 50-card decks, 1,470 card win rates, Glitch_41 anomaly hunter, and pairwise synergies:
   - Overall 0-100% Meta Discovery & Longevity Score (>=85% Ideal, >=70% Good, <70% Warning)
   - Interactive 3-Way Chart 1: Top 8 Staples (Most Included) | Top 8 Hidden Gems | Top 8 Winning Synergy Pairs
   - Chart 2: Meta Vitality & Longevity Bars + Top 4 Most-Similar Deck Pairs (Clone Watch)
@@ -66,7 +66,7 @@ class MetaDiscoveryTab:
 
         tk.Label(
             ctrl,
-            text=rtl("مستكشف الميتا والتآزر الاستراتيجي عبر كل الـ 41 ديكاً والـ 2,270 بطاقة:"),
+            text=rtl("مستكشف الميتا والتآزر الاستراتيجي عبر كل الـ 41 ديكاً والـ 1,470 بطاقة:"),
             bg=BG_PANEL, fg=FG_TEXT, font=(FONT_UI, 9, "bold"),
         ).pack(side="right", padx=(4, 0))
 
@@ -269,7 +269,7 @@ class MetaDiscoveryTab:
         for cnt in card_slot_freq.values():
             p = cnt / float(tot_slots)
             ent -= p * math.log2(p)
-        # Max theoretical unique cards in n_decks of 50 (with 2x copies each -> 25*n_decks capped at 2,270)
+        # Max theoretical unique cards in n_decks of 50 (with 2x copies each -> 25*n_decks capped at 1,470)
         max_ent = math.log2(min(self.db.num_cards, max(2, 25 * n_decks)))
         meta_entropy = min(100.0, 100.0 * ent / max_ent)
 
@@ -395,9 +395,9 @@ class MetaDiscoveryTab:
         rows.append((1, "إنتروبيا التنوع الاستراتيجي (Meta Entropy)", f"{meta_entropy:.1f}%", "82% فأعلى", "68% – 81%", st, diag, tg, pts))
 
         # 2. Active Meta Pool (Unique cards in latest 41 decks)
-        st, tg, pts = self._grade_range(float(active_unique), 600.0, 2270.0, 400.0, 2270.0)
-        diag = f"{active_unique:,} بطاقة فريدة حيّة داخل أحدث الـ {n_decks} ديكاً ({100*active_unique/self.db.num_cards:.1f}% من الـ 2,270)."
-        rows.append((2, "حجم حوض البطاقات النشط في الـ 41 ديكاً", f"{active_unique:,} بطاقة", "600+ بطاقة", "400 – 599", st, diag, tg, pts))
+        st, tg, pts = self._grade_range(float(active_unique), 450.0, float(self.db.num_cards), 320.0, float(self.db.num_cards))
+        diag = f"{active_unique:,} بطاقة فريدة حيّة داخل أحدث الـ {n_decks} ديكاً ({100*active_unique/self.db.num_cards:.1f}% من الـ {self.db.num_cards:,})."
+        rows.append((2, "حجم حوض البطاقات النشط في الـ 41 ديكاً", f"{active_unique:,} بطاقة", "450+ بطاقة", "320 – 449", st, diag, tg, pts))
 
         # 3. Avg Pairwise Deck Similarity (Jaccard %)
         st, tg, pts = self._grade_range(avg_jaccard, 0.0, 8.0, 0.0, 15.0)
@@ -569,7 +569,7 @@ class MetaDiscoveryTab:
         cv.create_text(w - 12, 44, text=rtl(badge), anchor="e", fill=col, font=(FONT_UI, 10, "bold"))
         cv.create_text(
             w - 12, 66,
-            text=rtl(f"المعيار: 🟢 >=85% مثالي | 🟡 70–84% جيد | 🔴 <70% خطر  •  (ديكات محللة: {d['n_decks']}/41 • بطاقات فريدة: {d['active_unique']:,}/2,270)"),
+            text=rtl(f"المعيار: 🟢 >=85% مثالي | 🟡 70–84% جيد | 🔴 <70% خطر  •  (ديكات محللة: {d['n_decks']}/41 • بطاقات فريدة: {d['active_unique']:,}/1,470)"),
             anchor="e", fill=FG_MUTED, font=(FONT_UI, 8),
         )
 

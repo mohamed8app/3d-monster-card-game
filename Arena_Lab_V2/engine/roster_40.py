@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 Defines the 40 Independent AI Models for Arena_Lab_V2:
-  - 10 Playstyle Models (full 2,270 card pool + behavioral style rewards)
+  - 10 Playstyle Models (full 1,470 card pool + behavioral style rewards)
   - 10 Environment Models (own Element monsters + own Environment + all Spells/Covenants/Leaders)
   - 10 Tribe Models (own Tribe monsters + all 200 Neutral Barriers + own Tribe Leaders + all Spells/Covenants/Envs)
-  - 10 Free Models (full 2,270 pool minus cards claimed in the latest decks of the other 9 Free models)
+  - 10 Free Models (full 1,470 pool minus cards claimed in the latest decks of the other 9 Free models)
 """
 
 from __future__ import annotations
@@ -101,7 +101,7 @@ def build_roster_40() -> List[ModelSpec]:
                 display_name=f"[Free] Free_{idx + 1:02d} ({cname})",
                 category="Free",
                 sub_index=idx,
-                short_desc="Open 2,270 pool — strictly banned from picking cards in other 9 Free decks.",
+                short_desc="Open 1,470 pool — strictly banned from picking cards in other 9 Free decks.",
             )
         )
 
@@ -135,7 +135,7 @@ def build_legal_card_mask(
 ) -> np.ndarray:
     """
     Returns a boolean mask of length `db.num_cards` (index i corresponds to card_id = i + 1)
-    specifying which of the 2,270 cards this model is legally allowed to draft.
+    specifying which of the 1,470 cards this model is legally allowed to draft.
     """
     mask = np.zeros(db.num_cards, dtype=np.bool_)
     excl = free_excluded_ids if (spec.category in ("Free", "Anomaly") and free_excluded_ids) else set()
@@ -147,9 +147,9 @@ def build_legal_card_mask(
         c = db.get(cid)
 
         if spec.category in ("Playstyle", "Free", "Anomaly"):
-            # Playstyle: full 2,270 pool
-            # Free: 2,270 minus cards in other 9 Free decks
-            # Anomaly: 2,270 minus top overused meta cards across the 40 models
+            # Playstyle: full 1,470 pool
+            # Free: 1,470 minus cards in other 9 Free decks
+            # Anomaly: 1,470 minus top overused meta cards across the 40 models
             mask[idx] = True
 
         elif spec.category == "Environment":

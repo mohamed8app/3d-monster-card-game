@@ -55,6 +55,8 @@ from integrity_tab import SimulationIntegrityTab
 from meta_tab import MetaDiscoveryTab
 from decks_tab import FinalDecksTab
 from abilities_eval_tab import AbilitiesAndSpellsEvalTab
+from master_fun_tab import MasterFunTab
+from skill_pricing_tab import SkillPricingAdvisorTab
 
 BG_DARK = "#12151C"
 BG_PANEL = "#1B202B"
@@ -486,6 +488,8 @@ class ArenaAnalyticsApp:
         self._build_tab_meta()
         self._build_tab_decks()
         self._build_tab_abilities_eval()
+        self._build_tab_master_fun()
+        self._build_tab_skill_pricing()
 
         self._all_tabs = [
             self.pace_tab,
@@ -503,6 +507,8 @@ class ArenaAnalyticsApp:
             self.meta_tab,
             self.decks_tab,
             self.abilities_eval_tab,
+            self.master_fun_tab,
+            self.skill_pricing_tab,
         ]
         # Central global mousewheel handler (replaces the overwritten per-tab bind_all so ALL 13 tabs scroll!)
         self.root.bind_all("<MouseWheel>", self._on_global_mousewheel)
@@ -801,6 +807,16 @@ class ArenaAnalyticsApp:
         self.nb.add(tab, text=rtl("15. القدرات والسحر"))
         self.abilities_eval_tab = AbilitiesAndSpellsEvalTab(tab, self.db, self.store, on_probe_complete=self._on_probe_updated)
 
+    def _build_tab_master_fun(self) -> None:
+        tab = tk.Frame(self.nb, bg=BG_DARK)
+        self.nb.add(tab, text=rtl("16. المتعة القصوى ★"))
+        self.master_fun_tab = MasterFunTab(tab, self.db, self.store, on_probe_complete=self._on_probe_updated)
+
+    def _build_tab_skill_pricing(self) -> None:
+        tab = tk.Frame(self.nb, bg=BG_DARK)
+        self.nb.add(tab, text=rtl("17. تسعير المهارات ⚡"))
+        self.skill_pricing_tab = SkillPricingAdvisorTab(tab, self.db, self.store, on_probe_complete=self._on_probe_updated)
+
     def refresh_all(self) -> None:
         self.store.reload()
         total_entries = sum(r["matches"] for r in self.store.roster.values()) // 2
@@ -810,7 +826,7 @@ class ArenaAnalyticsApp:
         self.summary_var.set(
             rtl(
                 f"إجمالي المباريات المسجلة: {total_entries:,}  |  النماذج المدرّبة: {trained_cnt} / 41  |  "
-                f"البطاقات المختبرة: {cards_seen:,} / 2,270  |  آخر تحديث: {now_s}"
+                f"البطاقات المختبرة: {cards_seen:,} / 1,470  |  آخر تحديث: {now_s}"
             )
         )
         self.pace_tab.refresh()
@@ -828,6 +844,8 @@ class ArenaAnalyticsApp:
         self.meta_tab.refresh()
         self.decks_tab.refresh()
         self.abilities_eval_tab.refresh()
+        self.master_fun_tab.refresh()
+        self.skill_pricing_tab.refresh()
 
 
 def main() -> None:

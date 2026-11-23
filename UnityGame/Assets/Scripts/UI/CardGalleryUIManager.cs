@@ -1242,12 +1242,12 @@ namespace MonsterCardGame.UI
                 new Color(0.05f, 0.08f, 0.14f, 0.98f),
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 408f), new Vector2(1240f, 32f));
 
-            AddDeckBuilderTypeButton(typeBar.transform, TypeFilter.Monsters, "🐺 MONSTERS (1800)", new Vector2(-525f, 0f), new Vector2(168f, 26f));
+            AddDeckBuilderTypeButton(typeBar.transform, TypeFilter.Monsters, "🐺 MONSTERS (1000)", new Vector2(-525f, 0f), new Vector2(168f, 26f));
             AddDeckBuilderTypeButton(typeBar.transform, TypeFilter.Spells, "📜 SPELLS (300)", new Vector2(-358f, 0f), new Vector2(150f, 26f));
             AddDeckBuilderTypeButton(typeBar.transform, TypeFilter.Covenants, "⚖️ COVENANTS (100)", new Vector2(-192f, 0f), new Vector2(168f, 26f));
             AddDeckBuilderTypeButton(typeBar.transform, TypeFilter.Environments, "🌋 ENVS (10)", new Vector2(-46f, 0f), new Vector2(112f, 26f));
             AddDeckBuilderTypeButton(typeBar.transform, TypeFilter.Leaders, "👑 SPIRITS (60)", new Vector2(88f, 0f), new Vector2(140f, 26f));
-            AddDeckBuilderTypeButton(typeBar.transform, TypeFilter.All, "🎴 ALL (2270)", new Vector2(226f, 0f), new Vector2(124f, 26f));
+            AddDeckBuilderTypeButton(typeBar.transform, TypeFilter.All, "🎴 ALL (1470)", new Vector2(226f, 0f), new Vector2(124f, 26f));
 
             deckBuilderFilterCountText = GameBootstrapper.CreateText(typeBar.transform, "FilterCountText",
                 "Showing 240 Monsters", 11,

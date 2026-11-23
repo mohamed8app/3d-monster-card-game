@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Exports the V2 2,270-Card Master Database (`data/cards_v2_2270.json`) and trained AI settled decks
+Exports the V2 1,470-Card Master Database (`data/__KEEP_CARDS_V2_1470_JSON__`) and trained AI settled decks
 (`saved_models/*/settled_deck.json`) directly into the Unity Game Engine (`UnityGame/Assets/Resources/`).
 
 Generates:
-  1. `UnityGame/Assets/Resources/cards_10000.json` (All 2,270 cards with English descriptions & v2_ops_json)
+  1. `UnityGame/Assets/Resources/cards_10000.json` (All 1,470 cards with English descriptions & v2_ops_json)
   2. `UnityGame/Assets/Resources/champion_decks.json` & `UnityGame/champion_decks.json` (V2 50-card decks, max 2 copies)
 """
 
@@ -21,7 +21,7 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-V2_JSON_PATH = os.path.join(ROOT_DIR, "data", "cards_v2_2270.json")
+V2_JSON_PATH = os.path.join(ROOT_DIR, "data", "__KEEP_CARDS_V2_1470_JSON__")
 SAVED_MODELS_DIR = os.path.join(ROOT_DIR, "saved_models")
 LOGS_ROSTER_PATH = os.path.join(ROOT_DIR, "logs", "roster_stats.json")
 
@@ -636,19 +636,19 @@ def export_all() -> None:
 
     champ_payload = {
         "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "training_matches_analyzed": 2270,
+        "training_matches_analyzed": 1470,
         "gora": {
             "name": "Gora (Free_01 Vanguard AI)",
             "title": "V2 Neural Settled Deck (50 Cards • Max 2 Copies)",
             "combat_style": "Aggressive & Tactical Tempo",
-            "description": "Trained across the 2,270-card V2 database under the 37 Constitution Rules.",
+            "description": "Trained across the 1,470-card V2 database under the 37 Constitution Rules.",
             "card_ids": gora_ids,
         },
         "navi": {
             "name": "Navi (Free_02 Apex AI)",
             "title": "V2 Neural Settled Deck (50 Cards • Max 2 Copies • Disjoint from Gora)",
             "combat_style": "Control & Synergy Mastery",
-            "description": "Trained across the 2,270-card V2 database with zero card overlap against Gora.",
+            "description": "Trained across the 1,470-card V2 database with zero card overlap against Gora.",
             "card_ids": navi_ids,
         },
         "archetypes": {

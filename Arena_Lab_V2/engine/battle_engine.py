@@ -139,6 +139,8 @@ class BattleEngine:
         self._turn_face_dmg = 0
         self._vc_kill_channel = 5
         self._hp_history = []
+        self._mf_t6_recorded = False
+        self._mf_state_history: List[Tuple[int, int, int, int, int]] = []
         self.players[self.active].telemetry.went_first = True
 
         # Opening hands: first player draws 4, second player draws 5
@@ -175,6 +177,11 @@ class BattleEngine:
             p1_s = 0 if self.players[0].telemetry.went_first else 1
             self.players[0].telemetry.cf_t4_hp_diff = self.players[p1_s].hp - self.players[1 - p1_s].hp
             self.players[0].telemetry.cf_t4_recorded = True
+        if self.turn == 6 and not self._mf_t6_recorded:
+            self._mf_t6_recorded = True
+            p0, p1 = self.players[0], self.players[1]
+            adv0 = (p0.hp - p1.hp) + 18 * (p0.board_count() - p1.board_count()) + 15 * (p0.max_mana - p1.max_mana)
+            self.players[0].telemetry.mf_t6_lead_side = 0 if adv0 >= 45 else (1 if adv0 <= -45 else -1)
         p.cards_played_turn = 0
         p.summons_turn = 0
         p.echo_next_spell = False
@@ -196,14 +203,17 @@ class BattleEngine:
             if p.leader_muted_turns == 0:
                 self._sync_leader_def_aura(side)
 
-        # Aether Well: +1 permanent Aether (up to cap) & full Mana refill every turn automatically (1+1)!
-        if p.max_mana < p.mana_cap():
-            p.max_mana += 1
-        if p.max_mana >= p.mana_cap() and p.telemetry.re_reach_cap_turn == 0:
+        # Pure-Sacrifice Aether Economy: NO automatic +1 permanent Aether!
+        # Every turn grants +1 baseline Mana on top of permanent Aether (Turn Mana = min(cap, Aether + 1) - locked).
+        # Permanent Aether grows ONLY through Sacrifice (+1 Aether & +1 Mana) or Aether cards/skills!
+        if p.max_mana > p.mana_cap():
+            p.max_mana = p.mana_cap()
+        if p.max_mana >= min(10, p.mana_cap()) and p.telemetry.re_reach_cap_turn == 0:
             p.telemetry.re_reach_cap_turn = self.turn
         locked = p.locked_mana_next
         p.locked_mana_next = 0
-        p.mana = max(0, p.max_mana - locked)
+        base_turn_mana = min(p.mana_cap(), p.max_mana + 1)
+        p.mana = max(0, base_turn_mana - locked)
         p.temp_mana = 0
 
         # Covenant start-of-turn checks & triggers
@@ -248,47 +258,49 @@ class BattleEngine:
                 for _ in range(tok_n):
                     self._spawn_token(side, 4, 5, name="Covenant Token", haste=bool(cov.get("rew_haste", False)))
 
-        # Shared Environment start-of-turn effects (Global base + Strong Elemental Resonance!)
+        # Shared Environment start-of-turn bespoke effects (Positive for Home Element + Mild Negative for Foreign Elements!)
         lvl_idx = min(2, max(0, self.env_level - 1))
-        if self.env_id == 1:  # Water Arena
-            base_h = (2, 3, 4)[lvl_idx]
-            res_h = (6, 10, 15)[lvl_idx]
+        if self.env_id == 1:  # Water Arena: Cleanse & heal +3/+5/+8 DEF for Water allies
+            res_h = (3, 5, 8)[lvl_idx]
             for u in p.board_units():
-                h = res_h if u.element == 1 else base_h
-                u.heal_def(h)
-                p.telemetry.def_healed += h
                 if u.element == 1:
                     u.cleanse()
-        elif self.env_id == 2:  # Nature Arena
-            p.heal_hp((5, 8, 12)[lvl_idx])
+                    healed = u.heal_def(res_h)
+                    p.telemetry.def_healed += healed
+        elif self.env_id == 2:  # Nature Arena: Heal Commander +6/+10/+14 & grow Nature +1/+2/+3 DEF; Foreign lose 1/2/3 max DEF (min 1)
             if any(u.element == 2 for u in p.board_units()):
-                p.heal_hp((12, 18, 26)[lvl_idx])
-        elif self.env_id == 3:  # Electric Arena
+                p.heal_hp((6, 10, 14)[lvl_idx])
+            grow_d = (1, 2, 3)[lvl_idx]
+            erode_d = (1, 2, 3)[lvl_idx]
+            for u in p.board_units():
+                if u.element == 2:
+                    u.apply_perm_buff(0, grow_d)
+                else:
+                    if u.deff > 1:
+                        loss = min(erode_d, u.deff - 1)
+                        u.deff -= loss
+                        u.max_def = max(u.deff, u.max_def - loss)
+        elif self.env_id == 3:  # Electric Arena: +1/+1/+2 Temp Mana if Electric ally on board
             if any(u.element == 3 for u in p.board_units()):
-                p.temp_mana += (1, 2, 2)[lvl_idx]
-        elif self.env_id == 7:  # Light Arena
-            base_d = (2, 3, 5)[lvl_idx]
-            res_d = (6, 10, 14)[lvl_idx]
-            cleansed_any = False
+                p.temp_mana += (1, 1, 2)[lvl_idx]
+        elif self.env_id == 7:  # Light Arena: Cleanse & heal +3/+5/+8 DEF for Light allies & +7/+12/+16 HP for Commander
+            res_d = (3, 5, 8)[lvl_idx]
             has_light = False
             for u in p.board_units():
                 if u.element == 7:
                     has_light = True
                     u.cleanse()
-                    u.heal_def(res_d)
-                    p.telemetry.def_healed += res_d
-                elif not cleansed_any and u.cleanse():
-                    u.heal_def(base_d)
-                    p.telemetry.def_healed += base_d
-                    cleansed_any = True
+                    p.telemetry.def_healed += u.heal_def(res_d)
             if has_light:
-                p.heal_hp((12, 18, 26)[lvl_idx])
-        elif self.env_id == 9:  # Desert Arena sandstorm erodes non-Desert enemies if you control a Desert unit
-            if any(u.element == 9 for u in p.board_units()):
-                erode = (4, 6, 9)[lvl_idx]
-                for eu in list(opp.board_units()):
-                    if eu.element != 9:
-                        self._damage_unit(1 - side, eu, erode, source_side=side)
+                p.heal_hp((7, 12, 16)[lvl_idx])
+        elif self.env_id == 9:  # Desert Arena: Sandstorm hits foreign monsters for 2/3/4 dmg + 1/1/2 Bleed at start of their turn
+            sand_dmg = (2, 3, 4)[lvl_idx]
+            sand_bleed = (1, 1, 2)[lvl_idx]
+            for u in list(p.board_units()):
+                if u.element != 9:
+                    self._damage_unit(side, u, sand_dmg, source_side=-1, is_dot=True)
+                    if u.deff > 0:
+                        self._apply_status(side, u, "bleed", sand_bleed, source_side=-1)
 
         # Active Leader Spirit continuous start-of-turn tribal blessings (Owner-Only, Pure Continuous!)
         if self._leader_aura_on(side) and p.leader_ops:
@@ -471,19 +483,15 @@ class BattleEngine:
         opp = self.players[1 - side]
         atk = int(u.atk + u.temp_atk_buff)
 
-        # Shared Environment Elemental Resonance ATK Bonus (shared by both sides, massively amplified for matching Element!)
+        # Shared Environment Bespoke ATK Modifiers:
+        #   - Fire Arena: +3/+5/+8 ATK for Fire units ONLY
+        #   - Water / Ice Arenas: -1/-2/-3 ATK mild drag/chill on Foreign units (min 1 if atk > 0)
         if self.env_id >= 0:
             el_idx = min(2, max(0, self.env_level - 1))
-            if u.element == self.env_id:
-                if self.env_id in (0, 3, 6, 8, 9):
-                    atk += (6, 9, 13)[el_idx]
-                else:
-                    atk += (5, 8, 11)[el_idx]
-            else:
-                if self.env_id == 0:
-                    atk += (1, 2, 3)[el_idx]
-                elif self.env_id == 8 and u.slot in FLANK_SLOTS:
-                    atk += (1, 2, 3)[el_idx]
+            if self.env_id == 0 and u.element == 0:
+                atk += (3, 5, 8)[el_idx]
+            elif self.env_id in (1, 4) and u.element != self.env_id and atk > 0:
+                atk = max(1, atk - (1, 2, 3)[el_idx])
 
         # Leader Owner-Only Pure Continuous Tribal ATK Auras
         if self._unit_matches_leader(side, u) and p.leader_ops:
@@ -553,10 +561,13 @@ class BattleEngine:
     def _effective_evasion(self, side: int, u: MonsterUnit) -> int:
         ev = 0 if u.is_silenced() else int(u.evasion_pct)
         el_idx = min(2, max(0, self.env_level - 1))
-        if self.env_id == 6:  # Dark Arena Evasion (base + Dark resonance)
-            ev += (12, 18, 24)[el_idx] if u.element == 6 else (6, 10, 14)[el_idx]
-        elif self.env_id == 8 and u.element == 8:  # Air Arena Evasion for Air units
-            ev += (18, 26, 35)[el_idx]
+        if self.env_id == 6 and u.element == 6:  # Dark Arena Evasion (Dark units only)
+            ev += (8, 12, 18)[el_idx]
+        elif self.env_id == 8:  # Air Arena: +12/+18/+25% Evasion for Air; -6/-10/-15% Crosswind penalty for Foreign
+            if u.element == 8:
+                ev += (12, 18, 25)[el_idx]
+            else:
+                ev -= (6, 10, 15)[el_idx]
         if self._unit_matches_leader(side, u) and self.players[side].leader_ops:
             ev += int(self.players[side].leader_ops.get("aura_evasion", 0))
         return min(65, max(0, int(ev)))
@@ -566,9 +577,9 @@ class BattleEngine:
         rpct = 0 if u.is_silenced() else int(u.reflect_pct)
         if not u.is_silenced() and u.enrage_active:
             flat += u.enrage_reflect
-        if self.env_id == 5:  # Earth Arena Reflect (base + strong Earth resonance)
+        if self.env_id == 5 and u.element == 5:  # Earth Arena Reflect (Earth units only!)
             el_idx = min(2, max(0, self.env_level - 1))
-            flat += (6, 10, 15)[el_idx] if u.element == 5 else (1, 2, 3)[el_idx]
+            flat += (3, 5, 8)[el_idx]
         p = self.players[side]
         if self._unit_matches_leader(side, u) and p.leader_ops:
             flat += int(p.leader_ops.get("aura_reflect", 0))
@@ -606,10 +617,13 @@ class BattleEngine:
     def _effective_skill_cost(self, side: int, u: MonsterUnit, op: Dict[str, Any]) -> int:
         cost = int(op.get("cost", 1))
         p = self.players[side]
-        # Electric Arena (-1/-1/-2 active skill cost, min 1)
+        # Electric Arena: Electric units -1/-1/-2 active skill cost; Foreign units +1/+1/+2 Static Jam tax!
         if self.env_id == 3:
-            disc = 2 if self.env_level >= 3 else 1
-            cost -= disc
+            delta_e = 2 if self.env_level >= 3 else 1
+            if u.element == 3:
+                cost -= delta_e
+            else:
+                cost += delta_e
         # Skill Conduit / Leader / Covenant / Spell buff discounts
         for ally in p.board_units():
             if not ally.is_silenced() and ally.skill_conduit > 0:
@@ -625,10 +639,11 @@ class BattleEngine:
     def _effective_skill_power_bonus(self, side: int, u: Optional[MonsterUnit] = None) -> int:
         p = self.players[side]
         bonus = p.skill_bonus_temp
-        if self.env_id == 9:  # Desert Arena: +2/+4/+6 active skill power
-            bonus += (2, 4, 6)[min(2, max(0, self.env_level - 1))]
-        if self.env_id == 3 and self.env_level >= 2:
-            bonus += 3
+        el_idx = min(2, max(0, self.env_level - 1))
+        if self.env_id == 9 and u is not None and u.element == 9:  # Desert Arena: +2/+3/+5 active skill power (Desert only)
+            bonus += (2, 3, 5)[el_idx]
+        elif self.env_id == 7 and u is not None and u.element != 7:  # Light Arena: Blinding Glare -1/-2/-3 active skill power on Foreign
+            bonus -= (1, 2, 3)[el_idx]
         if u is not None and self._unit_matches_leader(side, u) and p.leader_ops:
             bonus += int(p.leader_ops.get("aura_skill_power", 0))
         if p.covenant_active and p.covenant_ops:
@@ -642,7 +657,7 @@ class BattleEngine:
         p = self.players[side]
         sp = p.spell_power_temp
         if self.env_id in (0, 3) and any(u.element == self.env_id for u in p.board_units()):
-            sp += (3, 5, 8)[min(2, max(0, self.env_level - 1))]
+            sp += (2, 3, 5)[min(2, max(0, self.env_level - 1))]
         if self._has_matching_tribe_ally(side) and p.leader_ops:
             sp += int(p.leader_ops.get("aura_spell_power", 0))
         if p.covenant_active and p.covenant_ops:
@@ -666,7 +681,7 @@ class BattleEngine:
         opp = self.players[1 - s]
         mask[0] = True  # End Main Phase is always legal
 
-        if self.actions_this_turn >= 18:
+        if self.actions_this_turn >= 24:
             # Safety loop guard: finish main phase
             return mask
 
@@ -677,7 +692,7 @@ class BattleEngine:
 
         avail_mana = p.mana + p.temp_mana
 
-        # 1..7: Sacrifice hand card h for +1 permanent max_mana (once/turn)
+        # 1..7: Sacrifice hand card h for +1 permanent Aether & +1 Mana (1x/turn, UNBOUNDED Aether — never locks at 6/7/10!)
         if not p.sacrificed_this_turn and p.max_mana < p.mana_cap():
             for h in range(len(p.hand)):
                 mask[1 + h] = True
@@ -761,12 +776,80 @@ class BattleEngine:
                 if ban_skill_gt1 and sc > 1:
                     continue
                 if sc <= avail_mana:
-                    if op.get("kind") == "devour_3":
+                    ak = op.get("kind", "")
+                    if ak == "devour_3":
                         if not self._find_devour_target(s, u):
+                            continue
+                    elif ak == "absorb_ally_atk":
+                        if u.atk_locked or not any(
+                            au is not u and not au.is_barrier and not au.is_spy and self._effective_atk(s, au) > 0
+                            for au in p.board_units()
+                        ):
+                            continue
+                    elif ak == "def_to_atk":
+                        v_req = max(1, int(op.get("v1", 4)))
+                        if u.atk_locked or u.deff <= v_req + 1 or u.perm_atk_buff >= 10:
+                            continue
+                    elif ak == "flip_enemy_stats":
+                        if not any(
+                            not eu.is_barrier and not eu.is_spy and not eu.atk_locked and not eu.spell_immune and not eu.stealth
+                            for eu in opp.board_units()
+                        ):
+                            continue
+                    elif ak == "sac_ally_draw2":
+                        ban_xd_sk = bool(cov and cov.get("ban_self_extra_draw"))
+                        if (
+                            ban_xd_sk
+                            or p.no_draw_turns > 0
+                            or len(p.hand) >= p.hand_limit()
+                            or not any(au is not u for au in p.board_units())
+                        ):
+                            continue
+                    elif ak == "sac_ally_aether":
+                        if p.max_mana >= p.mana_cap() or not any(au is not u for au in p.board_units()):
+                            continue
+                    elif ak == "mirror_enemy_exact":
+                        if not any(
+                            not eu.is_barrier and not eu.is_spy and not eu.stealth
+                            for eu in opp.board_units()
+                        ):
+                            continue
+                    elif ak == "discard_hand_mana":
+                        if not p.hand:
+                            continue
+                    elif ak == "discard_hand_2aether":
+                        if not p.hand or p.max_mana >= p.mana_cap():
+                            continue
+                    elif ak == "dmg_face_aether":
+                        if p.max_mana <= 0:
+                            continue
+                    elif ak == "relocate_self":
+                        if u.rooted > 0 or (self.env_id == 5 and u.element != 5) or not p.empty_slots():
+                            continue
+                    elif ak == "reposition_ally":
+                        if not p.empty_slots() or not any(
+                            au is not u and au.rooted <= 0 and not (self.env_id == 5 and au.element != 5)
+                            for au in p.board_units()
+                        ):
+                            continue
+                    elif ak == "ally_atk_to_def":
+                        if not any(
+                            au is not u and not au.is_barrier and not au.is_spy and not au.atk_locked and au.atk > 0
+                            for au in p.board_units()
+                        ):
+                            continue
+                    elif ak == "betray_commander":
+                        if not any(
+                            not eu.is_barrier and not eu.is_spy and not eu.spell_immune and not eu.stealth and self._effective_atk(1 - s, eu) > 0
+                            for eu in opp.board_units()
+                        ):
+                            continue
+                    elif ak == "recall_enemy":
+                        if opp.board_count() <= 0:
                             continue
                     mask[50 + slot * 2 + k] = True
 
-        # 62: Aether Well Draw — Spend 2 Mana to draw +1 extra card (once per turn, hand < limit)
+        # 62: Aether Well Draw — Spend 2 Mana to draw +1 extra card (1x/turn, flat 2 Mana, every turn, hand < limit)
         ban_xd = bool(cov and cov.get("ban_self_extra_draw"))
         if (
             not p.aether_drawn_this_turn
@@ -807,7 +890,7 @@ class BattleEngine:
                 p.mana += 1
                 p.sacrificed_this_turn = True
                 p.telemetry.sacrifices_made += 1
-                if p.max_mana >= p.mana_cap() and p.telemetry.re_reach_cap_turn == 0:
+                if p.max_mana >= min(10, p.mana_cap()) and p.telemetry.re_reach_cap_turn == 0:
                     p.telemetry.re_reach_cap_turn = self.turn
             return self.done
 
@@ -978,10 +1061,14 @@ class BattleEngine:
                 self._summon_monster(side, card, slot)
 
     def _play_environment(self, side: int, env_id: int) -> None:
+        if 0 <= env_id < 10:
+            self.players[side].telemetry.mf_env_played_mask |= (1 << env_id)
         if self.env_id == env_id:
             self.env_level = min(3, self.env_level + 1)
             self.players[side].telemetry.mp_env_upgrades += 1
         else:
+            if self.env_id >= 0:
+                self.players[side].telemetry.mf_env_flips += 1
             self.env_id = env_id
             self.env_level = 1
         # Level 1 -> 10T, Level 2 -> 6T, Level 3 -> 3T
@@ -1118,7 +1205,7 @@ class BattleEngine:
                 u.deff = min(u.deff, def_cap)
         if p.max_mana > p.mana_cap():
             p.max_mana = p.mana_cap()
-            p.mana = min(p.mana, p.max_mana)
+            p.mana = min(p.mana, p.mana_cap())
         # Enforce hand cap (burns oldest)
         cap_h = p.hand_limit()
         while len(p.hand) > cap_h:
@@ -1212,28 +1299,35 @@ class BattleEngine:
             u.on_hit_poison += int(cov.get("rew_poison", 0))
             u.on_hit_bleed += int(cov.get("rew_bleed", 0))
 
-        # Shared Environment Elemental Resonance on summon (Water/Nature/Earth/Light DEF, Fire Burn, Dark Leech, Air Haste, Desert Bleed)
-        if self.env_id >= 0 and u.element == self.env_id:
+        # Shared Environment Bespoke On-Summon Effects (Positive for Home Element ONLY + Ice Lv2+ suppresses Foreign Haste!)
+        if self.env_id >= 0:
             el_idx = min(2, max(0, self.env_level - 1))
-            if self.env_id in (1, 2, 5, 7):  # Water / Nature / Earth / Light DEF bonus on summon
-                ed = (6, 10, 14)[el_idx]
-                u.deff += ed
-                u.max_def += ed
-            elif self.env_id == 0:  # Fire on-hit Burn
-                u.on_hit_burn += (3, 5, 7)[el_idx]
-            elif self.env_id == 6:  # Dark Life Leech
-                u.life_leech_pct += (25, 35, 45)[el_idx]
-            elif self.env_id == 8 and u.can_ever_attack():  # Air Haste on summon
-                u.haste = True
-            elif self.env_id == 9:  # Desert on-hit Bleed
-                u.on_hit_bleed += (4, 6, 9)[el_idx]
-        elif self.env_id == 8 and self.env_level >= 2 and u.can_ever_attack():
-            u.haste = True
+            if u.element == self.env_id:
+                if self.env_id == 1:  # Water DEF on summon
+                    ed = (3, 5, 7)[el_idx]
+                    u.deff += ed; u.max_def += ed
+                elif self.env_id == 2:  # Nature DEF on summon
+                    ed = (2, 4, 6)[el_idx]
+                    u.deff += ed; u.max_def += ed
+                elif self.env_id == 5:  # Earth DEF on summon
+                    ed = (3, 6, 9)[el_idx]
+                    u.deff += ed; u.max_def += ed
+                elif self.env_id == 0:  # Fire on-hit Burn
+                    u.on_hit_burn += (2, 3, 5)[el_idx]
+                elif self.env_id == 6:  # Dark Life Leech
+                    u.life_leech_pct += (15, 25, 35)[el_idx]
+                elif self.env_id == 8 and u.can_ever_attack():  # Air Haste on summon
+                    u.haste = True
+                elif self.env_id == 9:  # Desert on-hit Bleed
+                    u.on_hit_bleed += (2, 4, 6)[el_idx]
 
         # Register & trigger monster passives
         self._init_unit_passives(side, u)
 
-        if u.haste and u.can_ever_attack():
+        # Ice Arena Lv2+ Glacial Chill suppresses Haste on Foreign monsters on summon!
+        if self.env_id == 4 and self.env_level >= 2 and u.element != 4:
+            u.can_attack = False
+        elif u.haste and u.can_ever_attack():
             u.can_attack = True
         return u
 
@@ -1365,6 +1459,8 @@ class BattleEngine:
                     u.on_hit_burn += v1
             elif k == "spell_ping":
                 u.spell_ping_dmg += max(1, v1)
+            elif k == "steal_aether_face":
+                u.steal_aether_face = True
             elif k in ("bypass", "pierce"):
                 u.bypass_pct = max(u.bypass_pct, pct)
             elif k == "stealth":
@@ -1546,6 +1642,7 @@ class BattleEngine:
         _is_def_sk = _sk_re2 in (
             "heal_leader", "buff_ally", "aoe_ally", "buff_center",
             "recall_ally", "recall_enemy", "discount_hand_spells",
+            "flip_enemy_stats", "relocate_self", "reposition_ally", "ally_atk_to_def",
         ) or bool(op.get("cleanse") or op.get("taunt")) or (op.get("fx") in ("freeze", "silence", "weaken"))
         if _is_def_sk:
             p.telemetry.si_reactive_decisions += 1
@@ -1570,6 +1667,25 @@ class BattleEngine:
                 self._pace_first_defense = self.turn
         self._dmg_cause = "active"
         _sk_dmg_before = p.telemetry.cq_skill_dmg_total
+        _sk_dm0 = p.telemetry.dmg_to_monsters
+        _sk_df0 = p.telemetry.dmg_to_face
+        _sk_hl0 = p.telemetry.hp_healed + p.telemetry.def_healed
+        _sk_kl0 = p.telemetry.monsters_killed
+        _sk_ds0 = p.telemetry.disruptions_applied
+        _sk_ut0 = (
+            p.telemetry.cards_drawn + p.telemetry.tokens_spawned
+            + p.telemetry.clones_made + p.telemetry.revives_done + p.telemetry.grave_returns
+        )
+        _sk_ae0 = p.max_mana
+        _sk_tm0 = p.temp_mana
+        _sk_base_cost = int(op.get("cost", 0))
+        _sk_kind_key = str(op.get("kind", "dmg_single"))
+        _sk_is_buff = _sk_kind_key in (
+            "aoe_ally", "buff_ally", "buff_center", "def_to_atk",
+            "ally_atk_to_def", "absorb_ally_atk", "devour_3",
+            "grant_double_strike", "double_skill_1t", "mirror_enemy_exact",
+        )
+        _sk_stats0 = sum(au.atk + au.deff for au in p.board_units()) if _sk_is_buff else 0
 
         # Trigger on-skill passives
         for ally in p.board_units():
@@ -1638,7 +1754,7 @@ class BattleEngine:
                 if t.deff > 0:
                     self._recall_unit(1 - side, t, source_side=side)
         elif k == "aoe_enemy":
-            dmg = v1 + bonus
+            dmg = max(1, v1 + bonus)
             fx = op.get("fx", "")
             dur = int(op.get("dur", 1))
             wk = int(op.get("weaken", 0))
@@ -1655,7 +1771,7 @@ class BattleEngine:
         elif k == "cleave_enemy":
             t = self._best_enemy_unit(side)
             if t:
-                dmg = v1 + bonus
+                dmg = max(1, v1 + bonus)
                 fx = op.get("fx", "")
                 for sl in (t.slot - 1, t.slot, t.slot + 1):
                     if 0 <= sl < BOARD_SLOTS and opp.board[sl] is not None:
@@ -1739,7 +1855,7 @@ class BattleEngine:
             if op.get("cleanse"):
                 u.cleanse()
         elif k == "dmg_leader":
-            self._damage_commander(1 - side, v1 + bonus, source_side=side)
+            self._damage_commander(1 - side, max(1, v1 + bonus), source_side=side)
             if op.get("heal", 0) > 0:
                 p.heal_hp(int(op["heal"]))
             if op.get("weaken", 0) > 0:
@@ -1762,10 +1878,242 @@ class BattleEngine:
                     p.board[cs].apply_perm_buff(0, v1)
             if v2 > 0:
                 p.heal_hp(v2 + bonus)
+        elif k == "absorb_ally_atk":
+            p.telemetry.mf_new15_uses += 1
+            if not u.atk_locked:
+                cap_a = max(1, int(op.get("cap", 14)))
+                total_a = sum(
+                    self._effective_atk(side, au)
+                    for au in p.board_units()
+                    if au is not u and not au.is_barrier and not au.is_spy
+                )
+                gain = min(cap_a, max(0, total_a))
+                if gain > 0:
+                    u.apply_temp_buff(gain, 0)
+        elif k == "def_to_atk":
+            p.telemetry.mf_new15_uses += 1
+            if not u.atk_locked:
+                req = max(1, v1 if v1 > 0 else 4)
+                avail_d = max(0, u.deff - 2)
+                want = min(req, avail_d)
+                if want > 0:
+                    gained_a, _ = u.apply_perm_buff(want, 0)
+                    if gained_a > 0:
+                        u.deff = max(1, u.deff - gained_a)
+                        u.max_def = max(u.deff, u.max_def - gained_a)
+        elif k == "flip_enemy_stats":
+            p.telemetry.mf_new15_uses += 1
+            cands = [
+                eu for eu in opp.board_units()
+                if not eu.is_barrier and not eu.is_spy and not eu.atk_locked and not eu.spell_immune and not eu.stealth
+            ]
+            if cands:
+                cands.sort(key=lambda eu: (abs(eu.atk - eu.deff) + eu.atk, eu.deff), reverse=True)
+                t = cands[0]
+                old_a, old_d = max(0, t.atk), max(1, t.deff)
+                t.atk = old_d
+                t.deff = max(1, old_a)
+                t.max_def = max(t.max_def, t.deff)
+                p.telemetry.disruptions_applied += 1
+        elif k == "sac_ally_draw2":
+            p.telemetry.mf_new15_uses += 1
+            others = [au for au in p.board_units() if au is not u]
+            if others:
+                others.sort(key=lambda au: (0 if au.is_token else 1, au.atk + au.deff))
+                self._destroy_unit(side, others[0], killer_side=side)
+                draw_cnt = max(1, v1 if v1 > 0 else 2)
+                ban_xd_s = bool(cov and cov.get("ban_self_extra_draw"))
+                if not ban_xd_s and p.no_draw_turns <= 0:
+                    for _ in range(draw_cnt):
+                        if len(p.hand) < p.hand_limit():
+                            self._draw_card(side, check_deckout=False)
+        elif k == "sac_ally_aether":
+            p.telemetry.mf_new15_uses += 1
+            others = [au for au in p.board_units() if au is not u]
+            if others:
+                others.sort(key=lambda au: (0 if au.is_token else 1, au.atk + au.deff))
+                self._destroy_unit(side, others[0], killer_side=side)
+                if p.max_mana < p.mana_cap():
+                    p.max_mana = min(p.mana_cap(), p.max_mana + max(1, v1 if v1 > 0 else 1))
+                    if p.max_mana >= min(10, p.mana_cap()) and p.telemetry.re_reach_cap_turn == 0:
+                        p.telemetry.re_reach_cap_turn = self.turn
+                p.mana += 1
+        elif k == "mirror_enemy_exact":
+            p.telemetry.mf_new15_uses += 1
+            cands = [
+                eu for eu in opp.board_units()
+                if not eu.is_barrier and not eu.is_spy and not eu.stealth
+            ]
+            if cands:
+                cands.sort(key=lambda eu: (eu.atk + eu.deff, eu.mana), reverse=True)
+                src = cands[0]
+                u.card_id = src.card_id
+                u.name = src.name
+                u.element = src.element
+                u.tribe = src.tribe
+                u.playstyle = src.playstyle
+                u.role = src.role
+                u.tier = src.tier
+                u.mana = src.mana
+                u.is_all_attack = src.is_all_attack
+                u.atk_locked = src.atk_locked
+                u.base_atk = src.base_atk
+                u.base_def = src.base_def
+                u.atk = src.atk
+                u.deff = max(1, src.deff)
+                u.max_def = max(u.deff, src.max_def)
+                u.perm_atk_buff = src.perm_atk_buff
+                u.perm_def_buff = src.perm_def_buff
+                u.temp_atk_buff = 0
+                u.temp_def_buff = 0
+                u.leader_def_applied = 0
+                u.passives = [dict(pa) for pa in src.passives]
+                u.actives = [dict(ac) for ac in src.actives]
+                u.taunt = src.taunt
+                u.haste = src.haste
+                u.double_strike = src.double_strike
+                u.evasion_pct = src.evasion_pct
+                u.life_leech_pct = src.life_leech_pct
+                u.reflect_flat = src.reflect_flat
+                u.reflect_pct = src.reflect_pct
+                u.cleave_pct = src.cleave_pct
+                u.bypass_pct = src.bypass_pct
+                u.spell_immune = src.spell_immune
+                u.status_immune = src.status_immune
+                u.enrage_atk = src.enrage_atk
+                u.enrage_reflect = src.enrage_reflect
+                u.undying_ready = src.undying_ready and not u.undying_used
+                u.chameleon = src.chameleon
+                u.lone_wolf_atk = src.lone_wolf_atk
+                u.lone_wolf_def = src.lone_wolf_def
+                u.open_lane_atk = src.open_lane_atk
+                u.flank_atk = src.flank_atk
+                u.pack_atk = src.pack_atk
+                u.pack_def = src.pack_def
+                u.skill_conduit = src.skill_conduit
+                u.spell_power = src.spell_power
+                u.cost_discount_mode = src.cost_discount_mode
+                u.grave_scale_atk = src.grave_scale_atk
+                u.grave_scale_def = src.grave_scale_def
+                u.aura_weaken_opp = src.aura_weaken_opp
+                u.on_spell_atk = src.on_spell_atk
+                u.on_spell_def = src.on_spell_def
+                u.on_skill_atk = src.on_skill_atk
+                u.on_skill_def = src.on_skill_def
+                u.on_death_atk = src.on_death_atk
+                u.on_death_def = src.on_death_def
+                u.on_death_dmg = src.on_death_dmg
+                u.on_death_regen_def = src.on_death_regen_def
+                u.on_death_regen_hp = src.on_death_regen_hp
+                u.on_hit_burn = src.on_hit_burn
+                u.on_hit_poison = src.on_hit_poison
+                u.on_hit_bleed = src.on_hit_bleed
+                u.strip_buffs_bonus = src.strip_buffs_bonus
+                u.turn_heal_def = src.turn_heal_def
+                u.turn_heal_hp = src.turn_heal_hp
+                u.cleanse_aura_def = src.cleanse_aura_def
+                u.dmg_reduce_flat = src.dmg_reduce_flat
+                u.spell_ping_dmg = src.spell_ping_dmg
+                u.steal_aether_face = src.steal_aether_face
+                u.can_attack = u.can_ever_attack() and (u.can_attack or u.haste)
+                # Lock copied active skills for remainder of this turn (prevents infinite copy loops)
+                u.skill_uses_this_turn = [2, 2]
+                self._sync_leader_def_aura(side)
+                p.telemetry.clones_made += 1
+        elif k == "discard_hand_mana":
+            p.telemetry.mf_new15_uses += 1
+            if p.hand:
+                cheapest_i = min(range(len(p.hand)), key=lambda idx: self.db.get(p.hand[idx].card_id).mana)
+                hc = p.hand.pop(cheapest_i)
+                p.graveyard.append(hc.card_id)
+                p.temp_mana += max(2, v1 if v1 > 0 else 3)
+        elif k == "discard_hand_2aether":
+            p.telemetry.mf_new15_uses += 1
+            if p.hand:
+                cheapest_i = min(range(len(p.hand)), key=lambda idx: self.db.get(p.hand[idx].card_id).mana)
+                hc = p.hand.pop(cheapest_i)
+                p.graveyard.append(hc.card_id)
+                gain_ae = max(1, v1 if v1 > 0 else 2)
+                if p.max_mana < p.mana_cap():
+                    p.max_mana = min(p.mana_cap(), p.max_mana + gain_ae)
+                    if p.max_mana >= min(10, p.mana_cap()) and p.telemetry.re_reach_cap_turn == 0:
+                        p.telemetry.re_reach_cap_turn = self.turn
+                p.mana += max(0, v2 if v2 > 0 else 1)
+        elif k == "dmg_face_aether":
+            p.telemetry.mf_new15_uses += 1
+            dmg_ae = max(1, p.max_mana + bonus)
+            self._damage_commander(1 - side, dmg_ae, source_side=side)
+        elif k == "relocate_self":
+            p.telemetry.mf_new15_uses += 1
+            empties = p.empty_slots()
+            if empties and u.rooted <= 0 and not (self.env_id == 5 and u.element != 5):
+                u_eff = self._effective_atk(side, u)
+                open_lanes = [sl for sl in empties if opp.board[sl] is None]
+                block_lanes = [sl for sl in empties if opp.board[sl] is not None and not opp.board[sl].is_barrier]
+                if u_eff >= u.deff and open_lanes:
+                    dst = open_lanes[0]
+                elif block_lanes:
+                    block_lanes.sort(key=lambda sl: self._effective_atk(1 - side, opp.board[sl]), reverse=True)
+                    dst = block_lanes[0]
+                else:
+                    dst = empties[0]
+                p.board[u.slot] = None
+                u.slot = dst
+                p.board[dst] = u
+                p.telemetry.mf_lane_moves += 1
+        elif k == "reposition_ally":
+            p.telemetry.mf_new15_uses += 1
+            empties = p.empty_slots()
+            movables = [au for au in p.board_units() if au is not u and au.rooted <= 0 and not (self.env_id == 5 and au.element != 5)]
+            if empties and movables:
+                # Prefer moving an ally that is not currently blocking an enemy
+                movables.sort(key=lambda au: (1 if opp.board[au.slot] is not None else 0, -(au.deff + au.atk)))
+                ally = movables[0]
+                opp_lanes = [sl for sl in empties if opp.board[sl] is not None]
+                if opp_lanes:
+                    opp_lanes.sort(key=lambda sl: (self._effective_atk(1 - side, opp.board[sl]), opp.board[sl].deff), reverse=True)
+                    dst = opp_lanes[0]
+                else:
+                    dst = empties[0]
+                p.board[ally.slot] = None
+                ally.slot = dst
+                p.board[dst] = ally
+                p.telemetry.mf_lane_moves += 1
+        elif k == "ally_atk_to_def":
+            p.telemetry.mf_new15_uses += 1
+            cands = [
+                au for au in p.board_units()
+                if au is not u and not au.is_barrier and not au.is_spy and not au.atk_locked and au.atk > 0
+            ]
+            if cands:
+                cands.sort(key=lambda au: (au.atk, -au.deff), reverse=True)
+                ally = cands[0]
+                gain_d = max(1, ally.atk)
+                ally.deff += gain_d
+                ally.max_def += gain_d
+                ally.base_def += gain_d
+                ally.atk = 0
+                ally.base_atk = 0
+                ally.perm_atk_buff = 0
+                ally.temp_atk_buff = 0
+                ally.taunt = True
+        elif k == "betray_commander":
+            p.telemetry.mf_new15_uses += 1
+            cands = [
+                eu for eu in opp.board_units()
+                if not eu.is_barrier and not eu.is_spy and not eu.spell_immune and not eu.stealth and self._effective_atk(1 - side, eu) > 0
+            ]
+            if cands:
+                cands.sort(key=lambda eu: self._effective_atk(1 - side, eu), reverse=True)
+                traitor = cands[0]
+                betray_dmg = self._effective_atk(1 - side, traitor)
+                if betray_dmg > 0:
+                    self._damage_commander(1 - side, betray_dmg, source_side=side)
+                    p.telemetry.disruptions_applied += 1
         else:
             # Single-target damage / status active
             t = self._best_enemy_unit(side)
-            dmg = v1 + bonus
+            dmg = max(1, v1 + bonus)
             if t is not None:
                 dealt = self._damage_unit(1 - side, t, dmg, source_side=side)
                 if op.get("exec_below", 0) > 0 and t.deff > 0 and t.deff <= int(op["exec_below"]):
@@ -1787,6 +2135,41 @@ class BattleEngine:
         _sk_delta = p.telemetry.cq_skill_dmg_total - _sk_dmg_before
         if _sk_delta > 0:
             u.dmg_dealt_total += _sk_delta
+        # Pillar #17: Record exact per-active-skill impact & mana telemetry
+        _d_mon = max(0, p.telemetry.dmg_to_monsters - _sk_dm0)
+        _d_face = max(0, p.telemetry.dmg_to_face - _sk_df0)
+        _d_hb = max(0, (p.telemetry.hp_healed + p.telemetry.def_healed) - _sk_hl0)
+        if _sk_is_buff:
+            _sk_stats1 = sum(au.atk + au.deff for au in p.board_units())
+            if _sk_stats1 > _sk_stats0:
+                _d_hb += (_sk_stats1 - _sk_stats0)
+        _d_kl = max(0, p.telemetry.monsters_killed - _sk_kl0)
+        _d_ds = max(0, p.telemetry.disruptions_applied - _sk_ds0)
+        _d_ut = max(0, (
+            p.telemetry.cards_drawn + p.telemetry.tokens_spawned
+            + p.telemetry.clones_made + p.telemetry.revives_done + p.telemetry.grave_returns
+        ) - _sk_ut0)
+        _d_ae = max(0, p.max_mana - _sk_ae0)
+        _d_tm = max(0, p.temp_mana - _sk_tm0)
+        if _d_ae > 0:
+            _d_ut += _d_ae * 3
+        if _d_tm > 0:
+            _d_ut += _d_tm
+        if _sk_kind_key in ("double_skill_1t", "grant_double_strike", "discount_hand_spells", "reposition_ally", "relocate_self"):
+            _d_ut += 1
+        _skey = f"{_sk_kind_key}|{_sk_base_cost}"
+        _srec = p.telemetry.skill_telemetry.get(_skey)
+        if _srec is None:
+            p.telemetry.skill_telemetry[_skey] = [1, cost, _d_mon, _d_face, _d_hb, _d_kl, _d_ds, _d_ut]
+        else:
+            _srec[0] += 1
+            _srec[1] += cost
+            _srec[2] += _d_mon
+            _srec[3] += _d_face
+            _srec[4] += _d_hb
+            _srec[5] += _d_kl
+            _srec[6] += _d_ds
+            _srec[7] += _d_ut
 
     # ------------------------------------------------------------------
     # Spell Casting (All 300 Spells & 41 Opcodes)
@@ -2022,11 +2405,11 @@ class BattleEngine:
                 if au:
                     self._destroy_unit(side, au, killer_side=side)
             p.max_mana = min(p.mana_cap(), p.max_mana + max(1, int(op.get("v1", 1))))
-            p.mana = min(p.max_mana, p.mana + 1)
+            p.mana += 1
             if op.get("hp_heal", 0) > 0:
                 p.heal_hp(int(op["hp_heal"]))
         elif k == "reduce_enemy_max_mana":
-            opp.max_mana = max(1, opp.max_mana - max(1, int(op.get("v1", 1))))
+            opp.max_mana = max(0, opp.max_mana - max(1, int(op.get("v1", 1))))
             p.telemetry.disruptions_applied += 2
             if op.get("dmg", 0) > 0:
                 self._damage_commander(1 - side, int(op["dmg"]) + sp, source_side=side)
@@ -2268,6 +2651,7 @@ class BattleEngine:
                     p.board[au.slot].slot = au.slot
                 au.slot = other
                 au.apply_perm_buff(int(op.get("atk", 4)), int(op.get("deff", 0)))
+                p.telemetry.mf_lane_moves += 1
         elif k == "boost_skills":
             p.skill_bonus_temp += int(op.get("v1", 6))
             p.skill_discount_temp += int(op.get("disc", 0))
@@ -2465,6 +2849,12 @@ class BattleEngine:
                         elif not ban_face:
                             self._strike_commander(side, u, atk)
 
+                    # Dark Arena Shadow Recoil: Foreign attackers lose 1/2/3 DEF (min 1) on strike!
+                    if self.env_id == 6 and u.element != 6 and u.deff > 1:
+                        el_idx_dk = min(2, max(0, self.env_level - 1))
+                        recoil = min((1, 2, 3)[el_idx_dk], u.deff - 1)
+                        u.deff -= recoil
+
         if self.done:
             return
 
@@ -2480,13 +2870,21 @@ class BattleEngine:
                         if eu.spy_poison and adj_u.deff > 0:
                             self._apply_status(1 - side, adj_u, "poison", 2, source_side=side)
 
-        # 2. DoTs & Shifting Curse tick on active player's units (and return temp mind control)
+        # 2. DoTs, Fire Arena Scorch & Shifting Curse tick on active player's units (and return temp mind control)
         for slot in range(BOARD_SLOTS):
             if self.done:
                 break
             u = p.board[slot]
             if u is None:
                 continue
+
+            # Fire Arena End-of-Turn Scorch on Foreign units (1/2/3 dmg)
+            if self.env_id == 0 and u.element != 0 and u.deff > 0:
+                scorch = (1, 2, 3)[min(2, max(0, self.env_level - 1))]
+                self._dmg_cause = "dot"
+                self._damage_unit(side, u, scorch, source_side=-1, is_dot=True)
+                if p.board[slot] is not u or u.deff <= 0:
+                    continue
 
             # Burn ticks & splashes on kill
             if u.burn > 0:
@@ -2644,11 +3042,18 @@ class BattleEngine:
                 defender.perm_atk_buff = 0
                 dmg += attacker.strip_buffs_bonus
 
-        # Ice Arena Fortress Armor (strong damage reduction for Ice units + mild global protection)
-        if self.env_id == 4:
+        # Bespoke Combat Environment Modifiers:
+        #   - Ice Arena: Ice defenders reduce incoming combat damage by -3/-5/-7
+        #   - Earth Arena: Foreign defenders take +1/+2/+3 vulnerability damage
+        #   - Air Arena: Foreign attackers suffer -1/-2/-3 ATK when striking an Air defender
+        if self.env_id >= 0:
             el_idx = min(2, max(0, self.env_level - 1))
-            red = (5, 8, 12)[el_idx] if defender.element == 4 else (1, 2, 3)[el_idx]
-            dmg = max(1, dmg - red)
+            if self.env_id == 4 and defender.element == 4:
+                dmg = max(1, dmg - (3, 5, 7)[el_idx])
+            elif self.env_id == 5 and defender.element != 5:
+                dmg += (1, 2, 3)[el_idx]
+            elif self.env_id == 8 and defender.element == 8 and attacker.element != 8:
+                dmg = max(1, dmg - (1, 2, 3)[el_idx])
 
         atk_pre_def = attacker.deff
         def_tier = defender.tier
@@ -2663,10 +3068,10 @@ class BattleEngine:
         if def_died:
             pt.cq_lethal_strikes += 1
 
-        # Ice Arena elemental resonance: Ice attackers have 35%/50%/70% Freeze on hit
+        # Ice Arena elemental resonance: Ice attackers have 20%/30%/45% Freeze on hit
         if dealt > 0 and defender.deff > 0 and self.env_id == 4 and attacker.element == 4:
             el_idx = min(2, max(0, self.env_level - 1))
-            if self.rng.random() * 100.0 < (35, 50, 70)[el_idx]:
+            if self.rng.random() * 100.0 < (20, 30, 45)[el_idx]:
                 self._apply_status(opp_side, defender, "freeze", 1, source_side=side)
 
         # On-hit DoTs, Life Leech, Armor Pierce & Cleave (unit passives + dynamic continuous Leader aura!)
@@ -2738,6 +3143,8 @@ class BattleEngine:
         pre_diff = p.hp - opp.hp
         p.telemetry.cq_total_strikes += 1
         p.telemetry.cq_face_strikes += 1
+        if 0 <= attacker.slot < BOARD_SLOTS and opp.board[attacker.slot] is None:
+            p.telemetry.mf_open_lane_strikes += 1
         attacker.dmg_dealt_total += max(0, int(dmg))
         self._dmg_cause = "attack"
         self._damage_commander(1 - side, dmg, source_side=side)
@@ -2745,6 +3152,16 @@ class BattleEngine:
         leech_face = (0 if attacker.is_silenced() else attacker.life_leech_pct) + _l_leech
         if leech_face > 0:
             p.heal_hp(pct_of(dmg, leech_face))
+        if dmg > 0 and not attacker.is_silenced() and attacker.steal_aether_face and opp.max_mana > 0:
+            opp.max_mana = max(0, opp.max_mana - 1)
+            opp.mana = min(opp.mana, opp.max_mana + 1)
+            if p.max_mana < p.mana_cap():
+                p.max_mana += 1
+                if p.max_mana >= min(10, p.mana_cap()) and p.telemetry.re_reach_cap_turn == 0:
+                    p.telemetry.re_reach_cap_turn = self.turn
+            p.telemetry.disruptions_applied += 1
+            p.telemetry.mp_passive_triggers += 1
+            p.telemetry.mf_new15_uses += 1
         if dmg >= 25 or (pre_diff < 0 and (p.hp - opp.hp) >= 0):
             p.telemetry.cq_swing_strikes += 1
 
@@ -3140,6 +3557,7 @@ class BattleEngine:
             if opp.board[old_s] is not None:
                 opp.board[old_s].slot = old_s
             victim.slot = dest
+            self.players[side].telemetry.mf_lane_moves += 1
         if dmg > 0:
             self._damage_unit(1 - side, victim, dmg, source_side=side)
         if burn > 0 and victim.deff > 0:
@@ -3178,7 +3596,7 @@ class BattleEngine:
             element=-1, tribe=tribe, playstyle=6, role=0, tier=1, mana=1,
             atk=max(0, int(atk)), deff=max(1, int(deff)), is_token=True, summoned_turn=self.turn,
         )
-        if haste or (self.env_id == 8 and self.env_level >= 2):
+        if haste:
             u.haste = True
             u.can_attack = u.can_ever_attack()
         p.board[s] = u
@@ -3433,6 +3851,23 @@ class BattleEngine:
         if end_hand == 0:
             t.empty_hand_turns += 1
 
+        # Pillar #16: Master Fun per-turn ultra-lightweight counters (Lockout, Stalemate, 6-Lane Occupancy, Active Env, Peak Aether)
+        if p.max_mana > t.mf_peak_aether:
+            t.mf_peak_aether = p.max_mana
+        for _sl_i in range(BOARD_SLOTS):
+            _bu = p.board[_sl_i]
+            if _bu is not None:
+                t.mf_lane_occ[_sl_i] += 1
+                if not _bu.is_barrier and not _bu.is_spy:
+                    t.mf_active_unit_turns += 1
+                    if _bu.frozen > 0 or _bu.silenced > 0 or _bu.rooted > 0:
+                        t.mf_lockout_unit_turns += 1
+        if self._turn_kills == 0 and self._turn_face_dmg <= 10 and (board_cnt + self.players[1 - side].board_count()) >= 2:
+            t.mf_stalemate_turns += 1
+        if 0 <= self.env_id < 10:
+            self.players[0].telemetry.mf_env_active_turns[self.env_id] += 1
+        self._mf_state_history.append((self.turn, self.players[0].hp, self.players[1].hp, self.players[0].board_count(), self.players[1].board_count()))
+
         # Pillar #1 Game Pace per-turn counters (distinguishing strategic setup vs true dead turns!)
         if p.cards_played_turn == 0:
             t.pace_zero_card_turns += 1
@@ -3493,8 +3928,9 @@ class BattleEngine:
         self.winner = int(winner)
         self.win_reason = reason
 
-        # Compute Decisive Lead Turn: earliest round from which winner maintained >= 60 HP lead continuously to finish
+        # Compute Decisive Lead Turn & Garbage Time (turns spent past no-return >=220 HP + board lead)
         dec_turn = self.turn
+        garbage_turns = 0
         if winner in (0, 1) and self._hp_history:
             w_idx = 1 if winner == 0 else 2
             l_idx = 2 if winner == 0 else 1
@@ -3506,10 +3942,35 @@ class BattleEngine:
                 dec_turn = self._hp_history[last_contested + 1][0]
             else:
                 dec_turn = self.turn
+        if winner in (0, 1) and self._mf_state_history:
+            w_hp_i = 1 if winner == 0 else 2
+            l_hp_i = 2 if winner == 0 else 1
+            w_bd_i = 3 if winner == 0 else 4
+            l_bd_i = 4 if winner == 0 else 3
+            last_hope = -1
+            for i_m, m_row in enumerate(self._mf_state_history):
+                if (m_row[w_hp_i] - m_row[l_hp_i]) < 220 or m_row[w_bd_i] < m_row[l_bd_i]:
+                    last_hope = i_m
+            if last_hope + 1 < len(self._mf_state_history):
+                no_return_turn = self._mf_state_history[last_hope + 1][0]
+                garbage_turns = max(0, self.turn - no_return_turn)
+
+        self.players[0].telemetry.mf_garbage_turns = garbage_turns
+        if winner in (0, 1) and reason == "CommanderHP":
+            wt_mf = self.players[winner].telemetry
+            lt_mf = self.players[1 - winner].telemetry
+            w_bd = self.players[winner].board_count()
+            l_bd = self.players[1 - winner].board_count()
+            tot_face = max(1, wt_mf.dmg_to_face)
+            non_atk_face = wt_mf.vc_face_by_ch[1] + wt_mf.vc_face_by_ch[2] + wt_mf.vc_face_by_ch[3] + wt_mf.vc_face_by_ch[4]
+            if l_bd > w_bd and (self._vc_kill_channel in (1, 2, 3, 4) or (non_atk_face * 100 >= tot_face * 55)):
+                lt_mf.mf_solitaire_loss = 1
 
         for s in (0, 1):
             p = self.players[s]
             t = p.telemetry
+            if p.max_mana > t.mf_peak_aether:
+                t.mf_peak_aether = p.max_mana
             t.final_hp = p.hp
             t.max_hp_end = p.max_hp
             t.cu_hand_end_remaining = len(p.hand)
@@ -3579,9 +4040,9 @@ class BattleEngine:
         # Global scalars (0..19)
         obs[0] = p.hp / 500.0
         obs[1] = opp.hp / 500.0
-        obs[2] = (p.mana + p.temp_mana) / 10.0
-        obs[3] = p.max_mana / 10.0
-        obs[4] = opp.max_mana / 10.0
+        obs[2] = min(5.0, (p.mana + p.temp_mana) / 10.0)
+        obs[3] = min(5.0, p.max_mana / 10.0)
+        obs[4] = min(5.0, opp.max_mana / 10.0)
         obs[5] = len(p.hand) / 7.0
         obs[6] = len(opp.hand) / 7.0
         obs[7] = len(p.deck) / 50.0

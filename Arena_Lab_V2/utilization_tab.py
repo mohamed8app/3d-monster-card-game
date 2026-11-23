@@ -250,7 +250,7 @@ class CardUtilizationTab:
         cond_ok = int(cu.get("cond_success", 0))
         cond_pct = (100.0 * cond_ok / cond_att) if cond_att > 0 else 100.0
 
-        # Global 2,270 catalog coverage & win-rate balance from store.card_stats
+        # Global 1,470 catalog coverage & win-rate balance from store.card_stats
         tot_catalog = max(1, self.db.num_cards)
         seen_cards = sum(1 for st in self.store.card_stats.values() if int(st.get("drafted", 0)) > 0)
         coverage_pct = 100.0 * seen_cards / tot_catalog
@@ -325,13 +325,13 @@ class CardUtilizationTab:
         )
         rows.append((4, "تطابق تمائم القادة المستمرة مع عشيرة الديك", f"{cond_pct:.1f}% ({cond_ok}/{cond_att})", "80% فأعلى", "60% – 79%", st, diag, tg, pts))
 
-        # 5. Catalog Coverage (2,270 cards)
+        # 5. Catalog Coverage (1,470 cards)
         st, tg, pts = self._grade_range(coverage_pct, 65.0, 100.0, 40.0, 100.0)
         diag = (
-            f"تغطية ضخمة! {seen_cards:,} بطاقة من الـ 2,270 تم اختبارها بالديكات (المهملة: {neglected_cnt})." if tg == "ideal"
+            f"تغطية ضخمة! {seen_cards:,} بطاقة من الـ 1,470 تم اختبارها بالديكات (المهملة: {neglected_cnt})." if tg == "ideal"
             else f"{neglected_cnt:,} بطاقة لم تُسحب في أي ديك بعد (تغطية {coverage_pct:.1f}% فقط من الكتالوج)."
         )
-        rows.append((5, "نسبة تغطية كتالوج الـ 2,270 بطاقة", f"{coverage_pct:.1f}% ({seen_cards:,})", "65% فأعلى", "40% – 64%", st, diag, tg, pts))
+        rows.append((5, "نسبة تغطية كتالوج الـ 1,470 بطاقة", f"{coverage_pct:.1f}% ({seen_cards:,})", "65% فأعلى", "40% – 64%", st, diag, tg, pts))
 
         # 6. Balanced Card Win-Rate Share (44-56%)
         st, tg, pts = self._grade_range(bal_cards_pct, 75.0, 100.0, 58.0, 100.0)

@@ -414,9 +414,9 @@ namespace MonsterCardGame.Core
             // 0..19: Global scalars
             obs[0] = p.currentHp / 500f;
             obs[1] = opp.currentHp / 500f;
-            obs[2] = p.currentMana / 10f;
-            obs[3] = Mathf.Min(10, p.power) / 10f;
-            obs[4] = Mathf.Min(10, opp.power) / 10f;
+            obs[2] = Mathf.Min(5f, p.currentMana / 10f);
+            obs[3] = Mathf.Min(5f, p.power / 10f);
+            obs[4] = Mathf.Min(5f, opp.power / 10f);
             obs[5] = (p.hand != null ? p.hand.Count : 0) / 7f;
             obs[6] = (opp.hand != null ? opp.hand.Count : 0) / 7f;
             obs[7] = (p.deck != null ? p.deck.Count : 0) / 50f;
@@ -555,7 +555,7 @@ namespace MonsterCardGame.Core
 
             int handCount = Mathf.Min(7, p.hand != null ? p.hand.Count : 0);
 
-            // 1..7: Sacrifice hand card h
+            // 1..7: Sacrifice hand card h (1x/turn, UNBOUNDED Aether — never locks at 6/7/10!)
             if (!p.hasSacrificedThisTurn && p.denyDrawSacTurns <= 0 && p.power < V2CardMechanicsEngine.GetPlayerManaCap(p))
             {
                 for (int h = 0; h < handCount; h++)
@@ -662,7 +662,73 @@ namespace MonsterCardGame.Core
                         skillCost = Mathf.Max(0, mops.actives[k].cost);
                     if (p.freeSkillManaZero) skillCost = 0;
                     if (skillCost <= p.currentMana)
+                    {
+                        var v2op = (mops != null && mops.actives != null && k < mops.actives.Count) ? mops.actives[k] : null;
+                        if (v2op != null && !string.IsNullOrEmpty(v2op.kind))
+                        {
+                            string ak = v2op.kind;
+                            bool ok = true;
+                            if (ak == "absorb_ally_atk")
+                            {
+                                ok = !m.IsBarrier && !m.IsAllAttack && HasOtherAlly(p, sl, nonBarrierOnly: true, requirePositiveAtk: true);
+                            }
+                            else if (ak == "def_to_atk")
+                            {
+                                int req = v2op.v1 > 0 ? v2op.v1 : 4;
+                                ok = !m.IsBarrier && !m.IsAllAttack && m.currentDef > req + 1 && m.bonusAtk < MonsterInstance.MaxPermBonusAtk;
+                            }
+                            else if (ak == "flip_enemy_stats")
+                            {
+                                ok = HasValidEnemy(opp, nonBarrierOnly: true, excludeAtkLocked: true, excludeSpellImmune: true, requirePositiveAtk: false);
+                            }
+                            else if (ak == "sac_ally_draw2")
+                            {
+                                ok = !V2CardMechanicsEngine.IsExtraDrawBanned(p) && p.hand.Count < p.maxHandSize && HasOtherAlly(p, sl, false, false);
+                            }
+                            else if (ak == "sac_ally_aether")
+                            {
+                                ok = p.power < V2CardMechanicsEngine.GetPlayerManaCap(p) && HasOtherAlly(p, sl, false, false);
+                            }
+                            else if (ak == "mirror_enemy_exact")
+                            {
+                                ok = HasValidEnemy(opp, nonBarrierOnly: true, excludeAtkLocked: false, excludeSpellImmune: false, requirePositiveAtk: false);
+                            }
+                            else if (ak == "discard_hand_mana")
+                            {
+                                ok = p.hand != null && p.hand.Count > 0;
+                            }
+                            else if (ak == "discard_hand_2aether")
+                            {
+                                ok = p.hand != null && p.hand.Count > 0 && p.power < V2CardMechanicsEngine.GetPlayerManaCap(p);
+                            }
+                            else if (ak == "dmg_face_aether")
+                            {
+                                ok = p.power > 0;
+                            }
+                            else if (ak == "relocate_self")
+                            {
+                                ok = !m.IsLocked && HasEmptyBoardSlot(p);
+                            }
+                            else if (ak == "reposition_ally")
+                            {
+                                ok = HasEmptyBoardSlot(p) && HasMovableOtherAlly(p, sl);
+                            }
+                            else if (ak == "ally_atk_to_def")
+                            {
+                                ok = HasOtherAlly(p, sl, nonBarrierOnly: true, requirePositiveAtk: true, excludeAtkLocked: true);
+                            }
+                            else if (ak == "betray_commander")
+                            {
+                                ok = HasValidEnemy(opp, nonBarrierOnly: true, excludeAtkLocked: false, excludeSpellImmune: true, requirePositiveAtk: true);
+                            }
+                            else if (ak == "recall_enemy")
+                            {
+                                ok = HasValidEnemy(opp, nonBarrierOnly: false, excludeAtkLocked: false, excludeSpellImmune: false, requirePositiveAtk: false);
+                            }
+                            if (!ok) continue;
+                        }
                         mask[50 + sl * 2 + k] = true;
+                    }
                 }
             }
 
@@ -671,6 +737,59 @@ namespace MonsterCardGame.Core
                 mask[62] = true;
 
             return mask;
+        }
+
+        private static bool HasEmptyBoardSlot(PlayerState p)
+        {
+            if (p == null || p.slots == null) return false;
+            for (int i = 0; i < p.slots.Length; i++)
+                if (p.slots[i] != null && !p.slots[i].IsOccupied) return true;
+            return false;
+        }
+
+        private static bool HasMovableOtherAlly(PlayerState p, int selfSlot)
+        {
+            if (p == null || p.slots == null) return false;
+            for (int i = 0; i < p.slots.Length; i++)
+            {
+                if (i == selfSlot || p.slots[i] == null || !p.slots[i].IsOccupied) continue;
+                var u = p.slots[i].currentMonster;
+                if (u != null && u.IsAlive && !u.IsLocked) return true;
+            }
+            return false;
+        }
+
+        private static bool HasOtherAlly(PlayerState p, int selfSlot, bool nonBarrierOnly, bool requirePositiveAtk, bool excludeAtkLocked = false)
+        {
+            if (p == null || p.slots == null) return false;
+            for (int i = 0; i < p.slots.Length; i++)
+            {
+                if (i == selfSlot || p.slots[i] == null || !p.slots[i].IsOccupied) continue;
+                var u = p.slots[i].currentMonster;
+                if (u == null || !u.IsAlive) continue;
+                if (nonBarrierOnly && u.IsBarrier) continue;
+                if (excludeAtkLocked && (u.IsBarrier || u.IsAllAttack)) continue;
+                if (requirePositiveAtk && (u.baseAtk + u.bonusAtk) <= 0) continue;
+                return true;
+            }
+            return false;
+        }
+
+        private static bool HasValidEnemy(PlayerState opp, bool nonBarrierOnly, bool excludeAtkLocked, bool excludeSpellImmune, bool requirePositiveAtk)
+        {
+            if (opp == null || opp.slots == null) return false;
+            for (int i = 0; i < opp.slots.Length; i++)
+            {
+                if (opp.slots[i] == null || !opp.slots[i].IsOccupied) continue;
+                var u = opp.slots[i].currentMonster;
+                if (u == null || !u.IsAlive) continue;
+                if (nonBarrierOnly && u.IsBarrier) continue;
+                if (excludeAtkLocked && (u.IsBarrier || u.IsAllAttack)) continue;
+                if (excludeSpellImmune && V2CardMechanicsEngine.UnitHasPassiveKind(u, "spell_immune")) continue;
+                if (requirePositiveAtk && (u.baseAtk + u.bonusAtk) <= 0) continue;
+                return true;
+            }
+            return false;
         }
     }
 }

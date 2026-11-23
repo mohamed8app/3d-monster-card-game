@@ -66,7 +66,7 @@ class ArenaLabHubApp:
             bg=BG_PANEL, fg=FG_TEXT, font=("Segoe UI", 16, "bold"),
         ).pack(anchor="w")
         tk.Label(
-            hdr, text="40 Independent AI Models | 2,270 Cards | Pure-Python CPU RL Suite",
+            hdr, text="40 Independent AI Models | 1,470 Cards | Pure-Python CPU RL Suite",
             bg=BG_PANEL, fg=FG_MUTED, font=("Segoe UI", 9),
         ).pack(anchor="w", pady=(2, 8))
         tk.Label(
@@ -155,7 +155,7 @@ class ArenaLabHubApp:
         total_m = sum(r["matches"] for r in self.store.roster.values()) // 2
         trained = sum(1 for r in self.store.roster.values() if r["matches"] > 0)
         cards_seen = sum(1 for v in self.store.card_stats.values() if v.get("drafted", 0) > 0)
-        self.status_var.set(f"Matches: {total_m}  |  Trained Models: {trained}/41  |  Cards Tested: {cards_seen}/2270")
+        self.status_var.set(f"Matches: {total_m}  |  Trained Models: {trained}/41  |  Cards Tested: {cards_seen}/1470")
         info = get_warm_start_info()
         if info:
             self.ws_var.set(f"Warm-Start Base: READY (from {info['source_model_id']}, {info['source_matches']} matches)")

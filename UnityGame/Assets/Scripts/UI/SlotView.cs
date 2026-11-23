@@ -315,7 +315,8 @@ namespace MonsterCardGame.UI
         {
             if (skillCastHighlightCoroutine != null) return;
 
-            if (isTargetedForAbility || currentMonsterInstance == null || !currentMonsterInstance.IsAlive || !currentMonsterInstance.hasUsedActiveThisTurn)
+            if (isTargetedForAbility || currentMonsterInstance == null || !currentMonsterInstance.IsAlive ||
+                !currentMonsterInstance.hasUsedActiveThisTurn || !currentMonsterInstance.HasActiveSkill)
             {
                 if (skillCastBadgeObj != null) skillCastBadgeObj.SetActive(false);
                 return;
@@ -326,8 +327,8 @@ namespace MonsterCardGame.UI
 
             var gm = GameManager.Instance;
             var ownerPlayer = gm != null ? (isPlayerSide ? gm.humanPlayer : gm.aiPlayer) : null;
-            bool used0 = currentMonsterInstance.IsActiveSkillUsed(0, ownerPlayer);
-            bool used1 = currentMonsterInstance.ActiveSkillCount >= 2 && currentMonsterInstance.IsActiveSkillUsed(1, ownerPlayer);
+            bool used0 = currentMonsterInstance.HasActiveSkillAt(0) && currentMonsterInstance.IsActiveSkillUsed(0, ownerPlayer);
+            bool used1 = currentMonsterInstance.HasActiveSkillAt(1) && currentMonsterInstance.IsActiveSkillUsed(1, ownerPlayer);
             if (!used0 && !used1)
             {
                 skillCastBadgeObj.SetActive(false);
@@ -343,19 +344,24 @@ namespace MonsterCardGame.UI
                 bgCol = new Color(0.24f, 0.14f, 0.42f, 0.94f);
                 borderCol = new Color(0.45f, 0.95f, 0.65f, 0.95f);
             }
-            else if (used1)
+            else if (used1 && currentMonsterInstance.HasActiveSkillAt(1))
             {
                 string sName = CombatSystem.GetShortSkillName(currentMonsterInstance.actives[1]);
                 label = $"✓🔴 {sName}";
                 bgCol = new Color(0.48f, 0.10f, 0.16f, 0.92f);
                 borderCol = new Color(1f, 0.42f, 0.50f, 0.92f);
             }
-            else
+            else if (currentMonsterInstance.HasActiveSkillAt(0))
             {
                 string sName = CombatSystem.GetShortSkillName(currentMonsterInstance.actives[0]);
                 label = $"✓🔵 {sName}";
                 bgCol = new Color(0.06f, 0.28f, 0.52f, 0.92f);
                 borderCol = new Color(0.35f, 0.88f, 1f, 0.92f);
+            }
+            else
+            {
+                skillCastBadgeObj.SetActive(false);
+                return;
             }
 
             skillCastBadgeObj.SetActive(true);

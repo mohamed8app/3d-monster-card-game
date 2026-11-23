@@ -21,7 +21,8 @@ namespace MonsterCardGame.Core
         public bool canAttack;
         public BoardSlot currentSlot;
 
-        // Tactical status effects (Synced 100% with the V2 2,270-Card Constitution)
+        // Tactical status effects (Synced 100% with the V2 1,470-Card Constitution)
+        public int prevTurnDef = 0;
         public List<string> passives = new List<string>();
         public List<string> actives = new List<string>();
         public List<bool> activeUsedThisTurn = new List<bool>();
@@ -51,7 +52,10 @@ namespace MonsterCardGame.Core
             string.Equals(data.role, "Barrier", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(data.role, "Pure Shield", StringComparison.OrdinalIgnoreCase));
         public bool IsAllAttack => data != null && (data.is_all_attack || HasPassiveSubstr("All-Attack") != null);
-        public bool IsLocked => rootedTurns > 0 || HasPassiveSubstr("Tectonic Anchor") != null || HasPassiveSubstr("Locked") != null;
+        public bool IsLocked => rootedTurns > 0 || HasPassiveSubstr("Tectonic Anchor") != null || HasPassiveSubstr("Locked") != null ||
+            (data != null && GameManager.Instance != null && GameManager.Instance.activeEnvironment != null &&
+             EnvironmentCardData.AreSameElement(GameManager.Instance.activeEnvironment.element, "Earth") &&
+             !EnvironmentCardData.AreSameElement(data.element, "Earth"));
         public bool HasActiveSkill => !IsBarrier && actives != null && actives.Count > 0;
         public int ActiveSkillCount => (!IsBarrier && actives != null) ? actives.Count : 0;
 
@@ -138,6 +142,7 @@ namespace MonsterCardGame.Core
             baseAtk = (monsterData != null && monsterData.is_barrier) ? 0 : (monsterData != null ? monsterData.atk : 0);
             baseDef = monsterData != null ? Mathf.Max(1, monsterData.def) : 1;
             currentDef = baseDef;
+            prevTurnDef = baseDef;
             bonusAtk = 0;
             permBonusDef = 0;
             summonedTurn = currentTurn;
@@ -227,24 +232,17 @@ namespace MonsterCardGame.Core
             {
                 int lvlIdx = Mathf.Clamp(activeEnv.level - 1, 0, 2);
                 bool matchesEnvElem = EnvironmentCardData.AreSameElement(activeEnv.element, data.element);
-                if (matchesEnvElem)
+                if (matchesEnvElem && EnvironmentCardData.AreSameElement(activeEnv.element, "Fire"))
                 {
-                    bool offensiveElem = EnvironmentCardData.AreSameElement(activeEnv.element, "Fire") ||
-                                         EnvironmentCardData.AreSameElement(activeEnv.element, "Electric") ||
-                                         EnvironmentCardData.AreSameElement(activeEnv.element, "Dark") ||
-                                         EnvironmentCardData.AreSameElement(activeEnv.element, "Air") ||
-                                         EnvironmentCardData.AreSameElement(activeEnv.element, "Desert");
-                    totalAtk += offensiveElem
-                        ? (lvlIdx == 0 ? 5 : (lvlIdx == 1 ? 8 : 11))
-                        : (lvlIdx == 0 ? 4 : (lvlIdx == 1 ? 6 : 9));
+                    // Fire Arena: +3/+5/+8 ATK for Fire monsters ONLY
+                    totalAtk += new[] { 3, 5, 8 }[lvlIdx];
                 }
-                else
+                else if (!matchesEnvElem && totalAtk > 0 &&
+                         (EnvironmentCardData.AreSameElement(activeEnv.element, "Water") ||
+                          EnvironmentCardData.AreSameElement(activeEnv.element, "Ice")))
                 {
-                    int mildEnvBonus = (lvlIdx == 0 ? 1 : (lvlIdx == 1 ? 2 : 3));
-                    if (EnvironmentCardData.AreSameElement(activeEnv.element, "Fire"))
-                        totalAtk += mildEnvBonus;
-                    else if (EnvironmentCardData.AreSameElement(activeEnv.element, "Air") && (slotIdx == 0 || slotIdx == 1 || slotIdx == 4 || slotIdx == 5))
-                        totalAtk += mildEnvBonus;
+                    // Water / Ice Arena: mild -1/-2/-3 ATK drag/chill on Foreign monsters (min 1)
+                    totalAtk = Mathf.Max(1, totalAtk - new[] { 1, 2, 3 }[lvlIdx]);
                 }
             }
             if (owner == null && CommanderSpiritEffects.TryResolveOwner(this, out PlayerState resolvedOwner, out _, out _))
@@ -376,6 +374,7 @@ namespace MonsterCardGame.Core
         {
             if (IsAlive)
             {
+                prevTurnDef = currentDef;
                 ResetActiveSkillsUsage();
                 doubleSkillOneTurn = false; // V2 Constitution Rule #36: Double Skill lasts 1 turn only!
                 tempTurnAtk = 0;

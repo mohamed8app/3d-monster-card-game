@@ -338,11 +338,12 @@ namespace MonsterCardGame.Core
             }
             else if (IsEnvElement(activeEnv, "Nature") && hasNatAlly)
             {
-                player.HealLeader(new[] { 4, 7, 12 }[lvlIdx], opponent);
+                player.HealLeader(new[] { 6, 10, 14 }[lvlIdx], opponent);
             }
             else if (IsEnvElement(activeEnv, "Light") && hasLgtAlly)
             {
-                player.shield += new[] { 6, 10, 16 }[lvlIdx];
+                // V2 Constitution: ZERO Shields — Light Arena heals Commander +7/+12/+16 HP
+                player.HealLeader(new[] { 7, 12, 16 }[lvlIdx], opponent);
             }
 
             for (int slot = 0; slot < 6; slot++)
@@ -354,21 +355,42 @@ namespace MonsterCardGame.Core
                 if (IsEnvElement(activeEnv, "Water") && m.data.element == "Water")
                 {
                     m.burnDmg = 0;
+                    m.poisonDmg = 0;
+                    m.bleedDmg = 0;
                     m.weakenedTurns = 0;
-                    m.HealDefense(new[] { 4, 7, 10 }[lvlIdx]);
-                }
-                else if (IsEnvElement(activeEnv, "Earth") && m.data.element == "Earth")
-                {
                     m.HealDefense(new[] { 3, 5, 8 }[lvlIdx]);
                 }
-                else if (IsEnvElement(activeEnv, "Nature") && m.data.element == "Nature")
+                else if (IsEnvElement(activeEnv, "Nature"))
                 {
-                    m.HealDefense(new[] { 3, 5, 8 }[lvlIdx]);
+                    if (m.data.element == "Nature")
+                    {
+                        m.ApplyPermBuff(0, new[] { 1, 2, 3 }[lvlIdx]);
+                    }
+                    else if (m.currentDef > 1)
+                    {
+                        int loss = Mathf.Min(new[] { 1, 2, 3 }[lvlIdx], m.currentDef - 1);
+                        m.currentDef -= loss;
+                        m.baseDef = Mathf.Max(m.currentDef, m.baseDef - loss);
+                    }
                 }
-                else if (IsEnvElement(activeEnv, "Light") && hasLgtAlly)
+                else if (IsEnvElement(activeEnv, "Light") && m.data.element == "Light")
                 {
                     m.poisonDmg = 0;
                     m.burnDmg = 0;
+                    m.bleedDmg = 0;
+                    m.weakenedTurns = 0;
+                    m.HealDefense(new[] { 3, 5, 8 }[lvlIdx]);
+                }
+                else if (IsEnvElement(activeEnv, "Fire") && m.data.element != "Fire")
+                {
+                    // Fire Arena Scorch on Foreign units (1/2/3 dmg)
+                    m.currentDef -= new[] { 1, 2, 3 }[lvlIdx];
+                }
+                else if (IsEnvElement(activeEnv, "Desert") && m.data.element != "Desert")
+                {
+                    // Desert Arena Sandstorm on Foreign units (2/3/4 dmg + 1/1/2 Bleed)
+                    m.currentDef -= new[] { 2, 3, 4 }[lvlIdx];
+                    if (m.currentDef > 0) m.bleedDmg += new[] { 1, 1, 2 }[lvlIdx];
                 }
 
                 if (m.burnDmg > 0)
@@ -997,6 +1019,8 @@ namespace MonsterCardGame.Core
                 if (targetM.HasPassiveSubstr("Granite Armor") != null) flatRed += 6;
                 if (targetM.HasPassiveSubstr("Molten Anvil") != null) flatRed += 3;
                 flatRed += CommanderSpiritEffects.GetCombatIncomingReduction(opponent, targetM);
+                flatRed += V2CardMechanicsEngine.GetLeaderIncomingReduction(opponent, targetM);
+                flatRed += V2CardMechanicsEngine.GetCovenantIncomingReduction(opponent);
                 if (isCombat)
                 {
                     if (targetM.HasPassiveSubstr("Cinder Shield") != null) flatRed += 3;
@@ -1067,6 +1091,10 @@ namespace MonsterCardGame.Core
                 case "double_skill_1t":
                 case "grant_double_strike":
                 case "recall_ally":
+                case "sac_ally_draw2":
+                case "sac_ally_aether":
+                case "reposition_ally":
+                case "ally_atk_to_def":
                     return AbilityTargetMode.SingleAlly;
                 case "dmg_single":
                 case "cleave_enemy":
@@ -1075,6 +1103,9 @@ namespace MonsterCardGame.Core
                 case "devour_3":
                 case "pull_hook":
                 case "shifting_curse":
+                case "flip_enemy_stats":
+                case "mirror_enemy_exact":
+                case "betray_commander":
                     return AbilityTargetMode.SingleEnemy;
                 default:
                     return AbilityTargetMode.None;
@@ -1094,6 +1125,9 @@ namespace MonsterCardGame.Core
                 case "pull_hook":
                 case "shifting_curse":
                 case "detonate_dots":
+                case "flip_enemy_stats":
+                case "mirror_enemy_exact":
+                case "betray_commander":
                     return true;
                 default:
                     return false;
@@ -1144,7 +1178,15 @@ namespace MonsterCardGame.Core
                 var cov = V2CardMechanicsEngine.GetCovenantOps(player.activeCovenant);
                 if (cov != null) covDisc = cov.rew_skill_disc;
             }
-            int envDisc = (activeEnv != null && IsEnvElement(activeEnv, "Electric")) ? (activeEnv.level >= 3 ? 2 : 1) : 0;
+            int envDisc = 0;
+            if (activeEnv != null && IsEnvElement(activeEnv, "Electric") && myM != null && myM.data != null)
+            {
+                int stepE = activeEnv.level >= 3 ? 2 : 1;
+                if (EnvironmentCardData.AreSameElement(myM.data.element, "Electric"))
+                    envDisc = stepE;
+                else
+                    extraCost += stepE; // Static Jam: +1/+1/+2 Mana tax on Foreign units' actives!
+            }
             int discount = ((player != null && player.freeSkillBonus > 0) ? 1 : 0)
                 + CommanderSpiritEffects.GetSkillManaDiscount(player, myM)
                 + covDisc
@@ -1884,9 +1926,15 @@ namespace MonsterCardGame.Core
                 if (cov != null) covSkillBonus = cov.rew_skill_power;
             }
             var activeEnv = GameManager.Instance != null ? GameManager.Instance.activeEnvironment : null;
-            int envSkillBonus = (activeEnv != null && IsEnvElement(activeEnv, "Desert"))
-                ? (activeEnv.level >= 3 ? 6 : (activeEnv.level == 2 ? 4 : 2))
-                : 0;
+            int envLvl = activeEnv != null ? Mathf.Clamp(activeEnv.level - 1, 0, 2) : 0;
+            int envSkillBonus = 0;
+            if (activeEnv != null && m != null && m.data != null)
+            {
+                if (IsEnvElement(activeEnv, "Desert") && EnvironmentCardData.AreSameElement(m.data.element, "Desert"))
+                    envSkillBonus = new[] { 2, 3, 5 }[envLvl];
+                else if (IsEnvElement(activeEnv, "Light") && !EnvironmentCardData.AreSameElement(m.data.element, "Light"))
+                    envSkillBonus = -new[] { 1, 2, 3 }[envLvl]; // Blinding Glare on Foreign units
+            }
             int leaderSkillBonus = V2CardMechanicsEngine.GetLeaderSkillPowerBonus(player, m);
             int bonus = bonusEff + covSkillBonus + envSkillBonus + leaderSkillBonus;
             int v1 = op.v1;
@@ -2430,6 +2478,409 @@ namespace MonsterCardGame.Core
                         ts.currentMonster.burnDmg += cDmg;
                         ts.currentMonster.weakenedAtkFlat += Mathf.Max(2, cDmg / 2);
                         if (showVfx) SpawnSlotStatusVfx(oppIsHuman, ts.slotIndex, $"☠️ CURSED -{cDmg}/T", new Color(0.75f, 0.25f, 0.85f));
+                    }
+                    return true;
+                }
+
+                case "absorb_ally_atk":
+                {
+                    if (!m.IsBarrier && !m.IsAllAttack)
+                    {
+                        int capA = op.cap > 0 ? op.cap : 14;
+                        int sumAtk = 0;
+                        foreach (var al in allies)
+                        {
+                            if (al == null || al.currentMonster == null || al.currentMonster == m || al.currentMonster.IsBarrier) continue;
+                            sumAtk += Mathf.Max(0, al.currentMonster.GetEffectiveAtk(activeEnv, player));
+                        }
+                        int gain = Mathf.Min(capA, sumAtk);
+                        if (gain > 0)
+                        {
+                            m.tempTurnAtk += gain;
+                            if (showVfx) SpawnSlotStatusVfx(playerIsHuman, slot, $"⚔️ +{gain} ATK (1T)", new Color(1f, 0.78f, 0.22f));
+                        }
+                    }
+                    return true;
+                }
+
+                case "def_to_atk":
+                {
+                    if (!m.IsBarrier && !m.IsAllAttack)
+                    {
+                        int req = v1 > 0 ? v1 : 4;
+                        int availD = Mathf.Max(0, m.currentDef - 2);
+                        int roomA = Mathf.Max(0, MonsterInstance.MaxPermBonusAtk - m.bonusAtk);
+                        int conv = Mathf.Min(req, Mathf.Min(availD, roomA));
+                        if (conv > 0)
+                        {
+                            m.ApplyPermBuff(conv, 0);
+                            m.currentDef = Mathf.Max(1, m.currentDef - conv);
+                            m.baseDef = Mathf.Max(m.currentDef, m.baseDef - conv);
+                            if (showVfx) SpawnSlotStatusVfx(playerIsHuman, slot, $"⚔️ +{conv} ATK / -{conv} DEF", new Color(1f, 0.55f, 0.20f));
+                        }
+                    }
+                    return true;
+                }
+
+                case "flip_enemy_stats":
+                {
+                    BoardSlot pick = null;
+                    if (explicitTargetSlot >= 0 && explicitTargetSlot < 6 && opponent.slots[explicitTargetSlot] != null && opponent.slots[explicitTargetSlot].IsOccupied)
+                    {
+                        var em = opponent.slots[explicitTargetSlot].currentMonster;
+                        if (em != null && em.IsAlive && !em.IsBarrier && !em.IsAllAttack && !V2CardMechanicsEngine.UnitHasPassiveKind(em, "spell_immune"))
+                            pick = opponent.slots[explicitTargetSlot];
+                    }
+                    if (pick == null)
+                    {
+                        int bestScore = -1;
+                        foreach (var es in enemies)
+                        {
+                            var em = es.currentMonster;
+                            if (em == null || !em.IsAlive || em.IsBarrier || em.IsAllAttack || V2CardMechanicsEngine.UnitHasPassiveKind(em, "spell_immune")) continue;
+                            int curA = Mathf.Max(0, em.baseAtk + em.bonusAtk);
+                            int sc = Mathf.Abs(curA - em.currentDef) + curA;
+                            if (sc > bestScore) { bestScore = sc; pick = es; }
+                        }
+                    }
+                    if (pick != null && pick.currentMonster != null)
+                    {
+                        var tm = pick.currentMonster;
+                        int oldA = Mathf.Max(0, tm.baseAtk + tm.bonusAtk);
+                        int oldD = Mathf.Max(1, tm.currentDef);
+                        tm.baseAtk = oldD;
+                        tm.bonusAtk = 0;
+                        tm.currentDef = Mathf.Max(1, oldA);
+                        tm.baseDef = Mathf.Max(tm.baseDef, tm.currentDef);
+                        if (showVfx) SpawnSlotStatusVfx(oppIsHuman, pick.slotIndex, $"🔄 FLIPPED {tm.baseAtk}/{tm.currentDef}", new Color(0.85f, 0.45f, 1f));
+                    }
+                    return true;
+                }
+
+                case "sac_ally_draw2":
+                {
+                    BoardSlot victimSlot = null;
+                    if (explicitTargetSlot >= 0 && explicitTargetSlot < 6 && explicitTargetSlot != slot && player.slots[explicitTargetSlot] != null && player.slots[explicitTargetSlot].IsOccupied)
+                        victimSlot = player.slots[explicitTargetSlot];
+                    if (victimSlot == null)
+                    {
+                        int minPower = int.MaxValue;
+                        foreach (var al in allies)
+                        {
+                            if (al == null || al.slotIndex == slot || al.currentMonster == null) continue;
+                            int pw = (al.currentMonster.baseAtk + al.currentMonster.bonusAtk) + al.currentMonster.currentDef;
+                            if (pw < minPower) { minPower = pw; victimSlot = al; }
+                        }
+                    }
+                    if (victimSlot != null && victimSlot.currentMonster != null)
+                    {
+                        var victim = victimSlot.currentMonster;
+                        victim.currentDef = 0;
+                        HandleMonsterDeath(player, player, victimSlot.slotIndex, victim, m);
+                        int drawCnt = v1 > 0 ? v1 : 2;
+                        int drawn = 0;
+                        if (!V2CardMechanicsEngine.IsExtraDrawBanned(player))
+                        {
+                            for (int di = 0; di < drawCnt; di++)
+                            {
+                                if (player.hand.Count < player.maxHandSize)
+                                {
+                                    player.DrawCard();
+                                    drawn++;
+                                }
+                            }
+                        }
+                        if (showVfx) SpawnSlotStatusVfx(playerIsHuman, slot, $"💀 SACRIFICE +{drawn} CARDS", new Color(0.65f, 0.85f, 1f));
+                    }
+                    return true;
+                }
+
+                case "sac_ally_aether":
+                {
+                    BoardSlot victimSlot = null;
+                    if (explicitTargetSlot >= 0 && explicitTargetSlot < 6 && explicitTargetSlot != slot && player.slots[explicitTargetSlot] != null && player.slots[explicitTargetSlot].IsOccupied)
+                        victimSlot = player.slots[explicitTargetSlot];
+                    if (victimSlot == null)
+                    {
+                        int minPower = int.MaxValue;
+                        foreach (var al in allies)
+                        {
+                            if (al == null || al.slotIndex == slot || al.currentMonster == null) continue;
+                            int pw = (al.currentMonster.baseAtk + al.currentMonster.bonusAtk) + al.currentMonster.currentDef;
+                            if (pw < minPower) { minPower = pw; victimSlot = al; }
+                        }
+                    }
+                    if (victimSlot != null && victimSlot.currentMonster != null)
+                    {
+                        var victim = victimSlot.currentMonster;
+                        victim.currentDef = 0;
+                        HandleMonsterDeath(player, player, victimSlot.slotIndex, victim, m);
+                        int cap = V2CardMechanicsEngine.GetPlayerManaCap(player);
+                        int gainAe = v1 > 0 ? v1 : 1;
+                        if (player.power < cap) player.power = Mathf.Min(cap, player.power + gainAe);
+                        player.currentMana += 1;
+                        if (showVfx) SpawnSlotStatusVfx(playerIsHuman, slot, $"⚡ +{gainAe} AETHER & +1 MANA", new Color(0.45f, 0.90f, 1f));
+                    }
+                    return true;
+                }
+
+                case "mirror_enemy_exact":
+                {
+                    BoardSlot srcSlot = null;
+                    if (explicitTargetSlot >= 0 && explicitTargetSlot < 6 && opponent.slots[explicitTargetSlot] != null && opponent.slots[explicitTargetSlot].IsOccupied)
+                    {
+                        var em = opponent.slots[explicitTargetSlot].currentMonster;
+                        if (em != null && em.IsAlive && !em.IsBarrier) srcSlot = opponent.slots[explicitTargetSlot];
+                    }
+                    if (srcSlot == null)
+                    {
+                        int bestPw = -1;
+                        foreach (var es in enemies)
+                        {
+                            var em = es.currentMonster;
+                            if (em == null || !em.IsAlive || em.IsBarrier) continue;
+                            int pw = (em.baseAtk + em.bonusAtk) + em.currentDef;
+                            if (pw > bestPw) { bestPw = pw; srcSlot = es; }
+                        }
+                    }
+                    if (srcSlot != null && srcSlot.currentMonster != null)
+                    {
+                        var src = srcSlot.currentMonster;
+                        m.data = src.data;
+                        m.baseAtk = src.baseAtk;
+                        m.bonusAtk = src.bonusAtk;
+                        m.baseDef = src.baseDef;
+                        m.currentDef = Mathf.Max(1, src.currentDef);
+                        m.permBonusDef = src.permBonusDef;
+                        m.tempTurnAtk = 0;
+                        m.leaderDefApplied = 0;
+                        m.passives = src.passives != null ? new List<string>(src.passives) : new List<string>();
+                        m.actives = src.actives != null ? new List<string>(src.actives) : new List<string>();
+                        m.doubleStrike = src.doubleStrike;
+                        m.canAttack = !m.IsBarrier && (m.canAttack || src.HasPassiveSubstr("Haste") != null);
+                        if (V2CardMechanicsEngine.DoesUnitMatchOwnerLeader(m, player))
+                        {
+                            var lops = V2CardMechanicsEngine.GetLeaderOps(player.activeLeader);
+                            if (lops != null && lops.aura_def > 0)
+                            {
+                                m.baseDef += lops.aura_def;
+                                m.currentDef += lops.aura_def;
+                                m.leaderDefApplied = lops.aura_def;
+                            }
+                        }
+                        // Lock copied skills for rest of this turn to prevent infinite copy loops
+                        m.activeUsedThisTurn = new List<bool>();
+                        m.activeUseCountsThisTurn = new List<int>();
+                        for (int ai = 0; ai < m.actives.Count; ai++)
+                        {
+                            m.activeUsedThisTurn.Add(true);
+                            m.activeUseCountsThisTurn.Add(2);
+                        }
+                        m.hasUsedActiveThisTurn = m.actives.Count > 0;
+                        if (showVfx) SpawnSlotStatusVfx(playerIsHuman, slot, $"🪞 MIRRORED {src.data.name}", new Color(0.85f, 0.55f, 1f));
+                    }
+                    return true;
+                }
+
+                case "discard_hand_mana":
+                {
+                    if (player.hand != null && player.hand.Count > 0)
+                    {
+                        int cheapIdx = 0;
+                        for (int hi = 1; hi < player.hand.Count; hi++)
+                            if (player.hand[hi] != null && player.hand[cheapIdx] != null && player.hand[hi].cost < player.hand[cheapIdx].cost)
+                                cheapIdx = hi;
+                        var disc = player.hand[cheapIdx];
+                        player.hand.RemoveAt(cheapIdx);
+                        if (disc != null) player.graveyard.Add(disc);
+                        int gainM = v1 > 0 ? v1 : 3;
+                        player.currentMana += gainM;
+                        if (showVfx) SpawnSlotStatusVfx(playerIsHuman, slot, $"💧 DISCARD -> +{gainM} MANA", new Color(0.35f, 0.80f, 1f));
+                    }
+                    return true;
+                }
+
+                case "discard_hand_2aether":
+                {
+                    if (player.hand != null && player.hand.Count > 0)
+                    {
+                        int cheapIdx = 0;
+                        for (int hi = 1; hi < player.hand.Count; hi++)
+                            if (player.hand[hi] != null && player.hand[cheapIdx] != null && player.hand[hi].cost < player.hand[cheapIdx].cost)
+                                cheapIdx = hi;
+                        var disc = player.hand[cheapIdx];
+                        player.hand.RemoveAt(cheapIdx);
+                        if (disc != null) player.graveyard.Add(disc);
+                        int cap = V2CardMechanicsEngine.GetPlayerManaCap(player);
+                        int gainAe = v1 > 0 ? v1 : 2;
+                        int gainM = v2 > 0 ? v2 : 1;
+                        if (player.power < cap) player.power = Mathf.Min(cap, player.power + gainAe);
+                        player.currentMana += gainM;
+                        if (showVfx) SpawnSlotStatusVfx(playerIsHuman, slot, $"⚡ DISCARD -> +{gainAe} AETHER", new Color(0.55f, 0.92f, 1f));
+                    }
+                    return true;
+                }
+
+                case "dmg_face_aether":
+                {
+                    int dmgAe = Mathf.Max(1, player.power) + bonus;
+                    GetLeaderDmgDealt(opponent, dmgAe);
+                    if (showVfx) SpawnLeaderStatusVfx(oppIsHuman, $"⚡ -{dmgAe} AETHER BLAST", new Color(0.45f, 0.85f, 1f), false, dmgAe);
+                    return true;
+                }
+
+                case "relocate_self":
+                {
+                    if (!m.IsLocked && player.slots != null)
+                    {
+                        int openLane = -1;
+                        int blockLane = -1;
+                        int bestBlkAtk = -1;
+                        int anyEmpty = -1;
+                        for (int s = 0; s < 6; s++)
+                        {
+                            if (player.slots[s] == null || player.slots[s].IsOccupied) continue;
+                            if (anyEmpty < 0) anyEmpty = s;
+                            bool oppEmpty = (opponent.slots[s] == null || !opponent.slots[s].IsOccupied);
+                            if (oppEmpty && openLane < 0) openLane = s;
+                            if (!oppEmpty && opponent.slots[s].currentMonster != null && !opponent.slots[s].currentMonster.IsBarrier)
+                            {
+                                int ea = opponent.slots[s].currentMonster.GetEffectiveAtk(activeEnv, opponent);
+                                if (ea > bestBlkAtk) { bestBlkAtk = ea; blockLane = s; }
+                            }
+                        }
+                        int myAtk = m.GetEffectiveAtk(activeEnv, player);
+                        int dst = (myAtk >= m.currentDef && openLane >= 0) ? openLane : (blockLane >= 0 ? blockLane : anyEmpty);
+                        if (dst >= 0 && dst != slot)
+                        {
+                            player.slots[slot].ClearSlot();
+                            player.slots[dst].PlaceMonster(m);
+                            if (showVfx) SpawnSlotStatusVfx(playerIsHuman, dst, "💨 RELOCATED!", new Color(0.55f, 0.95f, 1f));
+                        }
+                    }
+                    return true;
+                }
+
+                case "reposition_ally":
+                {
+                    if (player.slots != null)
+                    {
+                        BoardSlot allySlot = null;
+                        if (explicitTargetSlot >= 0 && explicitTargetSlot < 6 && explicitTargetSlot != slot &&
+                            player.slots[explicitTargetSlot] != null && player.slots[explicitTargetSlot].IsOccupied &&
+                            player.slots[explicitTargetSlot].currentMonster != null && !player.slots[explicitTargetSlot].currentMonster.IsLocked)
+                        {
+                            allySlot = player.slots[explicitTargetSlot];
+                        }
+                        if (allySlot == null)
+                        {
+                            int bestScore = int.MinValue;
+                            foreach (var al in allies)
+                            {
+                                if (al == null || al.slotIndex == slot || al.currentMonster == null || al.currentMonster.IsLocked) continue;
+                                bool alreadyFacing = opponent.slots[al.slotIndex] != null && opponent.slots[al.slotIndex].IsOccupied;
+                                int sc = (alreadyFacing ? 0 : 100) + al.currentMonster.currentDef + al.currentMonster.baseAtk;
+                                if (sc > bestScore) { bestScore = sc; allySlot = al; }
+                            }
+                        }
+                        if (allySlot != null && allySlot.currentMonster != null)
+                        {
+                            int oppLane = -1;
+                            int bestEnemyScore = -1;
+                            int anyEmpty = -1;
+                            for (int s = 0; s < 6; s++)
+                            {
+                                if (player.slots[s] == null || player.slots[s].IsOccupied) continue;
+                                if (anyEmpty < 0) anyEmpty = s;
+                                if (opponent.slots[s] != null && opponent.slots[s].IsOccupied && opponent.slots[s].currentMonster != null)
+                                {
+                                    int es = opponent.slots[s].currentMonster.GetEffectiveAtk(activeEnv, opponent) * 2 + opponent.slots[s].currentMonster.currentDef;
+                                    if (es > bestEnemyScore) { bestEnemyScore = es; oppLane = s; }
+                                }
+                            }
+                            int dst = oppLane >= 0 ? oppLane : anyEmpty;
+                            if (dst >= 0 && dst != allySlot.slotIndex)
+                            {
+                                var moved = allySlot.currentMonster;
+                                allySlot.ClearSlot();
+                                player.slots[dst].PlaceMonster(moved);
+                                if (showVfx) SpawnSlotStatusVfx(playerIsHuman, dst, "🧭 REPOSITIONED!", new Color(0.55f, 0.95f, 0.75f));
+                            }
+                        }
+                    }
+                    return true;
+                }
+
+                case "ally_atk_to_def":
+                {
+                    BoardSlot allySlot = null;
+                    if (explicitTargetSlot >= 0 && explicitTargetSlot < 6 && explicitTargetSlot != slot &&
+                        player.slots[explicitTargetSlot] != null && player.slots[explicitTargetSlot].IsOccupied)
+                    {
+                        var am = player.slots[explicitTargetSlot].currentMonster;
+                        if (am != null && am.IsAlive && !am.IsBarrier && !am.IsAllAttack && (am.baseAtk + am.bonusAtk) > 0)
+                            allySlot = player.slots[explicitTargetSlot];
+                    }
+                    if (allySlot == null)
+                    {
+                        int bestAtk = 0;
+                        foreach (var al in allies)
+                        {
+                            if (al == null || al.slotIndex == slot || al.currentMonster == null) continue;
+                            var am = al.currentMonster;
+                            if (am.IsBarrier || am.IsAllAttack) continue;
+                            int aVal = am.baseAtk + am.bonusAtk;
+                            if (aVal > bestAtk) { bestAtk = aVal; allySlot = al; }
+                        }
+                    }
+                    if (allySlot != null && allySlot.currentMonster != null)
+                    {
+                        var ally = allySlot.currentMonster;
+                        int gainD = Mathf.Max(1, ally.baseAtk + ally.bonusAtk);
+                        ally.currentDef += gainD;
+                        ally.baseDef += gainD;
+                        ally.baseAtk = 0;
+                        ally.bonusAtk = 0;
+                        ally.tempTurnAtk = 0;
+                        if (ally.HasPassiveSubstr("Taunt") == null)
+                            ally.passives.Add("Taunt: Must be attacked first");
+                        if (showVfx) SpawnSlotStatusVfx(playerIsHuman, allySlot.slotIndex, $"🏰 +{gainD} DEF & TAUNT", new Color(0.45f, 0.85f, 1f));
+                    }
+                    return true;
+                }
+
+                case "betray_commander":
+                {
+                    BoardSlot pick = null;
+                    if (explicitTargetSlot >= 0 && explicitTargetSlot < 6 && opponent.slots[explicitTargetSlot] != null && opponent.slots[explicitTargetSlot].IsOccupied)
+                    {
+                        var em = opponent.slots[explicitTargetSlot].currentMonster;
+                        if (em != null && em.IsAlive && !em.IsBarrier && !V2CardMechanicsEngine.UnitHasPassiveKind(em, "spell_immune") && em.GetEffectiveAtk(activeEnv, opponent) > 0)
+                            pick = opponent.slots[explicitTargetSlot];
+                    }
+                    if (pick == null)
+                    {
+                        int bestAtk = 0;
+                        foreach (var es in enemies)
+                        {
+                            var em = es.currentMonster;
+                            if (em == null || !em.IsAlive || em.IsBarrier || V2CardMechanicsEngine.UnitHasPassiveKind(em, "spell_immune")) continue;
+                            int ea = em.GetEffectiveAtk(activeEnv, opponent);
+                            if (ea > bestAtk) { bestAtk = ea; pick = es; }
+                        }
+                    }
+                    if (pick != null && pick.currentMonster != null)
+                    {
+                        int betrayDmg = Mathf.Max(0, pick.currentMonster.GetEffectiveAtk(activeEnv, opponent));
+                        if (betrayDmg > 0)
+                        {
+                            GetLeaderDmgDealt(opponent, betrayDmg);
+                            if (showVfx)
+                            {
+                                SpawnSlotStatusVfx(oppIsHuman, pick.slotIndex, "🗡️ BETRAYED!", new Color(1f, 0.25f, 0.35f));
+                                SpawnLeaderStatusVfx(oppIsHuman, $"🗡️ TREASON -{betrayDmg}", new Color(1f, 0.25f, 0.35f), false, betrayDmg);
+                            }
+                        }
                     }
                     return true;
                 }
@@ -3440,7 +3891,9 @@ namespace MonsterCardGame.Core
                 if (m.HasPassiveSubstr("Frostbite Claw") != null && (oppM.frozenTurns > 0 || oppM.weakenedTurns > 0)) atk += 3;
                 if (hasGlacialCmd && m.data.element == "Ice" && oppM.frozenTurns > 0) atk += 4;
                 if (IsEnvElement(activeEnv, "Ice") && m.data.element == "Ice" && (oppM.frozenTurns > 0 || oppM.weakenedTurns > 0))
-                    atk += new[] { 4, 7, 12 }[lvlIdx];
+                    atk += new[] { 3, 5, 7 }[lvlIdx];
+                if (IsEnvElement(activeEnv, "Air") && oppM.data.element == "Air" && m.data.element != "Air" && atk > 0)
+                    atk = Mathf.Max(1, atk - new[] { 1, 2, 3 }[lvlIdx]); // Crosswind penalty vs Air defenders
                 if (m.HasPassiveSubstr("Boulder Bash") != null && (oppM.data.role == "Defender" || oppM.data.role == "Pure Shield")) atk += 3;
                 if (m.HasPassiveSubstr("Sunlit Fang") != null && (oppM.data.element == "Dark" || oppM.data.tribe == "Ghosts")) atk += 3;
                 if (m.HasPassiveSubstr("Valkyrie Charge") != null && oppM.data.cost > m.data.cost) atk += 3;
@@ -3633,6 +4086,16 @@ namespace MonsterCardGame.Core
                             return;
                         }
                     }
+                    else if (IsEnvElement(activeEnv, "Dark") && enemyMonster.data.element == "Dark")
+                    {
+                        float darkEv = new[] { 0.08f, 0.12f, 0.18f }[lvlIdx];
+                        if (UnityEngine.Random.value < darkEv)
+                        {
+                            MonsterCardGame.Audio.SoundManager.Instance?.PlayCardShieldBlock();
+                            SpawnSlotStatusVfx(defIsHuman, slotIdx, "🌑 SHADOW EVADE!", new Color(0.65f, 0.45f, 0.95f));
+                            return;
+                        }
+                    }
                     float spiritEvade = CommanderSpiritEffects.GetCombatEvasionChance(defender, slotIdx, enemyMonster);
                     if (spiritEvade > 0f && UnityEngine.Random.value < spiritEvade)
                     {
@@ -3645,6 +4108,13 @@ namespace MonsterCardGame.Core
                 // Immunity / Resistance / Env Armor & Vuln / Flat Reductions
                 atkPower = ApplyIncomingDefenseMods(enemyMonster, defender, attackerMonster, atkPower,
                     isCombat: true, isSpell: false, isSingleSpell: false, ignoreImmunity: cyclonePierce);
+                if (activeEnv != null)
+                {
+                    if (IsEnvElement(activeEnv, "Ice") && enemyMonster.data.element == "Ice" && atkPower > 0)
+                        atkPower = Mathf.Max(1, atkPower - new[] { 3, 5, 7 }[lvlIdx]);
+                    else if (IsEnvElement(activeEnv, "Earth") && enemyMonster.data.element != "Earth" && atkPower > 0)
+                        atkPower += new[] { 1, 2, 3 }[lvlIdx];
+                }
                 if (atkPower <= 0)
                 {
                     MonsterCardGame.Audio.SoundManager.Instance?.PlayCardShieldBlock();
@@ -3716,7 +4186,34 @@ namespace MonsterCardGame.Core
                     enemyMonster.HasPassiveSubstr("Moisture Shield") == null &&
                     enemyMonster.HasPassiveSubstr("Water Resilience") == null)
                 {
-                    enemyMonster.burnDmg = Mathf.Max(enemyMonster.burnDmg, new[] { 2, 4, 6 }[lvlIdx]);
+                    enemyMonster.burnDmg = Mathf.Max(enemyMonster.burnDmg, new[] { 2, 3, 5 }[lvlIdx]);
+                }
+                else if (IsEnvElement(activeEnv, "Ice") && attackerMonster.data.element == "Ice" && enemyMonster.IsAlive)
+                {
+                    float frzCh = new[] { 0.20f, 0.30f, 0.45f }[lvlIdx];
+                    if (UnityEngine.Random.value < frzCh)
+                        enemyMonster.frozenTurns = Mathf.Max(enemyMonster.frozenTurns, 1);
+                }
+                else if (IsEnvElement(activeEnv, "Desert") && attackerMonster.data.element == "Desert" && enemyMonster.IsAlive)
+                {
+                    enemyMonster.bleedDmg += new[] { 2, 4, 6 }[lvlIdx];
+                }
+                else if (IsEnvElement(activeEnv, "Dark") && dealtM > 0)
+                {
+                    if (attackerMonster.data.element == "Dark")
+                    {
+                        int lhPct = new[] { 15, 25, 35 }[lvlIdx];
+                        attacker.HealLeader(V2CardMechanicsEngine.StrictRoundPct(dealtM, lhPct), defender);
+                    }
+                    else if (attackerMonster.currentDef > 1)
+                    {
+                        int recoil = Mathf.Min(new[] { 1, 2, 3 }[lvlIdx], attackerMonster.currentDef - 1);
+                        attackerMonster.currentDef -= recoil;
+                    }
+                }
+                if (IsEnvElement(activeEnv, "Earth") && enemyMonster.data.element == "Earth" && attackerMonster.IsAlive)
+                {
+                    attackerMonster.TakeDamage(new[] { 3, 5, 8 }[lvlIdx]);
                 }
                 if (attackerMonster.HasPassiveSubstr("Psychic Drain") != null)
                 {
@@ -3831,6 +4328,17 @@ namespace MonsterCardGame.Core
                 if (attackerMonster.HasPassiveSubstr("Mana Steal") != null && dealtDirect > 0)
                 {
                     attacker.currentMana += 1;
+                }
+                if (dealtDirect > 0 && attackerMonster.silencedTurns <= 0 &&
+                    V2CardMechanicsEngine.UnitHasPassiveKind(attackerMonster, "steal_aether_face") &&
+                    defender.power > 0)
+                {
+                    defender.power = Mathf.Max(0, defender.power - 1);
+                    int capAether = V2CardMechanicsEngine.GetPlayerManaCap(attacker);
+                    if (attacker.power < capAether) attacker.power += 1;
+                    bool atkIsHuman = GameManager.Instance != null && (attacker == GameManager.Instance.humanPlayer);
+                    SpawnLeaderStatusVfx(atkIsHuman, "⚡ +1 AETHER STOLEN!", new Color(0.45f, 0.90f, 1f));
+                    SpawnLeaderStatusVfx(!atkIsHuman, "⚡ -1 AETHER!", new Color(1f, 0.35f, 0.35f));
                 }
 
                 if (BattleUIManager.Instance != null)

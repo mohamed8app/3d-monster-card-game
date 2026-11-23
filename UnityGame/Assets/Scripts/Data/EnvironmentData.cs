@@ -36,64 +36,64 @@ namespace MonsterCardGame.Data
         private static readonly Dictionary<string, EnvProfile> Profiles = new Dictionary<string, EnvProfile>(StringComparer.OrdinalIgnoreCase)
         {
             ["Fire"] = new EnvProfile(
-                new[] { 0.32f, 0.50f, 0.75f }, new[] { 0.00f, 0.00f, 0.00f },
-                new[] { 0.15f, 0.25f, 0.40f }, new[] { 0.10f, 0.20f, 0.30f },
-                new[] { "Nature", "Ice", "Dark" },
-                "Fire hits inflict Burn (2/4/6 per turn); opposing foes take +10%/+20%/+30% damage"
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new string[0],
+                "Fire Home: +3/+5/+8 ATK, +2/+3/+5 Burn & Spell Power | Foreign Penalty: 1/2/3 Scorch damage end of turn."
             ),
             ["Water"] = new EnvProfile(
-                new[] { 0.24f, 0.36f, 0.54f }, new[] { 0.20f, 0.30f, 0.45f },
-                new[] { 0.20f, 0.30f, 0.45f }, new[] { 0.00f, 0.00f, 0.00f },
-                new[] { "Fire", "Earth", "Light" },
-                "Restores +10 Commander HP & cleanses Water on cast; heals +4/+7/+10 DEF/turn"
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new string[0],
+                "Water Home: +3/+5/+7 DEF on summon, Cleanse & +3/+5/+8 DEF heal at turn start | Foreign Penalty: -1/-2/-3 ATK."
             ),
             ["Ice"] = new EnvProfile(
-                new[] { 0.26f, 0.40f, 0.58f }, new[] { 0.22f, 0.32f, 0.45f },
-                new[] { 0.22f, 0.32f, 0.45f }, new[] { 0.00f, 0.00f, 0.00f },
-                new[] { "Water", "Nature", "Air" },
-                "Freezes 1 enemy & deals 6 Cryo dmg on cast; Ice deals +4/+7/+12 shatter dmg vs Frozen/Weakened"
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new string[0],
+                "Ice Home: -3/-5/-7 incoming damage reduction & 20%/30%/45% Freeze on hit | Foreign Penalty: -1/-2/-3 ATK & no Haste (Lv2+)."
             ),
             ["Earth"] = new EnvProfile(
-                new[] { 0.20f, 0.32f, 0.48f }, new[] { 0.30f, 0.42f, 0.58f },
-                new[] { 0.15f, 0.25f, 0.35f }, new[] { 0.00f, 0.00f, 0.00f },
-                new[] { "Electric", "Fire", "Ice" },
-                "Grants +12 Commander Shield on cast; Heavy Fortress (-30%/-42%/-58% dmg), Steadfastness +3/+5/+8 DEF/T"
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new string[0],
+                "Earth Home: +3/+6/+9 DEF on summon & +3/+5/+8 Reflect | Foreign Penalty: Rooted against relocate & +1/+2/+3 combat vulnerability."
             ),
             ["Electric"] = new EnvProfile(
-                new[] { 0.25f, 0.40f, 0.60f }, new[] { 0.12f, 0.18f, 0.25f },
-                new[] { 0.20f, 0.30f, 0.45f }, new[] { 0.00f, 0.00f, 0.00f },
-                new[] { "Water", "Air", "Desert" },
-                "Electric Active Skills cost -1 Mana (min 1); grants +1/+1/+2 bonus Mana/turn if Electric ally alive"
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new string[0],
+                "Electric Home: +1/+1/+2 Temp Mana, -1/-1/-2 Skill Cost & +2/+3/+5 Spell Power | Foreign Penalty: +1/+1/+2 Skill Cost Static Jam."
             ),
             ["Air"] = new EnvProfile(
-                new[] { 0.28f, 0.42f, 0.60f }, new[] { 0.00f, 0.00f, 0.00f },
-                new[] { 0.20f, 0.30f, 0.45f }, new[] { 0.00f, 0.00f, 0.00f },
-                new[] { "Earth", "Fire", "Dark" },
-                "Air allies gain 12%/18%/25% combat Evasion and pierce 25%/35%/50% of enemy Armor"
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new string[0],
+                "Air Home: +12%/+18%/+25% Evasion & Haste on summon | Foreign Penalty: -6%/-10%/-15% Evasion & -1/-2/-3 ATK vs Air."
             ),
             ["Nature"] = new EnvProfile(
-                new[] { 0.25f, 0.38f, 0.55f }, new[] { 0.15f, 0.25f, 0.35f },
-                new[] { 0.20f, 0.30f, 0.45f }, new[] { 0.00f, 0.00f, 0.00f },
-                new[] { "Earth", "Water", "Electric" },
-                "Restores +8 Commander HP on cast; heals Commander +4/+7/+12 HP and Nature +3/+5/+8 DEF/T"
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new string[0],
+                "Nature Home: +2/+4/+6 DEF on summon, +1/+2/+3 DEF growth & +6/+10/+14 Commander HP/turn | Foreign Penalty: -1/-2/-3 DEF erosion."
             ),
             ["Light"] = new EnvProfile(
-                new[] { 0.25f, 0.38f, 0.56f }, new[] { 0.20f, 0.30f, 0.45f },
-                new[] { 0.20f, 0.30f, 0.45f }, new[] { 0.00f, 0.00f, 0.00f },
-                new[] { "Dark", "Ice", "Desert" },
-                "Grants +12 Commander Shield on cast; at turn start Light grants +6/+10/+16 Shield & cleanses Poison/Burn"
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new string[0],
+                "Light Home: +7/+12/+16 Commander HP, Cleanse & +3/+5/+8 DEF heal at turn start (ZERO Shields) | Foreign Penalty: -1/-2/-3 Skill Power."
             ),
             ["Dark"] = new EnvProfile(
-                new[] { 0.28f, 0.42f, 0.65f }, new[] { 0.00f, 0.00f, 0.00f },
-                new[] { 0.20f, 0.35f, 0.50f }, new[] { 0.00f, 0.00f, 0.00f },
-                new[] { "Light", "Nature", "Desert" },
-                "Whenever any monster dies, Dark allies gain +2/+3/+4 ATK and Enemy Leader loses 2/3/4 HP"
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new string[0],
+                "Dark Home: +15%/+25%/+35% Life Leech & +8%/+12%/+18% Evasion | Foreign Penalty: 1/2/3 DEF Shadow Recoil when attacking."
             ),
             ["Desert"] = new EnvProfile(
-                new[] { 0.28f, 0.44f, 0.65f }, new[] { 0.15f, 0.25f, 0.35f },
-                new[] { 0.20f, 0.32f, 0.45f }, new[] { 0.05f, 0.15f, 0.25f },
-                new[] { "Water", "Nature", "Ice" },
-                "Blinding Sandstorm blinds enemies; Desert allies gain +15%/+25%/+35% Armor and Sand Evasion"
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+                new string[0],
+                "Desert Home: +2/+3/+5 Skill Power & +2/+4/+6 Bleed on hit | Foreign Penalty: 2/3/4 Sandstorm damage & 1/1/2 Bleed."
             )
         };
 
@@ -229,19 +229,15 @@ namespace MonsterCardGame.Data
         {
             string norm = NormalizeElement(element);
             if (string.IsNullOrEmpty(norm)) return;
-            int idx = Mathf.Clamp(level - 1, 0, 2);
-            int atkPct = Mathf.RoundToInt(prof.atkBuff[idx] * 100f);
-            int armPct = Mathf.RoundToInt(prof.defArmor[idx] * 100f);
-            int debPct = Mathf.RoundToInt(prof.oppDebuff[idx] * 100f);
-            string debList = string.Join(", ", prof.debuffs);
-            string armorTxt = armPct > 0 ? $", +{armPct}% Armor" : "";
-            description = $"{norm} Environment: Escalates from Level 1 to 3 in battle (+{atkPct}% ATK{armorTxt}) & debuffs {debList} (-{debPct}% ATK). Permanent across rounds until countered. {prof.perkDesc}";
+            int durTurns = level == 1 ? 10 : (level == 2 ? 6 : 3);
+            description = $"{norm} Arena (Lv{level} • {durTurns}T): {prof.perkDesc}";
         }
 
         public string GetPerkSummary()
         {
+            int durTurns = level == 1 ? 10 : (level == 2 ? 6 : 3);
             return TryGetProfile(element, out EnvProfile prof)
-                ? $"Level {level} (Permanent until countered) • {prof.perkDesc}"
+                ? $"Level {level} ({turnsRemaining}/{durTurns}T) • {prof.perkDesc}"
                 : "Neutral battlefield.";
         }
 

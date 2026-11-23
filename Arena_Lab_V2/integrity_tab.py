@@ -2,11 +2,11 @@
 """
 Arena_Lab_V2 — Pillar #12: Simulation Integrity, Determinism & Fuzz Audit Tab (Arabic RTL).
 Automated QA & Constitution Fortress checking 14 critical engine & data invariants:
-  1. Python V2.2 <-> Unity cards_10000.json exact sync across ALL 2,270 cards
+  1. Python V2.2 <-> Unity cards_10000.json exact sync across ALL 1,470 cards
   2. Barrier Constitution (200 Barriers: 0 ATK, 0 Actives, never attacks)
   3. All 41 settled_deck.json validity (50 cards, <=2 copies, valid IDs, Free-10 disjoint)
   4. 100% Seed Determinism (15 identical dual-seed replays)
-  5. 150 Fuzz Stress Matches covering ALL 2,270 cards (0 Crashes / 0 Exceptions)
+  5. 150 Fuzz Stress Matches covering ALL 1,470 cards (0 Crashes / 0 Exceptions)
   6. 0 Infinite Loops / Stalled Matches (<800 steps & <=MAX_TURNS)
   7. 0 NaN/Inf in OBS_DIM=220 & valid Legal Masks
   8. Hard Caps (Hand <= hand_limit, 0 <= Mana <= mana_cap, Board <= 6)
@@ -71,9 +71,9 @@ def run_full_integrity_audit(
     saved_dir = saved_models_dir or os.path.abspath(os.path.join(logs_dir, "..", "saved_models"))
     unity_json = os.path.join(project_root, "UnityGame", "Assets", "Resources", "cards_10000.json")
 
-    # 1. Python <-> Unity Card DB Sync (2,270 cards)
+    # 1. Python <-> Unity Card DB Sync (all cards)
     if progress_cb:
-        progress_cb("1/5 فحص تطابق الـ 2,270 بطاقة بين Python وUnity...")
+        progress_cb(f"1/5 فحص تطابق الـ {db.num_cards:,} بطاقة بين Python وUnity...")
     unity_sync_mismatches = 0
     unity_found = os.path.isfile(unity_json)
     unity_checked = 0
@@ -142,7 +142,7 @@ def run_full_integrity_audit(
             if free10_sets[f_keys[i]] & free10_sets[f_keys[j]]:
                 free10_overlaps += 1
 
-    # Build Fuzz Decks covering EVERY SINGLE ONE of the 2,270 cards!
+    # Build Fuzz Decks covering EVERY SINGLE ONE of the 1,470 cards!
     rng = random.Random(20261212)
     all_ids = list(range(1, db.num_cards + 1))
     rng.shuffle(all_ids)
@@ -184,7 +184,7 @@ def run_full_integrity_audit(
 
     # 5..9 & 12..13: 150 Fuzz Stress Matches auditing ALL invariants step-by-step
     if progress_cb:
-        progress_cb(f"3/5 تشغيل اختبار الضغط الفوضوي ({n_fuzz} مباراة Fuzz على كل الـ 2,270 بطاقة)...")
+        progress_cb(f"3/5 تشغيل اختبار الضغط الفوضوي ({n_fuzz} مباراة Fuzz على كل الـ 1,470 بطاقة)...")
     crashes = 0
     stalls = 0
     nan_obs_errs = 0
@@ -202,7 +202,7 @@ def run_full_integrity_audit(
         try:
             eng.reset(d0, d1, seed=50000 + i)
             steps = 0
-            while not eng.done and steps < 800:
+            while not eng.done and steps < 1600:
                 s = eng.active
                 mask = eng.get_legal_mask(s)
                 if (not bool(mask[0])) or int(mask.sum()) < 1:
@@ -241,7 +241,7 @@ def run_full_integrity_audit(
                             if eng._effective_atk(ps.side, u) > u.base_atk:
                                 unit_violations += 1
 
-            if not eng.done or steps >= 800 or eng.turn > MAX_TURNS + 1:
+            if not eng.done or steps >= 1600 or eng.turn > MAX_TURNS + 1:
                 stalls += 1
             res = eng.get_result()
             wr_k = res.win_reason or "Unknown"
@@ -297,27 +297,38 @@ def run_full_integrity_audit(
             ok_dbl = bool(m3[50] and m3[51])
         else:
             ok_dbl = True
-        # Also verify V2.3 Aether Well (auto 1+1 ramp) + Aether Draw (Action 62, 2 Mana, 1x/turn)
+        # Also verify V2.4 Unbounded Aether (>10, never locks at 6/7/10!) + 1x/turn Sacrifice + 1x/turn Aether Draw (Action 62, 2 Mana)
         eng.reset(base_d, base_d, seed=7774)
         s_ae = eng.active
         p_ae = eng.players[s_ae]
         ok_aether_t1 = (p_ae.max_mana == 1 and p_ae.mana == 1)
-        p_ae.max_mana = 4; p_ae.mana = 4
+        # Test unbounded Aether > 10 via Sacrifice (1x/turn, never locked at 6/7/10!)
+        p_ae.max_mana = 10; p_ae.mana = 10
+        m_sac0 = eng.get_legal_mask(s_ae)
+        ok_sac_1 = bool(m_sac0[1])
+        eng.step(1)  # 1st sacrifice -> Aether 11, Mana 11 (past 10!), then locked for THIS turn only
+        m_sac1 = eng.get_legal_mask(s_ae)
+        ok_unbounded = (p_ae.max_mana == 11 and p_ae.mana == 11 and (not bool(m_sac1[1])))
+        # Test 1x/turn Aether Draw (Action 62, flat 2 Mana)
         while len(p_ae.hand) >= p_ae.hand_limit():
             p_ae.hand.pop()
         h_before = len(p_ae.hand)
         m_ae0 = eng.get_legal_mask(s_ae)
         ok_ae_legal = (len(m_ae0) == 63 and bool(m_ae0[62]))
-        eng.step(62)
+        eng.step(62)  # Draw (-2 Mana -> 9)
         m_ae1 = eng.get_legal_mask(s_ae)
         ok_ae_used = (
-            p_ae.mana == 2
+            p_ae.mana == 9
             and len(p_ae.hand) == h_before + 1
             and p_ae.aether_drawn_this_turn
             and (not bool(m_ae1[62]))
             and p_ae.telemetry.re_aether_draws == 1
         )
-        indep_skills_pass = bool(ok_pre and ok_mid and ok_post and ok_dbl and ok_aether_t1 and ok_ae_legal and ok_ae_used)
+        indep_skills_pass = bool(
+            ok_pre and ok_mid and ok_post and ok_dbl
+            and ok_aether_t1 and ok_sac_1 and ok_unbounded
+            and ok_ae_legal and ok_ae_used
+        )
     except Exception:
         indep_skills_pass = False
 
@@ -462,7 +473,7 @@ class SimulationIntegrityTab:
 
         self.run_btn = tk.Button(
             ctrl,
-            text=rtl("تشغيل فحص السلامة الشامل (150 مباراة Fuzz + تدقيق 2,270 بطاقة)"),
+            text=rtl("تشغيل فحص السلامة الشامل (150 مباراة Fuzz + تدقيق 1,470 بطاقة)"),
             command=self._start_audit,
             bg=COL_PURPLE,
             fg="#FFFFFF",
@@ -650,7 +661,7 @@ class SimulationIntegrityTab:
         cr = int(a.get("crashes", 0))
         _add_zero(
             5, f"انعدام الانهيارات ({nf} مباراة Fuzz شاملة)", "0 انهيارات", cr,
-            f"صلابة تامة! اكتملت {nf}/{nf} مباراة فوضوية عبر كل الـ 2,270 بطاقة بـ 0 أخطاء!",
+            f"صلابة تامة! اكتملت {nf}/{nf} مباراة فوضوية عبر كل الـ 1,470 بطاقة بـ 0 أخطاء!",
             f"حدث {cr} انهيار/استثناء أثناء اختبار الضغط الفوضوي!",
         )
 
@@ -863,7 +874,7 @@ class SimulationIntegrityTab:
         bars = [
             (f"تطابق بطاقات Python↔Unity ({a['unity_checked']:,})", sync_pct, COL_GREEN if sync_pct == 100 else COL_RED),
             (f"حتمية البذور Seed ({a['det_passed']}/{a['n_det']})", det_pct, COL_GREEN if det_pct == 100 else COL_RED),
-            (f"بطاقات فريدة لُعبت بـ Fuzz ({a['cards_exercised_cnt']:,}/2,270)", cov_pct, COL_CYAN),
+            (f"بطاقات فريدة لُعبت بـ Fuzz ({a['cards_exercised_cnt']:,}/1,470)", cov_pct, COL_CYAN),
             (f"سرعة المحاكي ({a['matches_per_sec']} م/ث | {a['steps_per_sec']:,} خ/ث)", spd_pct, COL_BLUE),
         ]
 
@@ -927,13 +938,13 @@ class SimulationIntegrityTab:
 
             def _done_ok() -> None:
                 self._running = False
-                self.run_btn.config(state="normal", text=rtl("تشغيل فحص السلامة الشامل (150 مباراة Fuzz + تدقيق 2,270 بطاقة)"))
+                self.run_btn.config(state="normal", text=rtl("تشغيل فحص السلامة الشامل (150 مباراة Fuzz + تدقيق 1,470 بطاقة)"))
                 self.refresh()
 
             self.parent.after(0, _done_ok)
         except Exception as err:
             def _done_err(msg: str = str(err)) -> None:
                 self._running = False
-                self.run_btn.config(state="normal", text=rtl("تشغيل فحص السلامة الشامل (150 مباراة Fuzz + تدقيق 2,270 بطاقة)"))
+                self.run_btn.config(state="normal", text=rtl("تشغيل فحص السلامة الشامل (150 مباراة Fuzz + تدقيق 1,470 بطاقة)"))
                 self.status_var.set(rtl(f"خطأ بالفحص: {msg[:55]}"))
             self.parent.after(0, _done_err)

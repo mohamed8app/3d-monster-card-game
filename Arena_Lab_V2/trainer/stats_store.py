@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Atomic JSON / JSONL persistence for Arena_Lab_V2 statistics, ELO ratings,
-Free-10 disjoint deck locks, and 2,270-card telemetry.
+Free-10 disjoint deck locks, and 1,470-card telemetry.
 """
 
 from __future__ import annotations
@@ -330,6 +330,37 @@ def _default_excitement_data() -> Dict[str, Any]:
             "mirror_blowouts": 0,
             "mirror_close": 0,
         },
+        "master_fun": {
+            "matches": 0,
+            "decisive_matches": 0,
+            "t6_lead_matches": 0,
+            "t6_lead_converted": 0,
+            "garbage_turns_sum": 0,
+            "total_match_turns": 0,
+            "lockout_unit_turns": 0,
+            "active_unit_turns": 0,
+            "stalemate_turns": 0,
+            "player_turns_total": 0,
+            "solitaire_losses": 0,
+            "lane_occ": [0, 0, 0, 0, 0, 0],
+            "lane_moves": 0,
+            "open_lane_strikes": 0,
+            "unit_clash_strikes": 0,
+            "env_flips": 0,
+            "env_active_turns": [0] * 10,
+            "env_played_sides": [0] * 10,
+            "env_played_wins": [0] * 10,
+            "aether_hist": [0] * 45,
+            "max_aether_seen": 0,
+            "aether_draw_sides": 0,
+            "aether_draw_wins": 0,
+            "no_aether_draw_sides": 0,
+            "no_aether_draw_wins": 0,
+            "new15_uses_total": 0,
+            "new15_sides": 0,
+            "new15_wins": 0,
+        },
+        "skill_pricing": {},
         "turn_curve": {
             str(t): {
                 "turns": 0, "dmg": 0, "kills": 0, "swings": 0, "bursts": 0,
@@ -406,7 +437,7 @@ class StatsStore:
             ):
                 if k in raw_ex:
                     self.excitement[k] = raw_ex[k]
-            for dict_key in ("match_len_bins", "monster_survival", "kill_causes", "dmg_sources", "game_pace", "combat_quality", "card_utilization", "resource_economy", "mechanics_perf", "victory_cond", "strategic_intel", "enjoyment", "comp_fairness"):
+            for dict_key in ("match_len_bins", "monster_survival", "kill_causes", "dmg_sources", "game_pace", "combat_quality", "card_utilization", "resource_economy", "mechanics_perf", "victory_cond", "strategic_intel", "enjoyment", "comp_fairness", "master_fun", "skill_pricing"):
                 if dict_key in raw_ex and isinstance(raw_ex[dict_key], dict):
                     self.excitement[dict_key].update(raw_ex[dict_key])
             if "turn_curve" in raw_ex and isinstance(raw_ex["turn_curve"], dict):
@@ -1274,6 +1305,84 @@ class StatsStore:
                 ex["comeback_wins"] = int(ex.get("comeback_wins", 0)) + 1
             if wt.clutch_win:
                 ex["clutch_wins"] = int(ex.get("clutch_wins", 0)) + 1
+
+        # Pillar #16: Master Fun, Anti-Frustration, Spatial Lanes & 10-Env Radar aggregation
+        mf = ex.setdefault("master_fun", _default_excitement_data()["master_fun"])
+        mf["matches"] = int(mf.get("matches", 0)) + 1
+        mf["total_match_turns"] = int(mf.get("total_match_turns", 0)) + rt
+        mf["garbage_turns_sum"] = int(mf.get("garbage_turns_sum", 0)) + int(t0.mf_garbage_turns)
+        if result.winner in (0, 1):
+            mf["decisive_matches"] = int(mf.get("decisive_matches", 0)) + 1
+            if t0.mf_t6_lead_side in (0, 1):
+                mf["t6_lead_matches"] = int(mf.get("t6_lead_matches", 0)) + 1
+                if t0.mf_t6_lead_side == result.winner:
+                    mf["t6_lead_converted"] = int(mf.get("t6_lead_converted", 0)) + 1
+        lo_arr = mf.setdefault("lane_occ", [0, 0, 0, 0, 0, 0])
+        eat_arr = mf.setdefault("env_active_turns", [0] * 10)
+        eps_arr = mf.setdefault("env_played_sides", [0] * 10)
+        epw_arr = mf.setdefault("env_played_wins", [0] * 10)
+        ah_arr = mf.setdefault("aether_hist", [0] * 45)
+        if len(ah_arr) < 45:
+            ah_arr.extend([0] * (45 - len(ah_arr)))
+        for ei in range(10):
+            eat_arr[ei] = int(eat_arr[ei]) + int(t0.mf_env_active_turns[ei])
+        for side_i, st_cur in enumerate((t0, t1)):
+            won_s = (result.winner == side_i)
+            mf["lockout_unit_turns"] = int(mf.get("lockout_unit_turns", 0)) + int(st_cur.mf_lockout_unit_turns)
+            mf["active_unit_turns"] = int(mf.get("active_unit_turns", 0)) + int(st_cur.mf_active_unit_turns)
+            mf["stalemate_turns"] = int(mf.get("stalemate_turns", 0)) + int(st_cur.mf_stalemate_turns)
+            mf["player_turns_total"] = int(mf.get("player_turns_total", 0)) + int(st_cur.hand_turns)
+            mf["solitaire_losses"] = int(mf.get("solitaire_losses", 0)) + int(st_cur.mf_solitaire_loss)
+            mf["lane_moves"] = int(mf.get("lane_moves", 0)) + int(st_cur.mf_lane_moves)
+            mf["open_lane_strikes"] = int(mf.get("open_lane_strikes", 0)) + int(st_cur.mf_open_lane_strikes)
+            mf["unit_clash_strikes"] = int(mf.get("unit_clash_strikes", 0)) + int(st_cur.cq_unit_clashes)
+            mf["env_flips"] = int(mf.get("env_flips", 0)) + int(st_cur.mf_env_flips)
+            for sli in range(6):
+                lo_arr[sli] = int(lo_arr[sli]) + int(st_cur.mf_lane_occ[sli])
+            emask = int(st_cur.mf_env_played_mask)
+            if emask:
+                for ei in range(10):
+                    if emask & (1 << ei):
+                        eps_arr[ei] = int(eps_arr[ei]) + 1
+                        if won_s:
+                            epw_arr[ei] = int(epw_arr[ei]) + 1
+            pae = max(0, int(st_cur.mf_peak_aether))
+            ah_arr[min(44, pae)] = int(ah_arr[min(44, pae)]) + 1
+            if pae > int(mf.get("max_aether_seen", 0)):
+                mf["max_aether_seen"] = pae
+            if int(st_cur.re_aether_draws) > 0:
+                mf["aether_draw_sides"] = int(mf.get("aether_draw_sides", 0)) + 1
+                if won_s:
+                    mf["aether_draw_wins"] = int(mf.get("aether_draw_wins", 0)) + 1
+            else:
+                mf["no_aether_draw_sides"] = int(mf.get("no_aether_draw_sides", 0)) + 1
+                if won_s:
+                    mf["no_aether_draw_wins"] = int(mf.get("no_aether_draw_wins", 0)) + 1
+            n15 = int(st_cur.mf_new15_uses)
+            if n15 > 0:
+                mf["new15_uses_total"] = int(mf.get("new15_uses_total", 0)) + n15
+                mf["new15_sides"] = int(mf.get("new15_sides", 0)) + 1
+                if won_s:
+                    mf["new15_wins"] = int(mf.get("new15_wins", 0)) + 1
+
+        # Pillar #17: Per-Active-Skill Mana Pricing & Impact aggregation
+        sp_map = ex.setdefault("skill_pricing", {})
+        for side_i, st_cur in enumerate((t0, t1)):
+            won_s = (result.winner == side_i)
+            sk_tel = getattr(st_cur, "skill_telemetry", None)
+            if sk_tel:
+                for skey, svals in sk_tel.items():
+                    acc = sp_map.get(skey)
+                    if acc is None:
+                        acc = [0] * 10  # [uses, mana, dmg_mon, dmg_face, heal_buff, kills, disrupt, util, sides, wins]
+                        sp_map[skey] = acc
+                    elif len(acc) < 10:
+                        acc.extend([0] * (10 - len(acc)))
+                    for idx_v in range(8):
+                        acc[idx_v] = int(acc[idx_v]) + int(svals[idx_v])
+                    acc[8] = int(acc[8]) + 1
+                    if won_s:
+                        acc[9] = int(acc[9]) + 1
 
         tc = ex["turn_curve"]
         for ev in result.turn_events:

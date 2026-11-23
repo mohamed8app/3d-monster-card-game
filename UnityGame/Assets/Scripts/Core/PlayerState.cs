@@ -18,6 +18,7 @@ namespace MonsterCardGame.Core
         public int power = 0;
         public int Aether { get => power; set => power = value; }
         public int currentMana = 0;
+        public int lockedManaNext = 0;
         public bool hasSacrificedThisTurn = false;
         public bool hasAetherDrawnThisTurn = false;
         public int fatigueCount = 0;
@@ -52,6 +53,7 @@ namespace MonsterCardGame.Core
         public int covenantMutedTurns = 0;
         public int cardsPlayedThisTurn = 0;
         public int monstersSummonedThisTurn = 0;
+        [NonSerialized] public string lastSummonFailReason = "";
 
         [Header("6 Board Slots")]
         public BoardSlot[] slots = new BoardSlot[6];
@@ -144,6 +146,7 @@ namespace MonsterCardGame.Core
             shield = 0;
             power = 0;
             currentMana = 0;
+            lockedManaNext = 0;
             fatigueCount = 0;
             monstersSummonedTotal = 0;
             hasSacrificedThisTurn = false;
@@ -214,11 +217,15 @@ namespace MonsterCardGame.Core
 
         public void StartTurn(int turnNumber, bool skipDraw = false)
         {
-            // 1. Aether Well automatic 1+1 ramp: +1 permanent Aether (up to cap) & refill Turn Mana to Aether
+            // 1. Pure-Sacrifice Aether Economy: NO automatic +1 permanent Aether!
+            // Every turn grants +1 baseline Mana on top of permanent Aether (Turn Mana = min(cap, Aether + 1) - locked).
+            // Permanent Aether grows ONLY through Sacrifice (+1 Aether & +1 Mana) or Aether cards/skills.
             int manaCap = V2CardMechanicsEngine.GetPlayerManaCap(this);
-            if (power < manaCap) power++;
             if (power > manaCap) power = manaCap;
-            currentMana = power;
+            int locked = lockedManaNext;
+            lockedManaNext = 0;
+            int baseTurnMana = Mathf.Min(manaCap, power + 1);
+            currentMana = Mathf.Max(0, baseTurnMana - locked);
             hasSacrificedThisTurn = false;
             hasAetherDrawnThisTurn = false;
             cardsPlayedThisTurn = 0;
@@ -473,10 +480,16 @@ namespace MonsterCardGame.Core
                 return false;
             }
 
+            if (denyDrawSacTurns > 0)
+            {
+                Debug.LogWarning("Card sacrifice is blocked this turn!");
+                return false;
+            }
+
             int manaCap = V2CardMechanicsEngine.GetPlayerManaCap(this);
             if (power >= manaCap)
             {
-                Debug.LogWarning($"Aether is already at maximum capacity ({manaCap})!");
+                Debug.LogWarning($"Aether is capped by active Covenant ({manaCap})!");
                 return false;
             }
 
@@ -553,17 +566,23 @@ namespace MonsterCardGame.Core
 
         public bool SummonMonster(CardData card, int targetSlotIndex, int currentTurn)
         {
+            lastSummonFailReason = "";
             if (targetSlotIndex < 0 || targetSlotIndex >= slots.Length)
+            {
+                lastSummonFailReason = "Invalid board slot.";
                 return false;
+            }
 
             if (slots[targetSlotIndex].IsOccupied)
             {
-                Debug.LogWarning($"Slot {targetSlotIndex} is already occupied!");
+                lastSummonFailReason = $"Slot {targetSlotIndex + 1} is already occupied!";
+                Debug.LogWarning(lastSummonFailReason);
                 return false;
             }
 
             if (!V2CardMechanicsEngine.CanPlayerSummonMonster(this, card, out string covReason))
             {
+                lastSummonFailReason = covReason;
                 Debug.LogWarning(covReason);
                 return false;
             }
@@ -571,7 +590,8 @@ namespace MonsterCardGame.Core
             int effCost = GetEffectiveCardCost(card);
             if (effCost > currentMana)
             {
-                Debug.LogWarning($"Not enough Mana! Required: {effCost}, Available: {currentMana}");
+                lastSummonFailReason = $"Not enough Mana for [{card.name}]! Required: {effCost}💧, Available: {currentMana}💧";
+                Debug.LogWarning(lastSummonFailReason);
                 return false;
             }
 

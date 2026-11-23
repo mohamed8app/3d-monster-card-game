@@ -2,7 +2,7 @@
 """
 Arena_Lab_V2 — Pillar #6: Archetype, Tribe, Element & Roster Balance Tab (Arabic RTL).
 Evaluates balance across all 41 AI models (10 Tribes, 10 Elements, 10 Playstyles, 10 Free, Glitch_41)
-and all 2,270 cards with:
+and all 1,470 cards with:
   - Overall 0-100% Balance Score (>=85% Ideal, >=70% Good, <70% Warning)
   - Interactive 5-Way Chart 1: 10 Tribes | 10 Elements | 10 Playstyles | 10 Free | 6 Roles (centered on 50%!)
   - Chart 2: Top 5 Strongest (OP Watch) vs Bottom 5 Weakest (Buff Watch) + 4-Category Summary

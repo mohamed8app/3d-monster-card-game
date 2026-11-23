@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Compiles the master Excel workbook ('التصنيف الشامل.xlsx', 2,270 cards, IDs 1..2270)
-into a blazing-fast, pre-parsed English JSON database (`data/cards_v2_2270.json`)
+Compiles the master Excel workbook ('التصنيف الشامل.xlsx', 1,470 cards, IDs 1..1470)
+into a blazing-fast, pre-parsed English JSON database (`data/__KEEP_CARDS_V2_1470_JSON__`)
 for Arena_Lab_V2. Every numeric value is rounded strictly to integers.
 """
 
@@ -18,7 +18,7 @@ import openpyxl
 
 DEFAULT_EXCEL_PATH = os.path.expanduser(r"~/Desktop/التصنيف الشامل.xlsx")
 OUT_JSON_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "data", "cards_v2_2270.json")
+    os.path.join(os.path.dirname(__file__), "..", "data", "__KEEP_CARDS_V2_1470_JSON__")
 )
 
 ELEMENT_MAP = {
@@ -811,7 +811,7 @@ def export_excel_to_json(excel_path: str = DEFAULT_EXCEL_PATH, out_path: str = O
 
         cards.append(entry)
 
-    assert len(cards) == 2270, f"Expected 2270 cards, got {len(cards)}"
+    assert len(cards) == 1470, f"Expected 1470 cards, got {len(cards)}"
     payload = {
         "version": "2.0",
         "total_cards": len(cards),
