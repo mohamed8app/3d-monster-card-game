@@ -580,6 +580,17 @@ class ArenaAnalyticsApp:
         if self.auto_refresh_var.get() and not self._pull_running:
             try:
                 self.refresh_all()
+                # Also detect when PC #2 transitions from running -> idle while Analytics is watching!
+                st_p = os.path.join(self.store.logs_dir, "pc2_status.json")
+                if os.path.isfile(st_p):
+                    with open(st_p, "r", encoding="utf-8") as sf:
+                        st_d = json.load(sf)
+                    cur_st = str(st_d.get("state", "idle")) if isinstance(st_d, dict) else "idle"
+                    prev_st = getattr(self, "_prev_pc2_state", "idle")
+                    self._prev_pc2_state = cur_st
+                    if prev_st in ("running", "stopping") and cur_st == "idle":
+                        from pc2_headless_worker import play_training_complete_sound_10s
+                        play_training_complete_sound_10s()
             except Exception:
                 pass
             self._schedule_auto_refresh()

@@ -12,13 +12,21 @@ from __future__ import annotations
 
 import gc
 import json
+import math
 import os
 import shutil
 import socket
+import struct
 import sys
 import threading
 import time
+import wave
 from typing import Any, Dict, List, Optional, Tuple
+
+try:
+    import winsound
+except ImportError:
+    winsound = None  # type: ignore
 
 ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
 if ROOT_DIR not in sys.path:
@@ -38,6 +46,80 @@ SAVED_MODELS_DIR = os.path.join(ROOT_DIR, "saved_models")
 CMD_PATH = os.path.join(LOGS_DIR, "pc2_remote_cmd.json")
 STATUS_PATH = os.path.join(LOGS_DIR, "pc2_status.json")
 HOST_INFO_NAME = "pc2_host_info.json"
+_LAST_SOUND_EPOCH: float = 0.0
+
+
+def play_training_complete_sound_10s() -> None:
+    """
+    Synthesizes (once) and plays a clear, pleasant 10.0-second triumphant multi-chime
+    WAV alert asynchronously through the default Windows audio output when training finishes.
+    Includes a 12s debounce so Trainer + Analytics open together never double-trigger.
+    """
+    global _LAST_SOUND_EPOCH
+    now = time.time()
+    if now - _LAST_SOUND_EPOCH < 12.0:
+        return
+    _LAST_SOUND_EPOCH = now
+
+    def _runner() -> None:
+        try:
+            os.makedirs(LOGS_DIR, exist_ok=True)
+            stamp_p = os.path.join(LOGS_DIR, ".last_chime_ts")
+            try:
+                if os.path.isfile(stamp_p) and (time.time() - os.path.getmtime(stamp_p)) < 12.0:
+                    return
+                with open(stamp_p, "w", encoding="utf-8") as sf:
+                    sf.write(str(time.time()))
+            except Exception:
+                pass
+
+            wav_path = os.path.join(LOGS_DIR, "training_complete_10s.wav")
+            if not os.path.isfile(wav_path) or os.path.getsize(wav_path) < 400000:
+                sr = 22050
+                dur = 10.0
+                n_samples = int(sr * dur)
+                notes = [
+                    (0.00, 0.45, 523.25), (0.45, 0.90, 659.25), (0.90, 1.35, 783.99), (1.35, 2.35, 1046.50),
+                    (2.50, 2.95, 587.33), (2.95, 3.40, 739.99), (3.40, 3.85, 880.00), (3.85, 4.85, 1174.66),
+                    (5.00, 5.45, 523.25), (5.45, 5.90, 659.25), (5.90, 6.35, 783.99), (6.35, 7.35, 1046.50),
+                    (7.50, 7.90, 783.99), (7.90, 8.30, 987.77), (8.30, 10.00, 1046.50),
+                ]
+                buf = bytearray(n_samples * 2)
+                two_pi = 2.0 * math.pi
+                for s_t, e_t, freq in notes:
+                    i0 = max(0, int(s_t * sr))
+                    i1 = min(n_samples, int(e_t * sr))
+                    span = max(1, i1 - i0)
+                    for i in range(i0, i1):
+                        rel = (i - i0) / sr
+                        prog = (i - i0) / span
+                        attack = min(1.0, (i - i0) / max(1.0, 0.018 * sr))
+                        decay = math.exp(-2.3 * prog)
+                        env = attack * decay
+                        val = (
+                            0.65 * math.sin(two_pi * freq * rel)
+                            + 0.25 * math.sin(two_pi * (freq * 2.0) * rel)
+                            + 0.10 * math.sin(two_pi * (freq * 3.0) * rel)
+                        )
+                        sample = int(max(-32767, min(32767, val * env * 23000)))
+                        struct.pack_into("<h", buf, i * 2, sample)
+                with wave.open(wav_path, "wb") as wf:
+                    wf.setnchannels(1)
+                    wf.setsampwidth(2)
+                    wf.setframerate(sr)
+                    wf.writeframes(buf)
+
+            if winsound is not None:
+                winsound.PlaySound(wav_path, winsound.SND_FILENAME | winsound.SND_ASYNC)
+        except Exception:
+            if winsound is not None:
+                try:
+                    for freq, ms in ((523, 550), (659, 550), (784, 550), (1046, 850)) * 4:
+                        winsound.Beep(freq, ms)
+                except Exception:
+                    pass
+
+    threading.Thread(target=_runner, daemon=True).start()
 
 
 def _get_lan_ipv4() -> str:
@@ -410,6 +492,8 @@ class PC2HeadlessWorker:
                 )
             self._mark_cmd(cmd, "completed")
             self._write_status()
+            if not self.stop_event.is_set():
+                play_training_complete_sound_10s()
         except Exception as err:
             with self._lock:
                 self.state = "idle"
@@ -509,6 +593,8 @@ class PC2HeadlessWorker:
                 )
             self._mark_cmd(cmd, "completed")
             self._write_status()
+            if not self.stop_event.is_set():
+                play_training_complete_sound_10s()
         except Exception as err:
             with self._lock:
                 self.state = "idle"

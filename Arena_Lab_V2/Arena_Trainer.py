@@ -29,7 +29,11 @@ ensure_venv(__file__, require_torch=True)
 from engine.ai_brain import get_warm_start_info, promote_model_to_warm_start_base
 from engine.card_model import get_card_db
 from engine.roster_40 import ROSTER_40, get_model_spec
-from pc2_headless_worker import perform_smart_v22_reset, resolve_pc2_remote_logs_dir
+from pc2_headless_worker import (
+    perform_smart_v22_reset,
+    play_training_complete_sound_10s,
+    resolve_pc2_remote_logs_dir,
+)
 from trainer.session_runner import (
     CPU_PRESETS,
     pick_next_auto_league_pair,
@@ -924,6 +928,7 @@ class ArenaTrainerApp:
             self.prog_title_var.set(f"Stopped & Saved cleanly ({jobs_done} / {total_jobs} jobs completed).")
         else:
             self.prog_title_var.set(f"ALL DONE — Completed {jobs_done} / {total_jobs} queued matchup job(s)!")
+            play_training_complete_sound_10s()
 
     def _apply_progress_ui(self, done: int, stat_line: str, log_line: Optional[str] = None) -> None:
         self.progress["value"] = done
@@ -1004,6 +1009,7 @@ class ArenaTrainerApp:
                         self.prog_title_var.set(str(st.get("prog_title", "PC #2 Idle.")))
                         self.prog_stats_var.set(str(st.get("prog_stats", "")))
                         self._refresh_model_lists(keep_selection=True)
+                        play_training_complete_sound_10s()
             else:
                 self.pc2_badge_var.set("PC #2 Worker: Waiting (Run Setup_And_Clean_PC2_Once.bat once on PC #2)")
                 self.pc2_badge_lbl.configure(fg=ACCENT_GOLD)
