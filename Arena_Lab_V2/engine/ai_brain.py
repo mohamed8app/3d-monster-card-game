@@ -15,6 +15,7 @@ import os
 import shutil
 import struct
 import time
+from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -72,27 +73,46 @@ class DeckDrafter:
         self.db = db
         self.num_cards = db.num_cards
 
-        # Unbiased mana-curve prior across ALL card types (Monsters, Spells, Environments, Leaders, Covenants)
-        # so 1-Mana Environments and 0-Mana Leaders/Covenants start on an equal footing with Monsters!
-        prior = np.zeros(self.num_cards, dtype=np.float32)
+        # Two-Head Deck Drafter:
+        # Head 0 (logits[:, 0]): Preference for drafting Copy #1 (Single / Tech / Core)
+        # Head 1 (logits[:, 1]): Preference for drafting Copy #2 (Duplicate / Pair / Engine)
+        prior = np.zeros((self.num_cards, 2), dtype=np.float32)
         for i in range(self.num_cards):
             c = db.get(i + 1)
             if c.type == "monster":
                 curve = {1: 0.08, 2: 0.10, 3: 0.08, 4: 0.04, 5: 0.0, 6: -0.05, 7: -0.08}
-                prior[i] = (curve.get(c.mana, 0.0) - 0.20) if c.is_barrier else curve.get(c.mana, 0.0)
+                base_p = (curve.get(c.mana, 0.0) - 0.20) if c.is_barrier else curve.get(c.mana, 0.0)
+                prior[i, 0] = base_p
+                if c.is_barrier:
+                    prior[i, 1] = base_p - 0.15
+                elif c.mana <= 3:
+                    prior[i, 1] = base_p
+                elif c.mana == 4:
+                    prior[i, 1] = base_p - 0.03
+                else:  # 5, 6, 7 mana
+                    prior[i, 1] = base_p - 0.06
             elif c.type == "spell":
-                prior[i] = 0.06 if c.mana <= 3 else 0.0
+                p0 = 0.06 if c.mana <= 3 else 0.0
+                prior[i, 0] = p0
+                prior[i, 1] = p0 if c.mana <= 2 else (p0 - 0.04)
             elif c.type == "environment":
-                prior[i] = 0.08
+                prior[i, 0] = 0.08
+                prior[i, 1] = 0.02
             elif c.type == "leader":
-                prior[i] = 0.06 if c.mana <= 1 else 0.04
+                p0 = 0.06 if c.mana <= 1 else 0.04
+                prior[i, 0] = p0
+                prior[i, 1] = p0 - 0.05
             elif c.type == "covenant":
-                prior[i] = {1: 0.06, 2: 0.04, 3: 0.02}.get(c.mana, 0.04)
+                p0 = {1: 0.06, 2: 0.04, 3: 0.02}.get(c.mana, 0.04)
+                prior[i, 0] = p0
+                prior[i, 1] = p0 - 0.06
             else:
-                prior[i] = 0.04
+                prior[i, 0] = 0.04
+                prior[i, 1] = 0.02
+
         self.prior = prior.copy()
         self.logits = torch.tensor(prior, dtype=torch.float32, requires_grad=False)
-        self.visits = np.zeros(self.num_cards, dtype=np.float32)
+        self.visits = np.zeros((self.num_cards, 2), dtype=np.float32)
         self.reward_baseline: float = 0.0
 
         # Precompute type masks (indices 0..2269)
@@ -125,10 +145,17 @@ class DeckDrafter:
         idxs = np.flatnonzero(avail)
         if idxs.size == 0:
             return None
+
+        # Two-Head dynamic dispatch:
+        # If counts[i] == 0: evaluate utility of adding Copy #1 (scores[i, 0])
+        # If counts[i] == 1: evaluate utility of adding Copy #2 (scores[i, 1])!
+        c_idxs = counts[idxs]
+        effective_scores = scores[idxs, c_idxs] if scores.ndim == 2 else scores[idxs]
+
         if deterministic:
-            best_i = idxs[int(np.argmax(scores[idxs]))]
+            best_i = idxs[int(np.argmax(effective_scores))]
             return int(best_i)
-        sub = scores[idxs] / max(0.25, temperature)
+        sub = effective_scores / max(0.25, temperature)
         sub = sub - np.max(sub)
         probs = np.exp(sub)
         ps = probs.sum()
@@ -150,8 +177,10 @@ class DeckDrafter:
 
         scores = self.logits.detach().cpu().numpy().copy()
         if not deterministic:
-            # UCB Curiosity Bonus: actively explore untested legal cards (including 10 Envs & 60 Leaders!)
-            scores = scores + (0.65 / np.sqrt(1.0 + self.visits))
+            # Two-Head UCB Curiosity Bonus: explore untested cards independently for Copy #1 and Copy #2
+            curiosity = 0.65 / np.sqrt(1.0 + self.visits)
+            scores = scores + curiosity
+
         counts = np.zeros(self.num_cards, dtype=np.int32)
         deck: List[int] = []
 
@@ -186,7 +215,8 @@ class DeckDrafter:
             n_legal = int(legal_t.sum().item())
             if n_legal <= 1:
                 return 100.0
-            masked = torch.where(legal_t, self.logits, torch.tensor(-1e9, dtype=torch.float32))
+            eff_logits = self.logits.mean(dim=1) if self.logits.ndim == 2 else self.logits
+            masked = torch.where(legal_t, eff_logits, torch.tensor(-1e9, dtype=torch.float32))
             probs = torch.softmax(masked, dim=0)[legal_t]
             ent = -(probs * torch.log(probs.clamp_min(1e-9))).sum().item()
             max_ent = float(np.log(n_legal))
@@ -200,12 +230,16 @@ class DeckDrafter:
         batch_played_ids: Optional[List[List[int]]] = None,
     ) -> float:
         """
-        Direct Per-Card Bandit / Policy Update (Zero log_softmax cross-card leakage!):
-        - Updates ONLY the cards actually drafted/played in this batch (untested cards stay untouched!).
-        - Combines Within-Batch Relative Advantage (70%) + Absolute Outcome Signal (30%) so even when
-          a model loses 90% of a batch, cards from its strongest/closest fights get promoted while
-          cards from its worst losses get demoted and replaced by fresh unexplored cards!
-        - Played cards receive 2.2x credit weight vs 0.45x for undrawn deck cards.
+        Direct Two-Head Per-Card Bandit / Policy Update (Proven Independent Copy Learning):
+        - Column 0 (Copy #1): Updates the utility of including the card as a 1-of.
+          * Rewarded when card is actually summoned/cast on the battlefield (2.2x credit).
+          * 0.0 delta when unplayed (sitting in deck / sacrificed).
+        - Column 1 (Copy #2): Updates the utility of including the 2nd copy independently!
+          * Rewarded (2.2x credit) ONLY when BOTH copies were actually played on the battlefield (p >= 2).
+          * If only 1 copy was played and the 2nd copy was unplayed dead weight (p == 1 < 2):
+            receives a decisive dead-weight penalty (-0.45 * max(0.4, |adv|)) driving Copy #2 DOWN!
+          * Enables the AI to autonomously draft situational/high-cost cards as 1-of singles
+            and low-cost consistent staples as 2-of doubles, with zero artificial penalty or caps!
         """
         if not batch_decks:
             return 0.0
@@ -213,8 +247,6 @@ class DeckDrafter:
         mean_r = float(rewards.mean())
         self.reward_baseline = 0.85 * self.reward_baseline + 0.15 * mean_r
 
-        # 70% within-batch relative ranking (always distinguishes better vs worse decks even in a losing streak!)
-        # + 30% global baseline advantage
         std_r = float(rewards.std())
         if std_r > 1e-4:
             rel_adv = (rewards - mean_r) / (std_r + 1e-5)
@@ -223,36 +255,60 @@ class DeckDrafter:
         abs_adv = np.clip(rewards - self.reward_baseline, -1.5, 1.5)
         adv = 0.70 * rel_adv + 0.30 * abs_adv
 
-        delta = np.zeros(self.num_cards, dtype=np.float32)
-        weight_sum = np.zeros(self.num_cards, dtype=np.float32)
+        delta = np.zeros((self.num_cards, 2), dtype=np.float32)
+        weight_sum = np.zeros((self.num_cards, 2), dtype=np.float32)
 
         for i, (deck_ids, a_val) in enumerate(zip(batch_decks, adv)):
-            played_set = (
-                set(batch_played_ids[i])
+            played_list = (
+                batch_played_ids[i]
                 if (batch_played_ids is not None and i < len(batch_played_ids) and batch_played_ids[i])
-                else set()
+                else []
             )
-            for cid in deck_ids:
+            deck_counts = Counter(deck_ids)
+            played_counts = Counter(played_list)
+
+            for cid, k_copies in deck_counts.items():
                 idx = cid - 1
-                if cid in played_set:
-                    # Card was actually played on the battlefield: receives full 2.2x credit
+                if idx < 0 or idx >= self.num_cards:
+                    continue
+                p_played = played_counts.get(cid, 0)
+
+                # --- Head 0: Copy #1 Utility ---
+                if p_played >= 1:
                     w = 2.2
-                    delta[idx] += float(a_val) * w
-                    weight_sum[idx] += w
-                    self.visits[idx] += 1.0
+                    delta[idx, 0] += float(a_val) * w
+                    weight_sum[idx, 0] += w
+                    self.visits[idx, 0] += 1.0
                 else:
-                    # Unplayed card (remained in deck or was sacrificed as mana fodder):
-                    # Zero reward delta so unplayed filler cards never receive false win credit!
-                    self.visits[idx] += 0.25
+                    self.visits[idx, 0] += 0.25
+
+                # --- Head 1: Copy #2 Utility (Independent Feedback) ---
+                if k_copies >= 2:
+                    if p_played >= 2:
+                        # Both copies were genuinely needed and actively played!
+                        w = 2.2
+                        delta[idx, 1] += float(a_val) * w
+                        weight_sum[idx, 1] += w
+                        self.visits[idx, 1] += 1.0
+                    elif p_played == 1:
+                        # Copy 1 was played, but Copy 2 sat dead in hand/deck!
+                        # Independent opportunity cost penalty:
+                        w = 2.2
+                        pen = -0.45 * max(0.4, abs(float(a_val))) if a_val >= 0 else float(a_val)
+                        delta[idx, 1] += pen * w
+                        weight_sum[idx, 1] += w
+                        self.visits[idx, 1] += 1.0
+                    else:
+                        # Both copies unplayed
+                        self.visits[idx, 1] += 0.25
 
         active = weight_sum > 0
-        step = np.zeros(self.num_cards, dtype=np.float32)
+        step = np.zeros((self.num_cards, 2), dtype=np.float32)
         step[active] = delta[active] / np.maximum(1.0, weight_sum[active])
 
         lr = 0.14
         with torch.no_grad():
             cur = self.logits.numpy()
-            # Gentle weight decay (0.992) on active cards prevents old lucky streaks from locking forever
             cur[active] = cur[active] * 0.992 + lr * step[active]
             np.clip(cur, -3.5, 3.5, out=cur)
             self.logits.copy_(torch.from_numpy(cur))
@@ -327,7 +383,13 @@ class ModelBrain:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         counts = Counter(int(cid) for cid in deck_ids)
         cards_list = []
+        singles_count = 0
+        pairs_count = 0
         for cid, copies in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):
+            if copies == 1:
+                singles_count += 1
+            elif copies >= 2:
+                pairs_count += 1
             c = self.db.get(cid)
             cards_list.append({
                 "id": int(cid),
@@ -346,6 +408,10 @@ class ModelBrain:
             "matches_trained": int(self.matches_trained),
             "total_cards": len(deck_ids),
             "unique_cards": len(cards_list),
+            "singles_count": singles_count,
+            "pairs_count": pairs_count,
+            "singleton_pct": round(100.0 * singles_count / max(1, len(cards_list)), 1),
+            "duplicate_pct": round(100.0 * pairs_count / max(1, len(cards_list)), 1),
             "last_updated": time.strftime("%Y-%m-%d %H:%M:%S"),
             "cards": cards_list,
             "deck_50_ids": [int(cid) for cid in deck_ids],
@@ -511,10 +577,13 @@ class ModelBrain:
                     continue
 
         if deck_ids:
-            for cid in deck_ids:
+            counts = Counter(int(cid) for cid in deck_ids)
+            for cid, copies in counts.items():
                 idx = int(cid) - 1
                 if 0 <= idx < self.drafter.num_cards:
-                    self.drafter.logits[idx] += 0.45
+                    self.drafter.logits[idx, 0] += 0.45
+                    if copies >= 2:
+                        self.drafter.logits[idx, 1] += 0.45
             self.drafter.logits.clamp_(-2.5, 2.5)
             self.matches_trained = max(self.matches_trained, recovered_matches)
             try:
@@ -583,29 +652,36 @@ class ModelBrain:
                     pass
             if "drafter_logits" in data:
                 saved_lg = data["drafter_logits"].float()
-                if saved_lg.numel() == brain.drafter.logits.numel():
-                    # Auto-sanitize any legacy checkpoint affected by the old log_softmax +5.5 saturation bug
-                    if "drafter_visits" not in data and float(saved_lg.abs().max().item()) >= 4.8:
-                        cleaned = torch.from_numpy(brain.drafter.prior) + 0.18 * (saved_lg - saved_lg.mean())
-                        cleaned.clamp_(-1.5, 1.5)
-                        brain.drafter.logits.copy_(cleaned)
-                    else:
-                        brain.drafter.logits.copy_(saved_lg)
+                if saved_lg.ndim == 1 and saved_lg.numel() == brain.drafter.num_cards:
+                    # Legacy 1D checkpoint: expand column 0 directly, initialize column 1 with natural prior/discount
+                    brain.drafter.logits[:, 0].copy_(saved_lg)
+                    brain.drafter.logits[:, 1].copy_(saved_lg - 0.05)
+                elif saved_lg.shape == brain.drafter.logits.shape:
+                    brain.drafter.logits.copy_(saved_lg)
                 else:
-                    # Seamless DB-resize migration (e.g., __KEEP_MIGRATION_1470_TO_1470__ cards):
-                    # preserve trained FighterNet + non-monster logits (1..470) & restore monster priors from settled_deck!
-                    n_pre = min(470, int(saved_lg.numel()), int(brain.drafter.logits.numel()))
+                    n_pre = min(470, int(saved_lg.shape[0]), int(brain.drafter.logits.shape[0]))
                     if n_pre > 0:
-                        brain.drafter.logits[:n_pre].copy_(saved_lg[:n_pre])
+                        if saved_lg.ndim == 1:
+                            brain.drafter.logits[:n_pre, 0].copy_(saved_lg[:n_pre])
+                            brain.drafter.logits[:n_pre, 1].copy_(saved_lg[:n_pre] - 0.05)
+                        else:
+                            brain.drafter.logits[:n_pre].copy_(saved_lg[:n_pre])
                     brain._restore_drafter_from_settled_deck()
             if "drafter_visits" in data:
                 sav_v = np.asarray(data["drafter_visits"], dtype=np.float32)
-                if sav_v.shape == brain.drafter.visits.shape:
+                if sav_v.ndim == 1 and sav_v.size == brain.drafter.num_cards:
+                    brain.drafter.visits[:, 0] = sav_v
+                    brain.drafter.visits[:, 1] = sav_v * 0.5
+                elif sav_v.shape == brain.drafter.visits.shape:
                     brain.drafter.visits = sav_v
                 else:
-                    n_pre = min(470, int(sav_v.size), int(brain.drafter.visits.size))
+                    n_pre = min(470, int(sav_v.shape[0]), int(brain.drafter.visits.shape[0]))
                     if n_pre > 0:
-                        brain.drafter.visits[:n_pre] = sav_v[:n_pre]
+                        if sav_v.ndim == 1:
+                            brain.drafter.visits[:n_pre, 0] = sav_v[:n_pre]
+                            brain.drafter.visits[:n_pre, 1] = sav_v[:n_pre] * 0.5
+                        else:
+                            brain.drafter.visits[:n_pre] = sav_v[:n_pre]
             brain.drafter.reward_baseline = float(data.get("drafter_baseline", 0.0))
             brain.matches_trained = int(data.get("matches_trained", 0))
             brain.warm_started = bool(data.get("warm_started", False))
