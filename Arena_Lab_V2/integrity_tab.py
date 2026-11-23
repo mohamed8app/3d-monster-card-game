@@ -297,11 +297,11 @@ def run_full_integrity_audit(
             ok_dbl = bool(m3[50] and m3[51])
         else:
             ok_dbl = True
-        # Also verify V2.4 Unbounded Aether (>10, never locks at 6/7/10!) + 1x/turn Sacrifice + 1x/turn Aether Draw (Action 62, 2 Mana)
+        # Also verify V2.4 Unbounded Aether (>10, never locks at 6/7/10!) + Pure-Sacrifice Economy (0 Aether, 1 baseline Mana at T1) + 1x/turn Aether Draw (Action 62, 2 Mana)
         eng.reset(base_d, base_d, seed=7774)
         s_ae = eng.active
         p_ae = eng.players[s_ae]
-        ok_aether_t1 = (p_ae.max_mana == 1 and p_ae.mana == 1)
+        ok_aether_t1 = (p_ae.max_mana == 0 and p_ae.mana == 1)
         # Test unbounded Aether > 10 via Sacrifice (1x/turn, never locked at 6/7/10!)
         p_ae.max_mana = 10; p_ae.mana = 10
         m_sac0 = eng.get_legal_mask(s_ae)

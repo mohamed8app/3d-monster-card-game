@@ -1068,6 +1068,33 @@ def export_full_analytics_report(app: Any, out_dir: str) -> Tuple[str, str, str,
                     f"| {rec_s['num']} | {rec_s['skill']} | {rec_s['cards']} | {rec_s['cur_cost']} | **{rec_s['sug_cost']}** | {rec_s['upm']} | {rec_s['wr']} | {rec_s['impact']} | {rec_s['vpm']} | {rec_s['verdict']} | {rec_s['reason']} |"
                 )
 
+    # Section 8: 1,470 Card Surgical Pricing Diagnoses from Tab #17
+    card_pricing_export_rows = []
+    if hasattr(app, "skill_pricing_tab"):
+        try:
+            from skill_pricing_tab import recommend_card_surgical_pricing
+            tot_m = int(app.store.overall_stats.get("matches", 0))
+            sp_map = getattr(app.skill_pricing_tab, "_skill_card_map", {})
+            md_lines.append("\n## 8. التشخيص الجراحي لتسعير البطاقات (Tab #17 Card Surgical Pricing)")
+            md_lines.append("| ID | البطاقة | النوع | التكلفة | المقترح | التقييم والقرار | العنصر المستهدف | السبب والتحليل الجراحي |")
+            md_lines.append("|---:|---|:---:|:---:|:---:|---|---|---|")
+            for cid_int in sorted(app.db.cards.keys()):
+                c_def = app.db.cards[cid_int]
+                c_st = app.store.card_stats.get(str(cid_int), {})
+                pl_cnt = int(c_st.get("played", 0))
+                if pl_cnt >= 50:
+                    badge, tag, target_elem, sug_cost, why = recommend_card_surgical_pricing(c_def, c_st, tot_m, sp_map)
+                    if tag != "nodata":
+                        rec_cp = {
+                            "id": cid_int, "name": c_def.name, "type": c_def.type,
+                            "mana": c_def.mana, "sug_cost": sug_cost, "badge": badge,
+                            "target": target_elem, "why": why, "played": pl_cnt
+                        }
+                        card_pricing_export_rows.append(rec_cp)
+                        md_lines.append(f"| {cid_int} | {c_def.name} | {c_def.type} | {c_def.mana} | **{sug_cost}** | {badge} | {target_elem} | {why} |")
+        except Exception:
+            pass
+
     md_text = "\n".join(md_lines)
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(md_text)
@@ -1080,6 +1107,7 @@ def export_full_analytics_report(app: Any, out_dir: str) -> Tuple[str, str, str,
         "pillars": pillars_json,
         "environments_10": env_export_rows,
         "skill_pricing_recommendations": skill_pricing_export_rows,
+        "card_surgical_pricing": card_pricing_export_rows,
         "roster_41": roster_rows,
         "top_15_cards": [{"id": cid, "name": nm, "wr": round(wr, 2), "played": pl, "arabic_desc": exp} for wr, pl, cid, nm, exp in card_rows[:15]],
         "bottom_15_cards": [{"id": cid, "name": nm, "wr": round(wr, 2), "played": pl, "arabic_desc": exp} for wr, pl, cid, nm, exp in list(reversed(card_rows[-15:]))],
@@ -1099,5 +1127,11 @@ def export_full_analytics_report(app: Any, out_dir: str) -> Tuple[str, str, str,
         w.writerow(["الترتيب", "الاسم العربي للنموذج", "المعرّف", "الفئة", "المباريات", "الانتصارات", "نسبة الفوز %", "ELO"])
         for idx_r, rr in enumerate(roster_rows, 1):
             w.writerow([idx_r, rr["arabic_name"], rr["model_id"], rr["category"], rr["matches"], rr["wins"], rr["win_rate"], rr["elo"]])
+
+        if card_pricing_export_rows:
+            w.writerow([])
+            w.writerow(["معرّف البطاقة", "اسم البطاقة", "نوع البطاقة", "التكلفة الحالية", "التكلفة المقترحة", "القرار والتقييم", "العنصر المستهدف", "السبب والتحليل الجراحي", "مرات اللعب"])
+            for cp in card_pricing_export_rows:
+                w.writerow([cp["id"], cp["name"], cp["type"], cp["mana"], cp["sug_cost"], cp["badge"], cp["target"], cp["why"], cp.get("played", "")])
 
     return md_path, json_path, csv_path, md_text
