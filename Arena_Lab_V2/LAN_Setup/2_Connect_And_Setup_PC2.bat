@@ -73,8 +73,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 echo.
 echo ========================================================================
 echo  ALL DONE ON PC #2!
-echo  - Shared Drive Z: -> %SHARE_UNC%
-echo  - Fast Local Python Venv -> C:\Arena_Lab_V2_Venv
+echo  - Shared Drive Z: = %SHARE_UNC%
+echo  - Fast Local Python Venv = C:\Arena_Lab_V2_Venv
 echo  - Desktop Shortcut Created: "Arena Lab V2 - Trainer (LAN)"
 echo ========================================================================
 pause

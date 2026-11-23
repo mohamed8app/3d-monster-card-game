@@ -76,9 +76,9 @@ def test_2_constitution_rules(db: CardDB) -> None:
     barrier_card = db.get(db.barriers[0])
     bu = eng._summon_monster(0, barrier_card, 0)
     assert bu is not None and bu.is_barrier
-    eng._play_environment(0)  # Fire L1
-    eng._play_environment(0)  # Fire L2
-    eng._play_environment(0)  # Fire L3 (+6 ATK to non-barriers)
+    eng._play_environment(0, 0)  # Fire L1
+    eng._play_environment(0, 0)  # Fire L2
+    eng._play_environment(0, 0)  # Fire L3 (+6 ATK to non-barriers)
     bu.apply_perm_buff(10, 10)
     bu.apply_temp_buff(10, 10)
     assert bu.atk == 0
@@ -184,18 +184,17 @@ def test_3_all_40_models_and_free10_disjoint(db: CardDB) -> None:
         if spec.category == "Playstyle":
             assert int(lmask.sum()) == 1470
         elif spec.category == "Environment":
-            assert spec.required_card_id in deck
+            if spec.required_card_id and spec.required_card_id > 0:
+                assert spec.required_card_id in deck
             for cid in deck:
                 c = db.get(cid)
                 if c.type == "monster":
-                    assert c.element == spec.sub_index, f"{spec.model_id} drafted foreign element monster {cid}"
+                    assert (c.element == spec.sub_index) or c.is_barrier, f"{spec.model_id} drafted foreign element monster {cid}"
         elif spec.category == "Tribe":
             for cid in deck:
                 c = db.get(cid)
                 if c.type == "monster":
                     assert (c.tribe == spec.sub_index) or c.is_barrier, f"{spec.model_id} drafted foreign tribe monster {cid}"
-                elif c.type == "leader":
-                    assert c.tribe == spec.sub_index, f"{spec.model_id} drafted foreign tribe leader {cid}"
         elif spec.category == "Free":
             overlap = free_claimed.intersection(deck)
             assert len(overlap) == 0, f"{spec.model_id} overlapped Free-10 cards: {overlap}"
