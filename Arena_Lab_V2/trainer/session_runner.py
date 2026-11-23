@@ -236,6 +236,10 @@ def run_match_session(
     decks_b_batch: List[List[int]] = []
     played_a_batch: List[List[int]] = []
     played_b_batch: List[List[int]] = []
+    drawn_a_batch: List[List[int]] = []
+    drawn_b_batch: List[List[int]] = []
+    wasted_a_batch: List[Dict[int, int]] = []
+    wasted_b_batch: List[Dict[int, int]] = []
     rews_a_batch: List[float] = []
     rews_b_batch: List[float] = []
     pending_history: List[str] = []
@@ -289,6 +293,8 @@ def run_match_session(
                 rews_a_batch + rews_b_batch,
                 mask_a,
                 batch_played_ids=played_a_batch + played_b_batch,
+                batch_drawn_ids=drawn_a_batch + drawn_b_batch,
+                batch_wasted_opps=wasted_a_batch + wasted_b_batch,
             )
             brain_a.matches_trained += len(decks_a_batch)
             last_vloss_a = last_vloss_b = st_a["value_loss"]
@@ -299,7 +305,14 @@ def run_match_session(
             brain_a.save_settled_deck_file(settled_a)
         else:
             st_a = brain_a.ppo_update(bufs_a)
-            brain_a.drafter.update(decks_a_batch, rews_a_batch, mask_a, batch_played_ids=played_a_batch)
+            brain_a.drafter.update(
+                decks_a_batch,
+                rews_a_batch,
+                mask_a,
+                batch_played_ids=played_a_batch,
+                batch_drawn_ids=drawn_a_batch,
+                batch_wasted_opps=wasted_a_batch,
+            )
             brain_a.matches_trained += len(decks_a_batch)
             last_vloss_a = st_a["value_loss"]
             last_focus_a = brain_a.drafter.focus_score(mask_a)
@@ -314,7 +327,14 @@ def run_match_session(
                     spec_b, db, free_excluded_ids=store.get_free10_excluded_ids(model_b_id)
                 )
             st_b = brain_b.ppo_update(bufs_b)
-            brain_b.drafter.update(decks_b_batch, rews_b_batch, mask_b, batch_played_ids=played_b_batch)
+            brain_b.drafter.update(
+                decks_b_batch,
+                rews_b_batch,
+                mask_b,
+                batch_played_ids=played_b_batch,
+                batch_drawn_ids=drawn_b_batch,
+                batch_wasted_opps=wasted_b_batch,
+            )
             brain_b.matches_trained += len(decks_b_batch)
             last_vloss_b = st_b["value_loss"]
             last_focus_b = brain_b.drafter.focus_score(mask_b)
@@ -332,6 +352,10 @@ def run_match_session(
         decks_b_batch.clear()
         played_a_batch.clear()
         played_b_batch.clear()
+        drawn_a_batch.clear()
+        drawn_b_batch.clear()
+        wasted_a_batch.clear()
+        wasted_b_batch.clear()
         rews_a_batch.clear()
         rews_b_batch.clear()
         mask_a, mask_b = _refresh_masks()
@@ -412,6 +436,10 @@ def run_match_session(
         decks_b_batch.append(deck_b)
         played_a_batch.append(list(res.telemetry[0].cards_played_ids))
         played_b_batch.append(list(res.telemetry[1].cards_played_ids))
+        drawn_a_batch.append(list(res.telemetry[0].cards_drawn_ids))
+        drawn_b_batch.append(list(res.telemetry[1].cards_drawn_ids))
+        wasted_a_batch.append(dict(res.telemetry[0].cards_opp_wasted))
+        wasted_b_batch.append(dict(res.telemetry[1].cards_opp_wasted))
         rews_a_batch.append(rew_a)
         rews_b_batch.append(rew_b)
 

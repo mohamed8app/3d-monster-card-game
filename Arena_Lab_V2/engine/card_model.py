@@ -401,7 +401,7 @@ class MatchTelemetry:
         "reflect_dmg_dealt", "monsters_killed", "spells_cast", "actives_used",
         "tokens_spawned", "clones_made", "revives_done", "grave_returns",
         "disruptions_applied", "evasions_triggered", "cards_drawn", "cards_burned_hand7",
-        "max_board_units", "cards_played_ids", "final_hp", "max_hp_end",
+        "max_board_units", "cards_played_ids", "cards_drawn_ids", "cards_opp_wasted", "final_hp", "max_hp_end",
         "turns_with_full_board", "direct_face_spells", "sacrifices_made",
         "max_turn_dmg", "peak_turn_num", "max_unit_atk", "max_unit_def",
         "multi_kill_turns", "highlight_triggers", "comeback_deficit",
@@ -480,6 +480,8 @@ class MatchTelemetry:
         self.cards_burned_hand7: int = 0
         self.max_board_units: int = 0
         self.cards_played_ids: List[int] = []
+        self.cards_drawn_ids: List[int] = []
+        self.cards_opp_wasted: Dict[int, int] = {}
         self.final_hp: int = LEADER_HP
         self.max_hp_end: int = LEADER_HP
         self.turns_with_full_board: int = 0
@@ -736,6 +738,7 @@ class PlayerState:
             self.telemetry.cards_burned_hand7 += 1
             burned = oldest.card_id
         self.hand.append(HandCard(card_id, cost_mod, drawn_turn))
+        self.telemetry.cards_drawn_ids.append(int(card_id))
         return burned
 
     def board_units(self) -> List[MonsterUnit]:

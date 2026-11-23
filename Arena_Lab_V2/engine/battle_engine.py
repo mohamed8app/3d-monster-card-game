@@ -880,6 +880,12 @@ class BattleEngine:
                 _em = self.get_legal_mask(s)
                 if _em[8:ACTION_DIM].any():
                     p.telemetry.si_restraint_passes += 1
+                for h, hc in enumerate(p.hand):
+                    # Check if card h was legally playable during this turn
+                    if _em[8 + h * 6 : 8 + (h + 1) * 6].any():
+                        p.telemetry.cards_opp_wasted[hc.card_id] = (
+                            p.telemetry.cards_opp_wasted.get(hc.card_id, 0) + 1
+                        )
             self._run_combat_and_end_turn(s)
             return self.done
 

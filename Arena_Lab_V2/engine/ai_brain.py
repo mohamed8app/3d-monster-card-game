@@ -228,18 +228,22 @@ class DeckDrafter:
         batch_rewards: List[float],
         legal_mask: np.ndarray,
         batch_played_ids: Optional[List[List[int]]] = None,
+        batch_drawn_ids: Optional[List[List[int]]] = None,
+        batch_wasted_opps: Optional[List[Dict[int, int]]] = None,
     ) -> float:
         """
-        Direct Two-Head Per-Card Bandit / Policy Update (Proven Independent Copy Learning):
-        - Column 0 (Copy #1): Updates the utility of including the card as a 1-of.
-          * Rewarded when card is actually summoned/cast on the battlefield (2.2x credit).
-          * 0.0 delta when unplayed (sitting in deck / sacrificed).
-        - Column 1 (Copy #2): Updates the utility of including the 2nd copy independently!
-          * Rewarded (2.2x credit) ONLY when BOTH copies were actually played on the battlefield (p >= 2).
-          * If only 1 copy was played and the 2nd copy was unplayed dead weight (p == 1 < 2):
-            receives a decisive dead-weight penalty (-0.45 * max(0.4, |adv|)) driving Copy #2 DOWN!
-          * Enables the AI to autonomously draft situational/high-cost cards as 1-of singles
-            and low-cost consistent staples as 2-of doubles, with zero artificial penalty or caps!
+        Direct Two-Head Per-Card Bandit / Policy Update (Truthful Evidence-Based Attribution):
+        Four explicit attribution conditions for Copy #2 (and Copy #1):
+          1. Undrawn (p_drawn < 2): If the 2nd copy was never drawn into hand during the match,
+             it gets NO reward and NO penalty (0 delta, unobserved evidence).
+          2. Drawn without opportunity (p_drawn >= 2, p_played < 2, opp_wasted == 0):
+             If the 2nd copy was drawn but no legal/strategic opportunity arose to play it
+             (mana-locked, board full, drawn on final turn), it gets NO penalty (0 delta).
+          3. Drawn with wasted opportunity (p_drawn >= 2, p_played < 2, opp_wasted > 0):
+             If the 2nd copy was in hand across turns where it was legally playable but left
+             unplayed, it receives a penalty proportional to the degree of wasted opportunity.
+          4. Played and contributed (p_played >= 2):
+             If the 2nd copy was summoned/cast on the battlefield, it receives full positive reward credit (2.2x).
         """
         if not batch_decks:
             return 0.0
@@ -264,43 +268,78 @@ class DeckDrafter:
                 if (batch_played_ids is not None and i < len(batch_played_ids) and batch_played_ids[i])
                 else []
             )
+            drawn_list = (
+                batch_drawn_ids[i]
+                if (batch_drawn_ids is not None and i < len(batch_drawn_ids) and batch_drawn_ids[i])
+                else None
+            )
+            wasted_map = (
+                batch_wasted_opps[i]
+                if (batch_wasted_opps is not None and i < len(batch_wasted_opps) and batch_wasted_opps[i])
+                else {}
+            )
+
             deck_counts = Counter(deck_ids)
             played_counts = Counter(played_list)
+            drawn_counts = Counter(drawn_list) if drawn_list is not None else None
 
             for cid, k_copies in deck_counts.items():
                 idx = cid - 1
                 if idx < 0 or idx >= self.num_cards:
                     continue
                 p_played = played_counts.get(cid, 0)
+                p_drawn = drawn_counts.get(cid, 0) if drawn_counts is not None else p_played
+                p_drawn = max(p_drawn, p_played)
+                opp_wasted = wasted_map.get(cid, 0)
 
-                # --- Head 0: Copy #1 Utility ---
+                # =========================================================================
+                # Head 0: Copy #1 Utility
+                # =========================================================================
                 if p_played >= 1:
+                    # Condition 4: Played and contributed -> 2.2x positive credit
                     w = 2.2
                     delta[idx, 0] += float(a_val) * w
                     weight_sum[idx, 0] += w
                     self.visits[idx, 0] += 1.0
+                elif p_drawn >= 1 and opp_wasted > 0:
+                    # Condition 3: Drawn with wasted opportunities -> proportional penalty
+                    deg = min(3, opp_wasted) / 3.0
+                    pen = -0.35 * deg * max(0.3, abs(float(a_val))) if a_val >= 0 else float(a_val)
+                    w = 2.2 * deg
+                    delta[idx, 0] += pen * w
+                    weight_sum[idx, 0] += w
+                    self.visits[idx, 0] += 1.0
+                elif p_drawn >= 1:
+                    # Condition 2: Drawn but no opportunity arose -> 0 penalty, 0 reward
+                    self.visits[idx, 0] += 0.1
                 else:
-                    self.visits[idx, 0] += 0.25
+                    # Condition 1: Undrawn in deck -> 0 penalty, 0 reward
+                    self.visits[idx, 0] += 0.05
 
-                # --- Head 1: Copy #2 Utility (Independent Feedback) ---
+                # =========================================================================
+                # Head 1: Copy #2 Utility (Truthful Evidence-Based Attribution)
+                # =========================================================================
                 if k_copies >= 2:
                     if p_played >= 2:
-                        # Both copies were genuinely needed and actively played!
+                        # Condition 4: BOTH copies played and contributed -> full positive reward!
                         w = 2.2
                         delta[idx, 1] += float(a_val) * w
                         weight_sum[idx, 1] += w
                         self.visits[idx, 1] += 1.0
-                    elif p_played == 1:
-                        # Copy 1 was played, but Copy 2 sat dead in hand/deck!
-                        # Independent opportunity cost penalty:
-                        w = 2.2
-                        pen = -0.45 * max(0.4, abs(float(a_val))) if a_val >= 0 else float(a_val)
+                    elif p_drawn < 2 and drawn_counts is not None:
+                        # Condition 1: 2nd copy was NEVER drawn (remained in deck) -> NO penalty, NO reward
+                        self.visits[idx, 1] += 0.05
+                    elif opp_wasted == 0:
+                        # Condition 2: 2nd copy drawn, but zero playable opportunity -> NO penalty, NO reward
+                        self.visits[idx, 1] += 0.1
+                    else:
+                        # Condition 3: 2nd copy drawn, opportunity existed, but wasted!
+                        deg = min(3, opp_wasted) / 3.0
+                        pen = -0.45 * deg * max(0.4, abs(float(a_val))) if a_val >= 0 else float(a_val)
+                        w = 2.2 * deg
                         delta[idx, 1] += pen * w
                         weight_sum[idx, 1] += w
                         self.visits[idx, 1] += 1.0
-                    else:
-                        # Both copies unplayed
-                        self.visits[idx, 1] += 0.25
 
         active = weight_sum > 0
         step = np.zeros((self.num_cards, 2), dtype=np.float32)
