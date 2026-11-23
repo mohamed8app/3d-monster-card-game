@@ -39,7 +39,7 @@ ensure_venv(__file__, require_torch=False)
 
 from engine.card_model import get_card_db
 from trainer.stats_store import StatsStore
-from arabic_glossary import export_full_analytics_report, open_arabic_skills_guide
+from arabic_glossary import auto_expand_treeview_columns, export_full_analytics_report, open_arabic_skills_guide
 from pace_tab import GamePaceTab, rtl
 from survival_tab import MonsterSurvivalTab
 from combat_tab import CombatQualityTab
@@ -510,8 +510,46 @@ class ArenaAnalyticsApp:
             self.master_fun_tab,
             self.skill_pricing_tab,
         ]
-        # Central global mousewheel handler (replaces the overwritten per-tab bind_all so ALL 13 tabs scroll!)
+        # Central global mousewheel handlers (replaces the overwritten per-tab bind_all so ALL tabs scroll smoothly!)
         self.root.bind_all("<MouseWheel>", self._on_global_mousewheel)
+        self.root.bind_all("<Shift-MouseWheel>", self._on_global_shift_mousewheel)
+        self.nb.bind("<<NotebookTabChanged>>", self._on_notebook_tab_changed)
+
+    def _on_notebook_tab_changed(self, event: Optional[tk.Event] = None) -> None:
+        """Auto-expands all Treeviews in the newly selected tab so columns fit text perfectly."""
+        try:
+            sel = self.nb.select()
+            if not sel:
+                return
+            idx = int(self.nb.index(sel))
+            if 0 <= idx < len(self._all_tabs):
+                tab_obj = self._all_tabs[idx]
+                for attr_name in dir(tab_obj):
+                    if attr_name.endswith("_tree") or attr_name == "tree":
+                        t = getattr(tab_obj, attr_name, None)
+                        if isinstance(t, ttk.Treeview):
+                            auto_expand_treeview_columns(t)
+        except Exception:
+            pass
+
+    def _on_global_shift_mousewheel(self, event: tk.Event) -> None:
+        """Enables smooth horizontal scrolling across ANY Treeview when holding Shift."""
+        try:
+            delta_units = int(-1 * (event.delta / 120)) if event.delta else 0
+            if delta_units == 0:
+                return
+            cur = event.widget
+            while cur is not None:
+                if isinstance(cur, ttk.Treeview):
+                    try:
+                        cur.xview_scroll(delta_units, "units")
+                        return
+                    except Exception:
+                        pass
+                    break
+                cur = getattr(cur, "master", None)
+        except Exception:
+            pass
 
     def _on_global_mousewheel(self, event: tk.Event) -> None:
         try:

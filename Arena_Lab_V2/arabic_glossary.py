@@ -14,7 +14,7 @@ import re
 import time
 import tkinter as tk
 from collections import Counter
-from tkinter import ttk
+from tkinter import font, messagebox, ttk
 from typing import Any, Dict, List, Optional, Tuple
 
 from engine.card_model import CardDB, CardDef, ELEMENTS, ROLES, TRIBES
@@ -167,8 +167,200 @@ def _smart_sort_key(raw: Any) -> Tuple[int, float, str]:
     return (3, 0.0, txt.casefold())
 
 
+def attach_treeview_hscroll(tree: ttk.Treeview, padx: int = 8, pady: Tuple[int, int] = (0, 6)) -> Optional[ttk.Scrollbar]:
+    """Attaches a responsive horizontal scrollbar (xscroll) cleanly beneath a ttk.Treeview."""
+    if getattr(tree, "_has_hsb", False):
+        return getattr(tree, "_hsb_widget", None)
+
+    parent = tree.master
+    if parent is None:
+        return None
+
+    try:
+        info = tree.pack_info()
+    except Exception:
+        info = {}
+
+    hsb = ttk.Scrollbar(parent, orient="horizontal", command=tree.xview)
+    tree.configure(xscrollcommand=hsb.set)
+    tree._has_hsb = True
+    tree._hsb_widget = hsb
+
+    if info.get("side") == "right":
+        # In frames where vsb is on the left and tree is on the right (e.g. abilities_eval, decks)
+        try:
+            tree.pack_forget()
+            hsb.pack(side="bottom", fill="x")
+            tree.pack(**info)
+        except Exception:
+            hsb.pack(side="bottom", fill="x")
+    else:
+        # Standard table panels (packed with fill="x")
+        p_x = info.get("padx", padx)
+        hsb.pack(fill="x", padx=p_x, pady=pady)
+
+    def _on_shift_mousewheel(event: tk.Event) -> None:
+        try:
+            if event.delta:
+                tree.xview_scroll(int(-1 * (event.delta / 120)), "units")
+        except Exception:
+            pass
+
+    tree.bind("<Shift-MouseWheel>", _on_shift_mousewheel, add="+")
+    return hsb
+
+
+def auto_expand_treeview_columns(
+    tree: ttk.Treeview,
+    padding: int = 28,
+    max_col_width: int = 850,
+    min_col_width: int = 40,
+) -> None:
+    """Measures all headings and populated row cells in every column of a Treeview and expands
+
+    column widths dynamically so that all text, diagnostics, and metrics are completely visible.
+    """
+    try:
+        f_ui = font.Font(family="Segoe UI", size=9)
+        f_b = font.Font(family="Segoe UI", size=9, weight="bold")
+    except Exception:
+        f_ui, f_b = None, None
+
+    def _measure_text(txt: str, is_bold: bool = False) -> int:
+        if not txt:
+            return 0
+        fn = f_b if is_bold else f_ui
+        if fn is not None:
+            try:
+                return fn.measure(txt)
+            except Exception:
+                pass
+        return int(len(txt) * 9.0)
+
+    try:
+        cols = list(tree["columns"])
+    except Exception:
+        return
+
+    children = tree.get_children("")
+
+    for col in cols:
+        try:
+            heading_raw = tree.heading(col, "text")
+            heading_txt = _clean_cell_text(heading_raw)
+            max_w = _measure_text(heading_txt, is_bold=True) + 24
+
+            for item_id in children:
+                val = str(tree.set(item_id, col) or "")
+                if not val:
+                    continue
+                if "\n" in val:
+                    cell_w = max((_measure_text(line) for line in val.split("\n")), default=0)
+                else:
+                    cell_w = _measure_text(val)
+                if cell_w > max_w:
+                    max_w = cell_w
+
+            target_w = max(min_col_width, max_w + padding)
+            if max_col_width > 0:
+                target_w = min(max_col_width, target_w)
+
+            curr_w = tree.column(col, "width")
+            final_w = max(curr_w, target_w)
+            tree.column(col, width=final_w, minwidth=target_w)
+        except Exception:
+            continue
+
+
 def enable_treeview_sorting(tree: ttk.Treeview) -> None:
-    """Enables click-to-sort on EVERY column header of a ttk.Treeview with ▲/▼ arrows."""
+    """Enables click-to-sort on EVERY column header of a ttk.Treeview with ▲/▼ arrows,
+
+    automatically attaches a horizontal scrollbar, and auto-expands column widths to fit all data.
+    """
+    # 0. Remember initial column widths for reset action
+    if not hasattr(tree, "_initial_column_widths"):
+        tree._initial_column_widths = {c: tree.column(c, "width") for c in tree["columns"]}
+
+    # 1. Attach horizontal scrollbar (xscroll) & Shift-MouseWheel binding
+    attach_treeview_hscroll(tree)
+
+    # 2. Hook tree.insert so newly populated rows trigger auto_expand seamlessly
+    if not getattr(tree, "_has_auto_expand_hook", False):
+        tree._has_auto_expand_hook = True
+        orig_insert = tree.insert
+        sched = [False]
+
+        def _wrapped_insert(*args: Any, **kwargs: Any) -> Any:
+            res = orig_insert(*args, **kwargs)
+            if not sched[0]:
+                sched[0] = True
+
+                def _do_expand() -> None:
+                    sched[0] = False
+                    try:
+                        auto_expand_treeview_columns(tree)
+                    except Exception:
+                        pass
+
+                try:
+                    tree.after_idle(_do_expand)
+                except Exception:
+                    sched[0] = False
+            return res
+
+        tree.insert = _wrapped_insert
+
+    # 3. If items already exist, trigger auto-expand after layout settles
+    if tree.get_children(""):
+        try:
+            tree.after_idle(lambda: auto_expand_treeview_columns(tree))
+        except Exception:
+            pass
+
+    # 4. Context Menu for user-friendly table operations
+    if not getattr(tree, "_has_context_menu", False):
+        tree._has_context_menu = True
+        menu = tk.Menu(tree, tearoff=0, bg="#1E293B", fg="#F8FAFC", activebackground="#0284C7", activeforeground="#FFFFFF")
+
+        def _menu_auto_fit() -> None:
+            auto_expand_treeview_columns(tree)
+
+        def _menu_copy_row() -> None:
+            sel = tree.selection()
+            if not sel:
+                return
+            row_vals = [str(tree.set(sel[0], c)) for c in tree["columns"]]
+            text_to_copy = "\t".join(row_vals)
+            try:
+                tree.clipboard_clear()
+                tree.clipboard_append(text_to_copy)
+            except Exception:
+                pass
+
+        def _menu_reset_widths() -> None:
+            inits = getattr(tree, "_initial_column_widths", {})
+            for c in tree["columns"]:
+                if c in inits:
+                    tree.column(c, width=inits[c])
+
+        menu.add_command(label=rtl("↔️ توسيع الأعمدة تلقائياً لتناسب البيانات"), command=_menu_auto_fit)
+        menu.add_separator()
+        menu.add_command(label=rtl("📋 نسخ بيانات الصف المحدد (نسخ للحافظة)"), command=_menu_copy_row)
+        menu.add_separator()
+        menu.add_command(label=rtl("🔄 استعادة العرض الافتراضي للأعمدة"), command=_menu_reset_widths)
+
+        def _on_right_click(event: tk.Event) -> None:
+            row_id = tree.identify_row(event.y)
+            if row_id:
+                tree.selection_set(row_id)
+            try:
+                menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                menu.grab_release()
+
+        tree.bind("<Button-3>", _on_right_click, add="+")
+
+    # 5. Column Sorting Setup
     base_headings: Dict[str, str] = {}
     cols = list(tree["columns"])
     for c in cols:
@@ -200,6 +392,12 @@ def enable_treeview_sorting(tree: ttk.Treeview) -> None:
                 tree.heading(c, text=rtl(f"{lbl}{arrow}"))
             else:
                 tree.heading(c, text=rtl(lbl))
+
+        # Re-verify proper column fit after sorting
+        try:
+            auto_expand_treeview_columns(tree)
+        except Exception:
+            pass
 
     for c in cols:
         tree.heading(c, command=lambda col=c: _sort_by(col))
