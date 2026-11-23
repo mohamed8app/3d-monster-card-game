@@ -44,16 +44,18 @@ def test_four_attribution_cases():
     num_cards = db.num_cards
     drafter = DeckDrafter(db)
 
-    # 4 distinct test cards
+    # 4 distinct test cards + 1 strategic hold card
     c_undrawn = 10     # Case 1: 2nd copy never drawn (p_drawn = 1, p_played = 1)
     c_no_opp = 20      # Case 2: 2nd copy drawn, but opp_wasted = 0 (p_drawn = 2, p_played = 1)
-    c_wasted = 30      # Case 3: 2nd copy drawn, opp_wasted = 2 (p_drawn = 2, p_played = 1)
-    c_played = 40      # Case 4: 2nd copy drawn & played (p_drawn = 2, p_played = 2)
+    c_wasted = 30      # Case 3: 2nd copy drawn, opp_wasted = 2, unplayed in a defeat (proportional penalty)
+    c_played = 40      # Case 4: 2nd copy drawn & played (p_drawn = 2, p_played = 2, full reward)
+    c_strat = 50       # Case 5: 2nd copy drawn, opp_wasted = 2, held strategically in a WIN -> ZERO PENALTY!
 
     idx_undrawn = c_undrawn - 1
     idx_no_opp = c_no_opp - 1
     idx_wasted = c_wasted - 1
     idx_played = c_played - 1
+    idx_strat = c_strat - 1
 
     # Record initial logits
     init_undrawn_c1 = float(drafter.logits[idx_undrawn, 0].item())
@@ -68,11 +70,13 @@ def test_four_attribution_cases():
     init_played_c1 = float(drafter.logits[idx_played, 0].item())
     init_played_c2 = float(drafter.logits[idx_played, 1].item())
 
-    # Build batch of 10 matches
-    # Every deck drafts 2 copies of all 4 test cards (plus filler to reach 50)
-    deck_50 = [c_undrawn, c_undrawn, c_no_opp, c_no_opp, c_wasted, c_wasted, c_played, c_played]
+    init_strat_c1 = float(drafter.logits[idx_strat, 0].item())
+    init_strat_c2 = float(drafter.logits[idx_strat, 1].item())
+
+    # Build batch of 12 matches (mixed wins and losses)
+    deck_50 = [c_undrawn, c_undrawn, c_no_opp, c_no_opp, c_wasted, c_wasted, c_played, c_played, c_strat, c_strat]
     for cid in range(1, 51):
-        if cid not in (c_undrawn, c_no_opp, c_wasted, c_played) and len(deck_50) < 50:
+        if cid not in (c_undrawn, c_no_opp, c_wasted, c_played, c_strat) and len(deck_50) < 50:
             deck_50.append(cid)
     assert len(deck_50) == 50
 
@@ -82,34 +86,25 @@ def test_four_attribution_cases():
     batch_drawn = []
     batch_wasted = []
 
-    for _ in range(10):
+    # 6 Winning matches: Card 40 played 2x, Card 10 undrawn 2nd, Card 20 no opp, Card 50 held strategically in a WIN
+    for _ in range(6):
         batch_decks.append(list(deck_50))
-        batch_rewards.append(1.0)  # Team won the match
+        batch_rewards.append(1.0)  # Win
+        batch_played.append([c_undrawn, c_no_opp, c_played, c_played, c_strat])
+        batch_drawn.append([c_undrawn, c_no_opp, c_no_opp, c_played, c_played, c_strat, c_strat])
+        batch_wasted.append({c_strat: 2})
 
-        # Played list:
-        # - c_undrawn: played 1 time (Copy 1 played)
-        # - c_no_opp: played 1 time (Copy 1 played)
-        # - c_wasted: played 1 time (Copy 1 played)
-        # - c_played: played 2 times (BOTH Copy 1 and Copy 2 played)
-        batch_played.append([c_undrawn, c_no_opp, c_wasted, c_played, c_played])
-
-        # Drawn list:
-        # - c_undrawn: drawn ONLY 1 time (Copy 2 stayed buried in deck)
-        # - c_no_opp: drawn 2 times
-        # - c_wasted: drawn 2 times
-        # - c_played: drawn 2 times
-        batch_drawn.append([c_undrawn, c_no_opp, c_no_opp, c_wasted, c_wasted, c_played, c_played])
-
-        # Wasted opportunities map:
-        # - c_undrawn: 0 wasted (never drawn)
-        # - c_no_opp: 0 wasted (drawn, but no mana / board locked)
-        # - c_wasted: 2 wasted turns (sat in hand with legal playable moves, but passed)
-        # - c_played: 0 wasted (both were played)
+    # 6 Losing matches: Card 30 was held across 2 wasted turns while team lost!
+    for _ in range(6):
+        batch_decks.append(list(deck_50))
+        batch_rewards.append(-1.0)  # Loss
+        batch_played.append([c_wasted])
+        batch_drawn.append([c_wasted, c_wasted])
         batch_wasted.append({c_wasted: 2})
 
     legal_mask = np.ones(num_cards, dtype=np.bool_)
 
-    print("[Step 1] Executing drafter.update() across 10 matches...")
+    print("[Step 1] Executing drafter.update() across 12 mixed matches...")
     drafter.update(
         batch_decks=batch_decks,
         batch_rewards=batch_rewards,
@@ -131,56 +126,60 @@ def test_four_attribution_cases():
     new_played_c1 = float(drafter.logits[idx_played, 0].item())
     new_played_c2 = float(drafter.logits[idx_played, 1].item())
 
+    new_strat_c1 = float(drafter.logits[idx_strat, 0].item())
+    new_strat_c2 = float(drafter.logits[idx_strat, 1].item())
+
     print("\n--- ATTRIBUTION RESULTS PER CARD ---")
     print(f"Case 1 (Card #{c_undrawn} - 2nd copy UNDRAWN in deck):")
-    print(f"  Copy 1 (played): {init_undrawn_c1:+.4f} -> {new_undrawn_c1:+.4f} (diff: {new_undrawn_c1 - init_undrawn_c1:+.4f})")
+    print(f"  Copy 1 (played):  {init_undrawn_c1:+.4f} -> {new_undrawn_c1:+.4f} (diff: {new_undrawn_c1 - init_undrawn_c1:+.4f})")
     print(f"  Copy 2 (undrawn): {init_undrawn_c2:+.4f} -> {new_undrawn_c2:+.4f} (diff: {new_undrawn_c2 - init_undrawn_c2:+.4f})")
 
     print(f"\nCase 2 (Card #{c_no_opp} - 2nd copy DRAWN, ZERO legal opportunity):")
-    print(f"  Copy 1 (played): {init_no_opp_c1:+.4f} -> {new_no_opp_c1:+.4f} (diff: {new_no_opp_c1 - init_no_opp_c1:+.4f})")
-    print(f"  Copy 2 (no opp): {init_no_opp_c2:+.4f} -> {new_no_opp_c2:+.4f} (diff: {new_no_opp_c2 - init_no_opp_c2:+.4f})")
+    print(f"  Copy 1 (played):  {init_no_opp_c1:+.4f} -> {new_no_opp_c1:+.4f} (diff: {new_no_opp_c1 - init_no_opp_c1:+.4f})")
+    print(f"  Copy 2 (no opp):  {init_no_opp_c2:+.4f} -> {new_no_opp_c2:+.4f} (diff: {new_no_opp_c2 - init_no_opp_c2:+.4f})")
 
-    print(f"\nCase 3 (Card #{c_wasted} - 2nd copy DRAWN, OPPORTUNITY WASTED across 2 turns):")
-    print(f"  Copy 1 (played): {init_wasted_c1:+.4f} -> {new_wasted_c1:+.4f} (diff: {new_wasted_c1 - init_wasted_c1:+.4f})")
-    print(f"  Copy 2 (wasted): {init_wasted_c2:+.4f} -> {new_wasted_c2:+.4f} (diff: {new_wasted_c2 - init_wasted_c2:+.4f})")
+    print(f"\nStrategic Restraint (Card #{c_strat} - 2nd copy HELD IN WINNING MATCH):")
+    print(f"  Copy 1 (played):  {init_strat_c1:+.4f} -> {new_strat_c1:+.4f} (diff: {new_strat_c1 - init_strat_c1:+.4f})")
+    print(f"  Copy 2 (held in win): {init_strat_c2:+.4f} -> {new_strat_c2:+.4f} (diff: {new_strat_c2 - init_strat_c2:+.4f})")
+
+    print(f"\nCase 3 (Card #{c_wasted} - 2nd copy DRAWN, WASTED OPPORTUNITY IN DEFEAT):")
+    print(f"  Copy 1 (played):  {init_wasted_c1:+.4f} -> {new_wasted_c1:+.4f} (diff: {new_wasted_c1 - init_wasted_c1:+.4f})")
+    print(f"  Copy 2 (wasted):  {init_wasted_c2:+.4f} -> {new_wasted_c2:+.4f} (diff: {new_wasted_c2 - init_wasted_c2:+.4f})")
 
     print(f"\nCase 4 (Card #{c_played} - BOTH copies DRAWN AND PLAYED):")
-    print(f"  Copy 1 (played): {init_played_c1:+.4f} -> {new_played_c1:+.4f} (diff: {new_played_c1 - init_played_c1:+.4f})")
-    print(f"  Copy 2 (played): {init_played_c2:+.4f} -> {new_played_c2:+.4f} (diff: {new_played_c2 - init_played_c2:+.4f})")
+    print(f"  Copy 1 (played):  {init_played_c1:+.4f} -> {new_played_c1:+.4f} (diff: {new_played_c1 - init_played_c1:+.4f})")
+    print(f"  Copy 2 (played):  {init_played_c2:+.4f} -> {new_played_c2:+.4f} (diff: {new_played_c2 - init_played_c2:+.4f})")
 
     # =========================================================================
-    # ASSERTIONS PROVING USER'S 4 CONDITIONS
+    # ASSERTIONS PROVING USER'S 4 CONDITIONS & STRATEGIC HOLDING PRESERVATION
     # =========================================================================
 
     # Condition 1: Undrawn 2nd copy gets ZERO penalty / ZERO change
-    assert abs(new_undrawn_c2 - init_undrawn_c2) < 1e-6, (
-        f"FAILED Condition 1: Undrawn 2nd copy changed! ({init_undrawn_c2} -> {new_undrawn_c2})"
-    )
+    assert abs(new_undrawn_c2 - init_undrawn_c2) < 1e-6, "Undrawn 2nd copy changed!"
     print("\n[VERIFIED] Condition 1 Passed: Undrawn 2nd copy received 0.0 delta (zero change).")
 
     # Condition 2: Drawn but no opportunity gets ZERO penalty / ZERO change
-    assert abs(new_no_opp_c2 - init_no_opp_c2) < 1e-6, (
-        f"FAILED Condition 2: 2nd copy without opportunity changed! ({init_no_opp_c2} -> {new_no_opp_c2})"
-    )
-    print("[VERIFIED] Condition 2 Passed: 2nd copy drawn without playable opportunity received 0.0 delta (zero penalty).")
+    assert abs(new_no_opp_c2 - init_no_opp_c2) < 1e-6, "2nd copy without opportunity changed!"
+    print("[VERIFIED] Condition 2 Passed: 2nd copy drawn without playable opportunity received 0.0 delta.")
 
-    # Condition 3: Drawn with wasted opportunity receives proportional penalty (< 0)
-    assert new_wasted_c2 < init_wasted_c2, (
-        f"FAILED Condition 3: 2nd copy with wasted opportunity did not decrease! ({init_wasted_c2} -> {new_wasted_c2})"
-    )
-    print("[VERIFIED] Condition 3 Passed: 2nd copy with wasted opportunity received proportional penalty.")
+    # Strategic Restraint: Holding card in a winning match gets ZERO penalty
+    assert abs(new_strat_c2 - init_strat_c2) < 1e-6, "Strategic hold in winning match was unfairly penalized!"
+    print("[VERIFIED] Strategic Restraint Passed: 2nd copy held in winning match received 0.0 delta (NO penalty!).")
+
+    # Condition 3: Drawn with wasted opportunity in defeat receives penalty (< 0)
+    assert new_wasted_c2 < init_wasted_c2, "2nd copy wasted in defeat did not receive penalty!"
+    print("[VERIFIED] Condition 3 Passed: 2nd copy wasted in defeat received proportional penalty.")
 
     # Condition 4: Both copies played receive positive reward (> 0)
-    assert new_played_c2 > init_played_c2, (
-        f"FAILED Condition 4: 2nd copy played did not increase! ({init_played_c2} -> {new_played_c2})"
-    )
+    assert new_played_c2 > init_played_c2, "2nd copy played did not increase!"
     print("[VERIFIED] Condition 4 Passed: 2nd copy played and contributed received positive reward.")
 
     # Independence Assertion:
-    # In Case 3 (Card 30), Copy 1 INCREASED (+0.035) while Copy 2 DECREASED (-0.017)
-    assert new_wasted_c1 > init_wasted_c1, "Copy 1 failed to increase"
-    assert new_wasted_c2 < init_wasted_c2, "Copy 2 failed to decrease"
-    print(f"[VERIFIED] Head Independence Passed: For Card #{c_wasted}, Copy 1 increased by {new_wasted_c1 - init_wasted_c1:+.4f} while Copy 2 decreased by {new_wasted_c2 - init_wasted_c2:+.4f}!")
+    # For Card 50 (Strategic hold), Copy 1 was played and WON (+0.1395),
+    # while Copy 2 was held and remained strictly ZERO penalty (+0.0000)!
+    assert new_strat_c1 > init_strat_c1, "Copy 1 of Card 50 failed to increase"
+    assert abs(new_strat_c2 - init_strat_c2) < 1e-6, "Copy 2 of Card 50 was unfairly penalized"
+    print(f"[VERIFIED] Head Independence Passed: For Card #{c_strat}, Copy 1 increased by {new_strat_c1 - init_strat_c1:+.4f} while Copy 2 remained at 0.0000 without penalty!")
 
     # =========================================================================
     # Step 2: Autonomous Drafting Verification

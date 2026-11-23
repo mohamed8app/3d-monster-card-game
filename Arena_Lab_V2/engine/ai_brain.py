@@ -301,16 +301,16 @@ class DeckDrafter:
                     delta[idx, 0] += float(a_val) * w
                     weight_sum[idx, 0] += w
                     self.visits[idx, 0] += 1.0
-                elif p_drawn >= 1 and opp_wasted > 0:
-                    # Condition 3: Drawn with wasted opportunities -> proportional penalty
+                elif p_drawn >= 1 and opp_wasted > 0 and a_val < 0:
+                    # Condition 3: Drawn with wasted opportunities in a LOSING match -> proportional penalty
                     deg = min(3, opp_wasted) / 3.0
-                    pen = -0.35 * deg * max(0.3, abs(float(a_val))) if a_val >= 0 else float(a_val)
+                    pen = float(a_val) * deg
                     w = 2.2 * deg
                     delta[idx, 0] += pen * w
                     weight_sum[idx, 0] += w
                     self.visits[idx, 0] += 1.0
                 elif p_drawn >= 1:
-                    # Condition 2: Drawn but no opportunity arose -> 0 penalty, 0 reward
+                    # Condition 2: Drawn but no opportunity arose, or held in a winning match -> 0 penalty, 0 reward
                     self.visits[idx, 0] += 0.1
                 else:
                     # Condition 1: Undrawn in deck -> 0 penalty, 0 reward
@@ -329,13 +329,18 @@ class DeckDrafter:
                     elif p_drawn < 2 and drawn_counts is not None:
                         # Condition 1: 2nd copy was NEVER drawn (remained in deck) -> NO penalty, NO reward
                         self.visits[idx, 1] += 0.05
-                    elif opp_wasted == 0:
-                        # Condition 2: 2nd copy drawn, but zero playable opportunity -> NO penalty, NO reward
+                    elif opp_wasted == 0 or a_val >= 0:
+                        # Condition 2: 2nd copy drawn, but:
+                        # - Either zero legal opportunity arose (opp_wasted == 0),
+                        # - OR the match was WON (a_val >= 0), meaning holding the card was
+                        #   a valid strategic reserve / restraint that did NOT cause defeat!
+                        # -> STRICTLY ZERO PENALTY (0.0 delta, eliminates strategic holding bias).
                         self.visits[idx, 1] += 0.1
                     else:
-                        # Condition 3: 2nd copy drawn, opportunity existed, but wasted!
+                        # Condition 3: 2nd copy drawn, opportunities existed, but unplayed AND the team LOST (a_val < 0)!
+                        # Genuine evidence of redundant dead weight contributing to defeat.
                         deg = min(3, opp_wasted) / 3.0
-                        pen = -0.45 * deg * max(0.4, abs(float(a_val))) if a_val >= 0 else float(a_val)
+                        pen = float(a_val) * deg
                         w = 2.2 * deg
                         delta[idx, 1] += pen * w
                         weight_sum[idx, 1] += w
