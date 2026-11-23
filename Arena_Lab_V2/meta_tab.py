@@ -219,11 +219,16 @@ class MetaDiscoveryTab:
 
     def _load_all_settled_decks(self) -> Dict[str, List[int]]:
         saved_dir = getattr(self.store, "saved_models_dir", os.path.abspath(os.path.join(self.store.logs_dir, "..", "saved_models")))
+        local_saved = os.path.abspath(os.path.join(os.path.dirname(__file__), "saved_models"))
         decks: Dict[str, List[int]] = {}
         for spec in ROSTER_40:
             mid = spec.model_id
             cids: List[int] = []
             dp = os.path.join(saved_dir, mid, "settled_deck.json")
+            if not os.path.isfile(dp):
+                local_dp = os.path.join(local_saved, mid, "settled_deck.json")
+                if os.path.isfile(local_dp):
+                    dp = local_dp
             if os.path.isfile(dp):
                 try:
                     with open(dp, "r", encoding="utf-8") as f:
@@ -245,11 +250,36 @@ class MetaDiscoveryTab:
 
         if n_decks < 4:
             self._last_metrics = {"has_data": False, "score": 0, "ideal_cnt": 0, "good_cnt": 0, "bad_cnt": 0}
-            self.meta_tree.insert(
-                "", "end",
-                values=(rtl("لا توجد ديكات مستقرة كافية (settled_deck.json) لتحليل الميتا."), rtl("بانتظار بيانات"), "--", "--", "--", rtl("تحليل الميتا جاهز"), "!"),
-                tags=("nodata",),
-            )
+            std_meta_indicators = [
+                (1, "إنتروبيا التنوع الاستراتيجي (Meta Entropy)", "82% فأعلى", "68% – 81%"),
+                (2, "حجم حوض البطاقات النشط في الـ 41 ديكاً", "450+ بطاقة", "320 – 449"),
+                (3, "متوسط تشابه الديكات المتبادل (Jaccard %)", "8% فأقل", "8% – 15%"),
+                (4, "أعلى نسبة تشابه بين ديكين (Clone Watch)", "35% فأقل", "35% – 55%"),
+                (5, "عدد البطاقات المحتكرة للميتا (>=25% ديكات)", "0 – 5 بطاقات", "6 – 14 بطاقة"),
+                (6, "أعلى نسبة انتشار لبطاقة واحدة (Top Staple)", "35% فأقل", "35% – 55%"),
+                (7, "تماسك التآزر القبلي والعنصري داخل الديكات", "55% فأعلى", "40% – 54%"),
+                (8, "أزواج الكومبو والتآزر الرابحة (>=3 ديكات)", "15+ زوجاً", "5 – 14"),
+                (9, "عدد الجواهر المخفية القابلة للاكتشاف (Gems)", "20 – 220", "5 – 400"),
+                (10, "عدد البطاقات الفخاخ (شائعة >=4 ديكات وفوز <45%)", "0 – 8", "9 – 20"),
+                (11, "أداء صائد الثغرات خارج الميتا (Glitch_41)", "45% – 58%", "40% – 63%"),
+                (12, "حالات الشذوذ والانفجارات الخطيرة المسجلة", "12 فأقل", "13 – 35"),
+                (13, "عدد الاستراتيجيات التنافسية الرابحة (>=50% WR)", "18+ نموذجاً", "12 – 17"),
+                (14, "مؤشر طول عمر الميتا وقابلية الاستكشاف", "80% فأعلى", "65% – 79%"),
+            ]
+            for num, m_name, ideal_s, good_s in std_meta_indicators:
+                self.meta_tree.insert(
+                    "", "end",
+                    values=(
+                        rtl("بانتظار استقرار 4+ ديكات لتفعيل قياس تنوع الميتا."),
+                        rtl("بانتظار بيانات"),
+                        rtl(good_s),
+                        rtl(ideal_s),
+                        "--",
+                        rtl(m_name),
+                        num,
+                    ),
+                    tags=("nodata",),
+                )
             return
 
         # 1 & 2. Strategic Meta Entropy & Active Card Pool across all 41 decks
