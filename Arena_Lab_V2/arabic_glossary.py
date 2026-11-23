@@ -13,7 +13,7 @@ import os
 import re
 import time
 import tkinter as tk
-from collections import Counter
+from collections import Counter, defaultdict
 from tkinter import font, messagebox, ttk
 from typing import Any, Dict, List, Optional, Tuple
 
