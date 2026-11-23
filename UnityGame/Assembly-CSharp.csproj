@@ -56,7 +56,6 @@
     <Compile Include="Assets\Scripts\Data\MonsterData.cs" />
     <Compile Include="Assets\Scripts\Utils\MonsterArtLoader.cs" />
     <Compile Include="Assets\Scripts\UI\GameBootstrapper.cs" />
-    <Compile Include="Assets\Scripts\Utils\ArabicFixer.cs" />
     <Compile Include="Assets\Scripts\UI\MonsterStandbyAnimator.cs" />
     <Compile Include="Assets\Scripts\UI\DraggableCard.cs" />
     <Compile Include="Assets\Scripts\UI\CardGalleryUIManager.cs" />
