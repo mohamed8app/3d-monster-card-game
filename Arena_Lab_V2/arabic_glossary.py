@@ -499,7 +499,7 @@ def explain_card_arabic(c: CardDef) -> str:
         ops = c.leader_ops or {}
         tr_i = int(ops.get("tribe", -1))
         tr_nm = TRIBE_AR.get(TRIBES[tr_i], "عام") if 0 <= tr_i < 10 else "عام"
-        parts.append(f"تميمة قائد لعشيرة ({tr_nm}) • 0 مانا")
+        parts.append(f"تميمة قائد لعشيرة ({tr_nm}) • {c.mana} مانا")
         for k, v in ops.items():
             if k in ("tribe", "style") or not v:
                 continue
@@ -508,7 +508,7 @@ def explain_card_arabic(c: CardDef) -> str:
         return " | ".join(parts)
     if c.type == "covenant":
         ops = c.covenant_ops or {}
-        parts.append("عهد وقيد (مذبح الجناح الأيمن • 0 مانا)")
+        parts.append(f"عهد وقيد (مذبح الجناح الأيمن • {c.mana} مانا)")
         for k, v in ops.items():
             if k in ("style", "tier") or not v:
                 continue

@@ -82,9 +82,14 @@ class DeckDrafter:
                 prior[i] = (curve.get(c.mana, 0.0) - 0.20) if c.is_barrier else curve.get(c.mana, 0.0)
             elif c.type == "spell":
                 prior[i] = 0.06 if c.mana <= 3 else 0.0
-            else:
-                # Environments (1 Mana), Leaders (0 Mana), Covenants (0 Mana) start completely fair at +0.08
+            elif c.type == "environment":
                 prior[i] = 0.08
+            elif c.type == "leader":
+                prior[i] = 0.06 if c.mana <= 1 else 0.04
+            elif c.type == "covenant":
+                prior[i] = {1: 0.06, 2: 0.04, 3: 0.02}.get(c.mana, 0.04)
+            else:
+                prior[i] = 0.04
         self.prior = prior.copy()
         self.logits = torch.tensor(prior, dtype=torch.float32, requires_grad=False)
         self.visits = np.zeros(self.num_cards, dtype=np.float32)
@@ -229,10 +234,16 @@ class DeckDrafter:
             )
             for cid in deck_ids:
                 idx = cid - 1
-                w = 2.2 if cid in played_set else 0.45
-                delta[idx] += float(a_val) * w
-                weight_sum[idx] += w
-                self.visits[idx] += 0.5 if cid not in played_set else 1.0
+                if cid in played_set:
+                    # Card was actually played on the battlefield: receives full 2.2x credit
+                    w = 2.2
+                    delta[idx] += float(a_val) * w
+                    weight_sum[idx] += w
+                    self.visits[idx] += 1.0
+                else:
+                    # Unplayed card (remained in deck or was sacrificed as mana fodder):
+                    # Zero reward delta so unplayed filler cards never receive false win credit!
+                    self.visits[idx] += 0.25
 
         active = weight_sum > 0
         step = np.zeros(self.num_cards, dtype=np.float32)

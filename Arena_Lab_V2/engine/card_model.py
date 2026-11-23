@@ -182,6 +182,7 @@ class MonsterUnit:
         "on_hit_burn", "on_hit_poison", "on_hit_bleed", "strip_buffs_bonus",
         "turn_heal_def", "turn_heal_hp", "cleanse_aura_def", "dmg_reduce_flat",
         "spell_ping_dmg", "leader_def_applied", "steal_aether_face",
+        "cov_def_applied", "cov_taunt_applied",
     )
 
     def __init__(
@@ -243,6 +244,8 @@ class MonsterUnit:
         self.temp_atk_buff: int = 0
         self.temp_def_buff: int = 0
         self.leader_def_applied: int = 0
+        self.cov_def_applied: int = 0
+        self.cov_taunt_applied: bool = False
 
         self.summoned_turn: int = int(summoned_turn)
         self.own_turns_survived: int = 0
@@ -664,7 +667,7 @@ class PlayerState:
         "leader_ops", "covenant_card_id", "covenant_active", "covenant_destroyed",
         "covenant_ops", "echo_next_spell", "spell_power_temp", "skill_bonus_temp",
         "skill_discount_temp", "no_draw_turns", "deck_out_lost", "cards_played_turn",
-        "summons_turn", "telemetry",
+        "summons_turn", "telemetry", "cov_perm_hp_lost",
     )
 
     def __init__(self, side: int, deck_ids: List[int]) -> None:
@@ -703,6 +706,7 @@ class PlayerState:
         self.deck_out_lost: bool = False
         self.cards_played_turn: int = 0
         self.summons_turn: int = 0
+        self.cov_perm_hp_lost: int = 0
         self.telemetry: MatchTelemetry = MatchTelemetry()
 
     def hand_limit(self) -> int:

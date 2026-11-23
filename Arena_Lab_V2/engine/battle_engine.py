@@ -722,11 +722,13 @@ class BattleEngine:
                 elif c.type == "environment":
                     mask[base] = True
                 elif c.type == "leader":
-                    if not p.leader_active and not p.leader_exorcised:
+                    if not p.leader_exorcised and (not p.leader_active or p.leader_card_id != hc.card_id):
                         mask[base] = True
                 elif c.type == "covenant":
-                    if not p.covenant_active and not p.covenant_destroyed:
-                        mask[base] = True
+                    if not p.covenant_destroyed and (not p.covenant_active or p.covenant_card_id != hc.card_id):
+                        cops = c.covenant_ops or {}
+                        if cops.get("self_hp_init_loss", 0) <= 0 or p.hp > int(cops["self_hp_init_loss"]):
+                            mask[base] = True
                 elif c.type == "spell":
                     if ban_spells:
                         continue
@@ -1161,6 +1163,8 @@ class BattleEngine:
     def _play_leader(self, side: int, card: CardDef) -> None:
         """V2.3 Pure Continuous Tribal Ancestor Blessing (ZERO On-Summon burst, continuous aura ONLY!)."""
         p = self.players[side]
+        if p.leader_active and p.leader_card_id > 0:
+            p.graveyard.append(p.leader_card_id)
         ops = card.leader_ops or {}
         p.leader_card_id = card.id
         p.leader_active = True
@@ -1182,8 +1186,64 @@ class BattleEngine:
         # Immediately synchronize continuous +DEF aura to all existing matching-Tribe allies on board
         self._sync_leader_def_aura(side)
 
+    def _remove_covenant_effects(self, side: int, send_to_grave: bool = True) -> None:
+        p = self.players[side]
+        if not p.covenant_active:
+            return
+        old_ops = p.covenant_ops or {}
+        # 1. Revert monster board bonuses and penalties applied directly to units
+        for u in p.board_units():
+            if u.cov_def_applied != 0:
+                u.max_def = max(1, u.max_def - u.cov_def_applied)
+                u.deff = max(1, min(u.deff, u.max_def))
+                u.cov_def_applied = 0
+            if u.cov_taunt_applied:
+                u.taunt = any(pa.get("kind") in ("taunt", "taunt_evasion", "taunt_reflect_pct") for pa in u.passives)
+                u.cov_taunt_applied = False
+            if old_ops.get("rew_leech_pct"):
+                u.life_leech_pct = max(0, u.life_leech_pct - int(old_ops["rew_leech_pct"]))
+            if old_ops.get("rew_burn"):
+                u.on_hit_burn = max(0, u.on_hit_burn - int(old_ops["rew_burn"]))
+            if old_ops.get("rew_poison"):
+                u.on_hit_poison = max(0, u.on_hit_poison - int(old_ops["rew_poison"]))
+            if old_ops.get("rew_bleed"):
+                u.on_hit_bleed = max(0, u.on_hit_bleed - int(old_ops["rew_bleed"]))
+        # 2. Revert player-level restrictions
+        if old_ops.get("self_hp_cap", 0) > 0:
+            p.max_hp = max(p.hp, LEADER_HP - p.cov_perm_hp_lost)
+        if send_to_grave and p.covenant_card_id > 0:
+            p.graveyard.append(p.covenant_card_id)
+        p.covenant_active = False
+        p.covenant_card_id = 0
+        p.covenant_ops = None
+
+    def _apply_covenant_effects(self, side: int, ops: Dict[str, Any]) -> None:
+        p = self.players[side]
+        net_def = int(ops.get("rew_def", 0)) - int(ops.get("self_def_pen", 0))
+        for u in p.board_units():
+            if net_def != 0:
+                u.cov_def_applied = net_def
+                u.max_def = max(1, u.max_def + net_def)
+                u.deff = max(1, min(u.deff, u.max_def)) if net_def < 0 else (u.deff + net_def)
+            if ops.get("rew_taunt") and not u.taunt:
+                u.taunt = True
+                u.cov_taunt_applied = True
+            if ops.get("rew_haste") and u.can_ever_attack():
+                u.haste = True
+                u.can_attack = True
+            u.life_leech_pct += int(ops.get("rew_leech_pct", 0))
+            u.on_hit_burn += int(ops.get("rew_burn", 0))
+            u.on_hit_poison += int(ops.get("rew_poison", 0))
+            u.on_hit_bleed += int(ops.get("rew_bleed", 0))
+            dcap = int(ops.get("self_def_cap", 0))
+            if dcap > 0:
+                u.max_def = min(u.max_def, dcap)
+                u.deff = min(u.deff, dcap)
+
     def _play_covenant(self, side: int, card: CardDef) -> None:
         p = self.players[side]
+        if p.covenant_active:
+            self._remove_covenant_effects(side, send_to_grave=True)
         ops = card.covenant_ops or {}
         p.covenant_card_id = card.id
         p.covenant_active = True
@@ -1192,17 +1252,13 @@ class BattleEngine:
         # Apply immediate self-restriction caps
         hp_init_loss = int(ops.get("self_hp_init_loss", 0))
         if hp_init_loss > 0:
+            p.cov_perm_hp_lost += hp_init_loss
             p.max_hp = max(50, p.max_hp - hp_init_loss)
             p.hp = min(p.hp, p.max_hp)
         hp_cap = int(ops.get("self_hp_cap", 0))
         if hp_cap > 0 and p.hp > hp_cap:
             p.max_hp = min(p.max_hp, hp_cap)
             p.hp = min(p.hp, hp_cap)
-        def_cap = int(ops.get("self_def_cap", 0))
-        if def_cap > 0:
-            for u in p.board_units():
-                u.max_def = min(u.max_def, def_cap)
-                u.deff = min(u.deff, def_cap)
         if p.max_mana > p.mana_cap():
             p.max_mana = p.mana_cap()
             p.mana = min(p.mana, p.mana_cap())
@@ -1210,6 +1266,9 @@ class BattleEngine:
         cap_h = p.hand_limit()
         while len(p.hand) > cap_h:
             p.graveyard.append(p.hand.pop(0).card_id)
+
+        # Synchronize board bonuses and penalties to existing monsters
+        self._apply_covenant_effects(side, ops)
 
     # ------------------------------------------------------------------
     # Monster Summoning & Passive Initialization
@@ -1231,15 +1290,17 @@ class BattleEngine:
         deff = max(1, pct_of(card.deff, stat_pct))
 
         # Covenant DEF cap / penalty
+        cov_def = 0
         if p.covenant_active and p.covenant_ops:
-            deff = max(1, deff - int(p.covenant_ops.get("self_def_pen", 0)))
-            dpct = int(p.covenant_ops.get("self_def_pct_pen", 0))
+            cov = p.covenant_ops
+            cov_def = int(cov.get("rew_def", 0)) - int(cov.get("self_def_pen", 0))
+            dpct = int(cov.get("self_def_pct_pen", 0))
             if dpct > 0:
-                deff = max(1, deff - pct_of(deff, dpct))
-            dcap = int(p.covenant_ops.get("self_def_cap", 0))
+                cov_def -= pct_of(deff, dpct)
+            deff = max(1, deff + cov_def)
+            dcap = int(cov.get("self_def_cap", 0))
             if dcap > 0:
                 deff = min(deff, dcap)
-            deff += int(p.covenant_ops.get("rew_def", 0))
 
         u = MonsterUnit(
             card_id=card.id,
@@ -1262,6 +1323,7 @@ class BattleEngine:
             actives=card.actives,
             summoned_turn=self.turn,
         )
+        u.cov_def_applied = cov_def
         p.board[slot] = u
         if self._pace_first_summon == 0:
             self._pace_first_summon = self.turn
@@ -1292,8 +1354,9 @@ class BattleEngine:
             cov = p.covenant_ops
             if cov.get("rew_haste") and u.can_ever_attack():
                 u.haste = True
-            if cov.get("rew_taunt"):
+            if cov.get("rew_taunt") and not u.taunt:
                 u.taunt = True
+                u.cov_taunt_applied = True
             u.life_leech_pct += int(cov.get("rew_leech_pct", 0))
             u.on_hit_burn += int(cov.get("rew_burn", 0))
             u.on_hit_poison += int(cov.get("rew_poison", 0))
@@ -2186,9 +2249,8 @@ class BattleEngine:
         if k == "counter_betrayal":
             self._damage_commander(side, int(op.get("self_dmg", 40)), source_side=-1)
             if opp.covenant_active:
-                opp.covenant_active = False
+                self._remove_covenant_effects(1 - side, send_to_grave=True)
                 opp.covenant_destroyed = True
-                opp.covenant_ops = None
                 p.telemetry.disruptions_applied += 3
                 self._add_highlight(side, "Counter_Tech_Break")
         elif k == "counter_stand_alone":
@@ -2199,9 +2261,8 @@ class BattleEngine:
                 self._add_highlight(side, "Counter_Tech_Break")
         elif k == "counter_oblivion":
             if opp.covenant_active:
-                opp.covenant_active = False
+                self._remove_covenant_effects(1 - side, send_to_grave=True)
                 opp.covenant_destroyed = True
-                opp.covenant_ops = None
                 p.telemetry.disruptions_applied += 3
                 self._add_highlight(side, "Counter_Tech_Break")
         elif k == "counter_exorcism":

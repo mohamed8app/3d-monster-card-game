@@ -21,7 +21,7 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-V2_JSON_PATH = os.path.join(ROOT_DIR, "data", "__KEEP_CARDS_V2_1470_JSON__")
+V2_JSON_PATH = os.path.join(ROOT_DIR, "data", "cards_v2_2270.json")
 SAVED_MODELS_DIR = os.path.join(ROOT_DIR, "saved_models")
 LOGS_ROSTER_PATH = os.path.join(ROOT_DIR, "logs", "roster_stats.json")
 

@@ -607,13 +607,15 @@ namespace MonsterCardGame.Core
                 yield return new WaitForSeconds(0.40f);
             }
 
-            // Also activate Right-Wing Altar Covenant if AI holds one and none is active yet
-            if (aiPlayer.activeCovenant == null && !aiPlayer.covenantDestroyed)
+            // Also activate Right-Wing Altar Covenant if AI holds one and it differs from active covenant
+            if (!aiPlayer.covenantDestroyed)
             {
                 CardData chosenCov = null;
                 foreach (var card in new List<CardData>(aiPlayer.hand))
                 {
-                    if (card != null && card.cardType == CardType.Covenant && aiPlayer.GetEffectiveCardCost(card) <= aiPlayer.currentMana)
+                    if (card != null && card.cardType == CardType.Covenant &&
+                        (aiPlayer.activeCovenant == null || aiPlayer.activeCovenant.id != card.id) &&
+                        aiPlayer.GetEffectiveCardCost(card) <= aiPlayer.currentMana)
                     {
                         chosenCov = card;
                         break;

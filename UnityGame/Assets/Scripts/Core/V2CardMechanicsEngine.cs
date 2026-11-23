@@ -657,12 +657,15 @@ namespace MonsterCardGame.Core
                 var cov = GetCovenantOps(player.activeCovenant);
                 if (cov != null)
                 {
-                    if (cov.rew_def > 0) instance.AddBonusDef(cov.rew_def);
-                    if (cov.rew_stat_pct > 0) instance.AddBonusDef(StrictRoundPct(instance.baseDef, cov.rew_stat_pct));
-                    if (cov.self_def_pen > 0)
-                        instance.currentDef = Mathf.Max(1, instance.currentDef - cov.self_def_pen);
+                    int netDef = cov.rew_def - cov.self_def_pen;
                     if (cov.self_def_pct_pen > 0)
-                        instance.currentDef = Mathf.Max(1, instance.currentDef - StrictRoundPct(instance.currentDef, cov.self_def_pct_pen));
+                        netDef -= StrictRoundPct(instance.currentDef, cov.self_def_pct_pen);
+                    if (netDef != 0)
+                    {
+                        instance.covDefApplied = netDef;
+                        instance.baseDef = Mathf.Max(1, instance.baseDef + netDef);
+                        instance.currentDef = Mathf.Max(1, instance.currentDef + netDef);
+                    }
                     if (cov.self_def_cap > 0)
                     {
                         instance.baseDef = Mathf.Min(instance.baseDef, cov.self_def_cap);
@@ -670,6 +673,11 @@ namespace MonsterCardGame.Core
                     }
                     if (cov.rew_haste && !instance.IsBarrier)
                         instance.canAttack = true;
+                    if (cov.rew_taunt && !instance.covTauntApplied)
+                        instance.covTauntApplied = true;
+                    if (cov.rew_burn > 0) instance.burnDmg += cov.rew_burn;
+                    if (cov.rew_poison > 0) instance.poisonDmg += cov.rew_poison;
+                    if (cov.rew_bleed > 0) instance.bleedDmg += cov.rew_bleed;
                     if (cov.rew_double_skill && !instance.IsBarrier)
                         instance.doubleSkillOneTurn = true;
                 }
@@ -973,6 +981,85 @@ namespace MonsterCardGame.Core
             }
         }
 
+        public static void RemoveActiveCovenantEffects(PlayerState player, bool sendToGraveyard = true)
+        {
+            if (player == null || player.activeCovenant == null) return;
+            var oldOps = GetCovenantOps(player.activeCovenant);
+            if (oldOps != null && player.slots != null)
+            {
+                foreach (var s in player.slots)
+                {
+                    if (s == null || !s.IsOccupied || s.currentMonster == null || !s.currentMonster.IsAlive) continue;
+                    var m = s.currentMonster;
+                    if (m.covDefApplied > 0)
+                    {
+                        m.baseDef = Mathf.Max(1, m.baseDef - m.covDefApplied);
+                        m.currentDef = Mathf.Max(1, Mathf.Min(m.currentDef, m.baseDef + m.permBonusDef));
+                        m.covDefApplied = 0;
+                    }
+                    else if (m.covDefApplied < 0)
+                    {
+                        m.baseDef = Mathf.Max(1, m.baseDef - m.covDefApplied);
+                        m.currentDef = Mathf.Max(1, m.currentDef - m.covDefApplied);
+                        m.covDefApplied = 0;
+                    }
+                    if (m.covTauntApplied)
+                    {
+                        m.covTauntApplied = false;
+                    }
+                    if (oldOps.rew_burn > 0) m.burnDmg = Mathf.Max(0, m.burnDmg - oldOps.rew_burn);
+                    if (oldOps.rew_poison > 0) m.poisonDmg = Mathf.Max(0, m.poisonDmg - oldOps.rew_poison);
+                    if (oldOps.rew_bleed > 0) m.bleedDmg = Mathf.Max(0, m.bleedDmg - oldOps.rew_bleed);
+                }
+                if (oldOps.self_hp_cap > 0)
+                {
+                    player.maxHp = Mathf.Max(player.currentHp, 500 - player.covPermHpLost);
+                }
+                if (oldOps.max_hand_self > 0 && oldOps.max_hand_self < 7)
+                {
+                    player.maxHandSize = 7;
+                }
+            }
+            if (sendToGraveyard && player.activeCovenant != null)
+            {
+                player.graveyard.Add(player.activeCovenant);
+            }
+            player.activeCovenant = null;
+        }
+
+        public static void ApplyCovenantEffects(PlayerState player, V2CovenantOps ops)
+        {
+            if (player == null || ops == null || player.slots == null) return;
+            int netDef = ops.rew_def - ops.self_def_pen;
+            foreach (var s in player.slots)
+            {
+                if (s == null || !s.IsOccupied || s.currentMonster == null || !s.currentMonster.IsAlive) continue;
+                var m = s.currentMonster;
+                if (netDef != 0)
+                {
+                    m.covDefApplied = netDef;
+                    m.baseDef = Mathf.Max(1, m.baseDef + netDef);
+                    m.currentDef = Mathf.Max(1, m.currentDef + netDef);
+                }
+                if (ops.rew_taunt && !m.covTauntApplied)
+                {
+                    m.covTauntApplied = true;
+                }
+                if (ops.rew_haste && !m.IsBarrier)
+                {
+                    m.canAttack = true;
+                }
+                if (ops.rew_burn > 0) m.burnDmg += ops.rew_burn;
+                if (ops.rew_poison > 0) m.poisonDmg += ops.rew_poison;
+                if (ops.rew_bleed > 0) m.bleedDmg += ops.rew_bleed;
+                if (ops.self_def_cap > 0)
+                {
+                    m.baseDef = Mathf.Min(m.baseDef, ops.self_def_cap);
+                    m.currentDef = Mathf.Min(m.currentDef, ops.self_def_cap);
+                }
+            }
+        }
+
         public static bool PlayCovenantCard(PlayerState player, CardData covCard)
         {
             if (player == null || covCard == null || covCard.cardType != CardType.Covenant) return false;
@@ -992,8 +1079,11 @@ namespace MonsterCardGame.Core
             player.currentMana -= effCost;
             player.hand.Remove(covCard);
             player.cardsPlayedThisTurn++;
+
             if (player.activeCovenant != null)
-                player.graveyard.Add(player.activeCovenant);
+            {
+                RemoveActiveCovenantEffects(player, sendToGraveyard: true);
+            }
 
             player.activeCovenant = covCard;
             player.covenantDestroyed = false;
@@ -1003,6 +1093,7 @@ namespace MonsterCardGame.Core
             {
                 if (ops.self_hp_init_loss > 0)
                 {
+                    player.covPermHpLost += ops.self_hp_init_loss;
                     player.maxHp = Mathf.Max(50, player.maxHp - ops.self_hp_init_loss);
                     player.currentHp = Mathf.Min(player.currentHp, player.maxHp);
                 }
@@ -1021,17 +1112,7 @@ namespace MonsterCardGame.Core
                         player.graveyard.Add(burned);
                     }
                 }
-                if (ops.self_def_cap > 0 && player.slots != null)
-                {
-                    foreach (var s in player.slots)
-                    {
-                        if (s != null && s.IsOccupied && s.currentMonster != null)
-                        {
-                            s.currentMonster.baseDef = Mathf.Min(s.currentMonster.baseDef, ops.self_def_cap);
-                            s.currentMonster.currentDef = Mathf.Min(s.currentMonster.currentDef, ops.self_def_cap);
-                        }
-                    }
-                }
+                ApplyCovenantEffects(player, ops);
             }
 
             BattleUIManager.Instance?.LogCombatMessage($"📜 [{player.playerName}] activated Right-Wing Altar Covenant [{covCard.name}]: {covCard.description}", covCard);
@@ -1083,11 +1164,7 @@ namespace MonsterCardGame.Core
 
                 case "oblivion":
                 case "counter_oblivion":
-                    if (target.activeCovenant != null)
-                    {
-                        target.graveyard.Add(target.activeCovenant);
-                        target.activeCovenant = null;
-                    }
+                    RemoveActiveCovenantEffects(target, sendToGraveyard: true);
                     target.covenantDestroyed = true;
                     BattleUIManager.Instance?.LogCombatMessage($"⚡ [Oblivion] Shattered [{target.playerName}]'s Right-Wing Altar Covenant!", spellCard);
                     break;

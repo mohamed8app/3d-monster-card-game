@@ -330,7 +330,8 @@ namespace MonsterCardGame.Core
         private static bool HasTaunt(MonsterInstance u)
         {
             if (u == null || u.silencedTurns > 0) return false;
-            return HasAnyPassiveKind(u, "taunt", "taunt_reflect_pct", "taunt_evasion")
+            return u.covTauntApplied
+                || HasAnyPassiveKind(u, "taunt", "taunt_reflect_pct", "taunt_evasion")
                 || u.HasPassiveSubstr("Taunt") != null
                 || u.HasPassiveSubstr("Vanguard") != null;
         }
@@ -637,7 +638,7 @@ namespace MonsterCardGame.Core
                 }
                 else if (c.cardType == CardType.Covenant)
                 {
-                    if (!p.covenantDestroyed && p.activeCovenant == null)
+                    if (!p.covenantDestroyed && (p.activeCovenant == null || p.activeCovenant.id != c.id))
                     {
                         var cops = V2CardMechanicsEngine.GetCovenantOps(c);
                         if (cops == null || cops.self_hp_init_loss <= 0 || p.currentHp > cops.self_hp_init_loss)

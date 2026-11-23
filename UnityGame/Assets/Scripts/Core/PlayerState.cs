@@ -51,6 +51,7 @@ namespace MonsterCardGame.Core
         public int leaderMutedTurns = 0;
         public bool covenantDestroyed = false;
         public int covenantMutedTurns = 0;
+        public int covPermHpLost = 0;
         public int cardsPlayedThisTurn = 0;
         public int monstersSummonedThisTurn = 0;
         [NonSerialized] public string lastSummonFailReason = "";
