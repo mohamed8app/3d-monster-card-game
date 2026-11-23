@@ -1571,6 +1571,21 @@ namespace MonsterCardGame.Core
                 return false;
             }
 
+            var v2op = V2CardMechanicsEngine.GetSpellOps(spellCard);
+            if (v2op != null && !string.IsNullOrEmpty(v2op.kind))
+            {
+                if ((v2op.kind == "clone_board" || v2op.kind == "doppelganger_spell" || v2op.kind == "spawn_tokens" || v2op.kind == "revive_board") && !hasEmpty)
+                {
+                    reason = $"Battlefield is full! [{spellCard.name}] requires at least 1 empty slot to summon/clone.";
+                    return false;
+                }
+                if (v2op.kind == "revive_board" && !HasCatalogMonsterInGraveyard(caster))
+                {
+                    reason = $"[{spellCard.name}] requires a fallen Monster in your graveyard to revive.";
+                    return false;
+                }
+            }
+
             return true;
         }
 

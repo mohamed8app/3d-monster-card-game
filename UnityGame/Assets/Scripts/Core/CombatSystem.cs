@@ -1341,9 +1341,55 @@ namespace MonsterCardGame.Core
                 return AbilityReadyState.NoValidTarget;
             }
 
-            if ((act.Contains("Wrath of Nature") || act.Contains("Graveyard Summoning") || act.Contains("Hive Swarm Call")) && !HasEmptyFlankSlot(owner))
+            // 1. Sacrifice Preconditions: requires at least 1 other alive ally on the battlefield
+            bool isSacrificeSkill = (v2op != null && (v2op.sac || v2op.kind.StartsWith("sac_") || v2op.kind == "absorb_ally_atk" || v2op.kind == "ally_atk_to_def" || v2op.kind == "devour_3"))
+                                   || act.ToLower().Contains("sacrifice") || act.ToLower().Contains("absorb ally");
+            if (isSacrificeSkill && GetAliveSlots(owner).Count <= 1)
             {
-                reason = $"⚠️ Flank slots are full! Need at least 1 empty flank slot to summon tokens.";
+                reason = $"⚠️ [{shortName}] requires at least 1 other allied monster on the battlefield to sacrifice!";
+                return AbilityReadyState.NoValidTarget;
+            }
+
+            // 2. Summon / Spawn / Revive Preconditions: requires at least 1 empty slot on board
+            bool isSpawnSkill = (v2op != null && (v2op.kind == "spawn_token" || v2op.kind == "warrior_call" || v2op.kind == "revive_board" || v2op.spawn != null))
+                                || act.Contains("Wrath of Nature") || act.Contains("Graveyard Summoning") || act.Contains("Hive Swarm Call") || act.ToLower().Contains("spawn") || act.ToLower().Contains("summon");
+            bool hasEmptySlot = false;
+            for (int s = 0; s < 6; s++)
+            {
+                if (owner.slots != null && s < owner.slots.Length && (owner.slots[s] == null || !owner.slots[s].IsOccupied))
+                {
+                    hasEmptySlot = true;
+                    break;
+                }
+            }
+            if (isSpawnSkill && !hasEmptySlot)
+            {
+                reason = $"⚠️ Board is full! Need at least 1 empty battlefield slot for [{shortName}].";
+                return AbilityReadyState.NoValidTarget;
+            }
+
+            // 3. Graveyard Preconditions: requires at least 1 card in graveyard
+            bool isGraveSkill = (v2op != null && (v2op.kind == "revive_board" || v2op.kind == "grave_to_hand"))
+                                || act.ToLower().Contains("graveyard to hand") || act.ToLower().Contains("revive");
+            if (isGraveSkill && owner.graveyard.Count == 0)
+            {
+                reason = $"⚠️ Graveyard is empty! No fallen cards to retrieve or revive with [{shortName}].";
+                return AbilityReadyState.NoValidTarget;
+            }
+
+            // 4. Hand Discard Preconditions: requires at least 1 card in hand
+            bool isDiscardSkill = (v2op != null && v2op.kind.StartsWith("discard_hand")) || act.ToLower().Contains("discard a card from hand");
+            if (isDiscardSkill && owner.hand.Count == 0)
+            {
+                reason = $"⚠️ Hand is empty! No card to discard for [{shortName}].";
+                return AbilityReadyState.NoValidTarget;
+            }
+
+            // 5. Leader Healing Preconditions: cannot heal if already at max HP
+            bool isHealLeaderSkill = (v2op != null && v2op.kind == "heal_leader") || act.ToLower().Contains("heal commander");
+            if (isHealLeaderSkill && owner.currentHp >= owner.maxHp)
+            {
+                reason = $"❤️ Commander is already at maximum health ({owner.maxHp} HP)!";
                 return AbilityReadyState.NoValidTarget;
             }
 

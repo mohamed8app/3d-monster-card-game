@@ -735,8 +735,13 @@ class BattleEngine:
                     sk = c.spell_ops["kind"] if c.spell_ops else "dmg_single"
                     if cov and cov.get("ban_face_spell") and sk == "dmg_leader":
                         continue
-                    # Targeted enemy/ally single-slot spells allow picking occupied slots
-                    if sk in ("dmg_single", "execute_enemy", "polymorph", "pull_hook_spell", "mind_control",
+                    if sk in ("clone_board", "doppelganger_spell", "spawn_tokens", "revive_board"):
+                        if b_cnt >= b_lim:
+                            continue
+                        if sk == "revive_board" and not p.graveyard:
+                            continue
+                        mask[base] = True
+                    elif sk in ("dmg_single", "execute_enemy", "polymorph", "pull_hook_spell", "mind_control",
                               "shifting_curse", "cleave_enemy", "melt_enemy_def"):
                         any_t = False
                         for slot in range(BOARD_SLOTS):
@@ -848,6 +853,27 @@ class BattleEngine:
                             continue
                     elif ak == "recall_enemy":
                         if opp.board_count() <= 0:
+                            continue
+                    elif ak in ("spawn_token", "warrior_call"):
+                        if p.board_count() >= p.board_limit():
+                            continue
+                    elif ak == "revive_board":
+                        if p.board_count() >= p.board_limit() or not p.graveyard:
+                            continue
+                    elif ak in ("cleave_enemy", "pull_hook", "aoe_enemy"):
+                        if opp.board_count() <= 0:
+                            continue
+                    elif ak == "mind_control_temp":
+                        if opp.board_count() <= 0 or p.board_count() >= p.board_limit():
+                            continue
+                    elif ak == "grave_to_hand":
+                        if not p.graveyard or len(p.hand) >= p.hand_limit():
+                            continue
+                    elif ak == "copy_enemy_hand":
+                        if not opp.hand or len(p.hand) >= p.hand_limit():
+                            continue
+                    elif ak == "heal_leader":
+                        if p.hp >= p.max_hp:
                             continue
                     mask[50 + slot * 2 + k] = True
 
