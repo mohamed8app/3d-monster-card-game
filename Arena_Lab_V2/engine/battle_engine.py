@@ -1731,6 +1731,27 @@ class BattleEngine:
         if cost > p.mana + p.temp_mana:
             return
 
+        k = op.get("kind", "dmg_single")
+        # Strict Execution Precondition Guards:
+        if k in ("spawn_token", "warrior_call") and p.board_count() >= p.board_limit():
+            return
+        if k == "revive_board" and (p.board_count() >= p.board_limit() or not p.graveyard):
+            return
+        if k in ("cleave_enemy", "pull_hook", "aoe_enemy") and opp.board_count() <= 0:
+            return
+        if k == "mind_control_temp" and (opp.board_count() <= 0 or p.board_count() >= p.board_limit()):
+            return
+        if k == "grave_to_hand" and (not p.graveyard or len(p.hand) >= p.hand_limit()):
+            return
+        if k == "copy_enemy_hand" and (not opp.hand or len(p.hand) >= p.hand_limit()):
+            return
+        if k == "heal_leader" and p.hp >= p.max_hp:
+            return
+        if k in ("sac_ally_aether", "sac_ally_draw2") and not any(au is not u for au in p.board_units()):
+            return
+        if k in ("discard_hand_mana", "discard_hand_2aether") and not p.hand:
+            return
+
         self._spend_mana(side, cost)
         p.telemetry.si_total_decisions += 1
         _sk_re2 = str(op.get("kind", ""))
