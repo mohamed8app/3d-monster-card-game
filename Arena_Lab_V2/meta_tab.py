@@ -100,7 +100,7 @@ class MetaDiscoveryTab:
         self.inner = tk.Frame(self.scroll_canvas, bg=BG_DARK)
         self._inner_win = self.scroll_canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda _e: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all")))
-        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(980, e.width)))
+        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(400, e.width)))
         self.scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         # Hero Score Banner
@@ -110,49 +110,7 @@ class MetaDiscoveryTab:
         self.cv_score.pack(fill="x")
         self.cv_score.bind("<Configure>", lambda _e: self._draw_score_banner())
 
-        # Visual Charts Row (RTL: Interactive 3-Way Meta Explorer on RIGHT 54%, Vitality & Clone Watch on LEFT 46%)
-        charts = tk.Frame(self.inner, bg=BG_DARK)
-        charts.pack(fill="x", pady=(0, 8))
-        charts.grid_columnconfigure(0, weight=46, uniform="meta")
-        charts.grid_columnconfigure(1, weight=54, uniform="meta")
-
-        p_vit = self._make_panel(charts, "مؤشرات حيوية وطول عمر الميتا + أكثر الديكات تشابهاً (Clone Watch)", COL_CYAN)
-        p_vit.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        self.cv_vit = tk.Canvas(p_vit, bg=BG_PANEL, height=255, highlightthickness=0)
-        self.cv_vit.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_vit.bind("<Configure>", lambda _e: self._draw_vitality())
-
-        p_exp = self._make_panel(charts, "مستكشف البطاقات والأزواج التفاعلي (اضغط للتبديل)", COL_GOLD)
-        p_exp.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-
-        tbar = tk.Frame(p_exp, bg=BG_PANEL, padx=8, pady=2)
-        tbar.pack(fill="x")
-        modes = [
-            ("staples", "أكثر 8 بطاقات احتكاراً (Staples)"),
-            ("gems", "أقوى 8 جواهر مخفية (Gems)"),
-            ("pairs", "أقوى 8 أزواج تآزر (Pairs)"),
-        ]
-        for key, lbl in modes:
-            btn = tk.Button(
-                tbar,
-                text=rtl(lbl),
-                command=lambda k=key: self._set_mode(k),
-                bg=COL_BLUE if key == "staples" else BG_CARD,
-                fg="#FFFFFF" if key == "staples" else FG_MUTED,
-                relief="flat",
-                font=(FONT_UI, 8, "bold"),
-                padx=8,
-                pady=2,
-                cursor="hand2",
-            )
-            btn.pack(side="right", padx=2)
-            self._mode_buttons[key] = btn
-
-        self.cv_exp = tk.Canvas(p_exp, bg=BG_PANEL, height=228, highlightthickness=0)
-        self.cv_exp.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_exp.bind("<Configure>", lambda _e: self._draw_explorer())
-
-        # Self-Explanatory 14-Indicator Diagnostic Table
+        # Self-Explanatory 14-Indicator Diagnostic Table (Full Width First!)
         tbl_panel = self._make_panel(
             self.inner,
             "بطاقة التقييم التفصيلية لمعيار اكتشاف الميتا والتنوع الاستراتيجي (14 مؤشراً — النتيجة + الجيد + المثالي + التشخيص)",
@@ -181,6 +139,43 @@ class MetaDiscoveryTab:
 
         self.meta_tree.pack(fill="x", padx=8, pady=(2, 8))
         enable_treeview_sorting(self.meta_tree)
+
+        # Visual Charts Stacked Vertically at Full Screen Width
+        p_exp = self._make_panel(self.inner, "مستكشف البطاقات والأزواج التفاعلي (اضغط للتبديل)", COL_GOLD)
+        p_exp.pack(fill="x", pady=(0, 8))
+
+        tbar = tk.Frame(p_exp, bg=BG_PANEL, padx=8, pady=2)
+        tbar.pack(fill="x")
+        modes = [
+            ("staples", "أكثر 8 بطاقات احتكاراً (Staples)"),
+            ("gems", "أقوى 8 جواهر مخفية (Gems)"),
+            ("pairs", "أقوى 8 أزواج تآزر (Pairs)"),
+        ]
+        for key, lbl in modes:
+            btn = tk.Button(
+                tbar,
+                text=rtl(lbl),
+                command=lambda k=key: self._set_mode(k),
+                bg=COL_BLUE if key == "staples" else BG_CARD,
+                fg="#FFFFFF" if key == "staples" else FG_MUTED,
+                relief="flat",
+                font=(FONT_UI, 8, "bold"),
+                padx=8,
+                pady=2,
+                cursor="hand2",
+            )
+            btn.pack(side="right", padx=2)
+            self._mode_buttons[key] = btn
+
+        self.cv_exp = tk.Canvas(p_exp, bg=BG_PANEL, height=240, highlightthickness=0)
+        self.cv_exp.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_exp.bind("<Configure>", lambda _e: self._draw_explorer())
+
+        p_vit = self._make_panel(self.inner, "مؤشرات حيوية وطول عمر الميتا + أكثر الديكات تشابهاً (Clone Watch)", COL_CYAN)
+        p_vit.pack(fill="x", pady=(0, 8))
+        self.cv_vit = tk.Canvas(p_vit, bg=BG_PANEL, height=255, highlightthickness=0)
+        self.cv_vit.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_vit.bind("<Configure>", lambda _e: self._draw_vitality())
 
     def _make_panel(self, parent: tk.Widget, title: str, accent: str) -> tk.Frame:
         f = tk.Frame(parent, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1)

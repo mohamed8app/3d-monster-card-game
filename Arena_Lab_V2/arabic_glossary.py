@@ -169,8 +169,22 @@ def _smart_sort_key(raw: Any) -> Tuple[int, float, str]:
 
 def attach_treeview_hscroll(tree: ttk.Treeview, padx: int = 8, pady: Tuple[int, int] = (0, 6)) -> Optional[ttk.Scrollbar]:
     """Attaches a responsive horizontal scrollbar (xscroll) cleanly beneath a ttk.Treeview."""
+    for c in tree["columns"]:
+        try:
+            tree.column(c, stretch=False)
+        except Exception:
+            pass
+
+    def _mark_user_xscroll(_e: Any = None) -> None:
+        tree._user_xscrolled = True
+
     if getattr(tree, "_has_hsb", False):
-        return getattr(tree, "_hsb_widget", None)
+        hsb_existing = getattr(tree, "_hsb_widget", None)
+        if hsb_existing is not None and not getattr(hsb_existing, "_user_scroll_bound", False):
+            hsb_existing._user_scroll_bound = True
+            hsb_existing.bind("<ButtonPress-1>", _mark_user_xscroll, add="+")
+            hsb_existing.bind("<B1-Motion>", _mark_user_xscroll, add="+")
+        return hsb_existing
 
     parent = tree.master
     if parent is None:
@@ -185,9 +199,11 @@ def attach_treeview_hscroll(tree: ttk.Treeview, padx: int = 8, pady: Tuple[int, 
     tree.configure(xscrollcommand=hsb.set)
     tree._has_hsb = True
     tree._hsb_widget = hsb
+    hsb._user_scroll_bound = True
+    hsb.bind("<ButtonPress-1>", _mark_user_xscroll, add="+")
+    hsb.bind("<B1-Motion>", _mark_user_xscroll, add="+")
 
     if info.get("side") == "right":
-        # In frames where vsb is on the left and tree is on the right (e.g. abilities_eval, decks)
         try:
             tree.pack_forget()
             hsb.pack(side="bottom", fill="x")
@@ -195,13 +211,13 @@ def attach_treeview_hscroll(tree: ttk.Treeview, padx: int = 8, pady: Tuple[int, 
         except Exception:
             hsb.pack(side="bottom", fill="x")
     else:
-        # Standard table panels (packed with fill="x")
         p_x = info.get("padx", padx)
         hsb.pack(fill="x", padx=p_x, pady=pady)
 
     def _on_shift_mousewheel(event: tk.Event) -> None:
         try:
             if event.delta:
+                tree._user_xscrolled = True
                 tree.xview_scroll(int(-1 * (event.delta / 120)), "units")
         except Exception:
             pass
@@ -212,13 +228,15 @@ def attach_treeview_hscroll(tree: ttk.Treeview, padx: int = 8, pady: Tuple[int, 
 
 def auto_expand_treeview_columns(
     tree: ttk.Treeview,
-    padding: int = 28,
-    max_col_width: int = 850,
+    padding: int = 24,
+    max_col_width: int = 1400,
     min_col_width: int = 40,
+    align_rtl_right: bool = True,
 ) -> None:
-    """Measures all headings and populated row cells in every column of a Treeview and expands
-
-    column widths dynamically so that all text, diagnostics, and metrics are completely visible.
+    """Measures headings and evenly sampled rows in every column of a Treeview, then:
+    - If total content width < viewport width: expands text columns cleanly to fill 100% of screen width (no dead space).
+    - If total content width >= viewport width: preserves full exact widths (no clipped words) with smooth horizontal
+      scrolling, and aligns Arabic RTL tables to the RIGHT edge (showing #, Metric/Card, Actual immediately).
     """
     try:
         f_ui = font.Font(family="Segoe UI", size=9)
@@ -241,16 +259,27 @@ def auto_expand_treeview_columns(
         cols = list(tree["columns"])
     except Exception:
         return
-
-    children = tree.get_children("")
-    if not children:
+    if not cols:
         return
 
-    # Sample at most 40 rows for blazing fast non-blocking measurement (<1ms vs 6,100ms)
-    sample_limit = 40
-    sample_ids = children[:sample_limit] if len(children) > sample_limit else children
+    children = tree.get_children("")
+    n_rows = len(children)
 
-    # Cache row values: 1 Tcl call per item instead of cols * items Tcl calls
+    # Evenly sample up to 60 rows (head + middle + tail) in < 1.5ms so long rows anywhere in 1,470 items are measured
+    if n_rows <= 60:
+        sample_ids = list(children)
+    else:
+        idxs = list(range(25))
+        step = max(1, (n_rows - 35) // 25)
+        idxs.extend(range(25, n_rows - 10, step))
+        idxs.extend(range(n_rows - 10, n_rows))
+        seen_i = set()
+        sample_ids = []
+        for idx in idxs:
+            if 0 <= idx < n_rows and idx not in seen_i:
+                seen_i.add(idx)
+                sample_ids.append(children[idx])
+
     row_values_list: List[Tuple[Any, ...]] = []
     for item_id in sample_ids:
         try:
@@ -258,40 +287,109 @@ def auto_expand_treeview_columns(
         except Exception:
             pass
 
+    init_widths = getattr(tree, "_initial_column_widths", {})
+    content_w: Dict[str, int] = {}
+    has_arabic = False
+
     for col_idx, col in enumerate(cols):
         try:
-            heading_raw = tree.heading(col, "text")
+            heading_raw = str(tree.heading(col, "text") or "")
             heading_txt = _clean_cell_text(heading_raw)
-            max_w = _measure_text(heading_txt, is_bold=True) + 24
+            if not has_arabic and any("\u0600" <= ch <= "\u06ff" for ch in heading_txt):
+                has_arabic = True
+            max_w = _measure_text(heading_txt, is_bold=True) + 22
 
-            for vals in row_values_list:
-                if col_idx < len(vals):
-                    val = str(vals[col_idx] or "")
-                    if not val:
-                        continue
-                    if "\n" in val:
-                        cell_w = max((_measure_text(line) for line in val.split("\n")), default=0)
-                    else:
-                        cell_w = _measure_text(val)
-                    if cell_w > max_w:
-                        max_w = cell_w
+            if row_values_list:
+                for vals in row_values_list:
+                    if col_idx < len(vals):
+                        val = _clean_cell_text(vals[col_idx])
+                        if not val:
+                            continue
+                        if "\n" in val:
+                            cell_w = max((_measure_text(line) for line in val.split("\n")), default=0)
+                        else:
+                            cell_w = _measure_text(val)
+                        if cell_w > max_w:
+                            max_w = cell_w
+                target_w = max(min_col_width, max_w + padding)
+            else:
+                target_w = max(min_col_width, init_widths.get(col, max_w + padding))
 
-            target_w = max(min_col_width, max_w + padding)
             if max_col_width > 0:
                 target_w = min(max_col_width, target_w)
+            content_w[col] = int(target_w)
+        except Exception:
+            content_w[col] = int(init_widths.get(col, 80))
 
-            curr_w = tree.column(col, "width")
-            final_w = max(curr_w, target_w)
-            tree.column(col, width=final_w, minwidth=target_w)
+    # Measure current visible width of the Treeview
+    avail_w = 0
+    try:
+        w_self = int(tree.winfo_width())
+        if w_self > 120:
+            avail_w = w_self - 4
+        elif tree.master is not None:
+            w_par = int(tree.master.winfo_width())
+            if w_par > 120:
+                avail_w = w_par - 24
+    except Exception:
+        avail_w = 0
+
+    total_w = sum(content_w.values())
+    final_widths = dict(content_w)
+
+    # Smart Full-Width Fill: if table fits inside viewport, stretch descriptive/title columns cleanly to 100% width
+    if avail_w > 120 and total_w < avail_w:
+        extra = avail_w - total_w
+        primary_desc = {"diag", "reason", "desc", "explain", "rec"}
+        secondary_txt = {"metric", "skill", "name", "model", "env", "role", "target", "mix", "impact"}
+        weights: Dict[str, float] = {}
+        for c in cols:
+            if c in primary_desc:
+                weights[c] = 3.5
+            elif c in secondary_txt:
+                weights[c] = 1.5
+            elif c not in ("num", "cid", "id", "qty"):
+                weights[c] = 0.4
+        w_sum = sum(weights.values())
+        if w_sum > 0:
+            distributed = 0
+            w_cols = list(weights.keys())
+            for i_wc, c in enumerate(w_cols):
+                if i_wc == len(w_cols) - 1:
+                    add_px = extra - distributed
+                else:
+                    add_px = int(extra * (weights[c] / w_sum))
+                    distributed += add_px
+                final_widths[c] += max(0, add_px)
+
+    for col in cols:
+        try:
+            fw = final_widths[col]
+            tree.column(col, width=fw, minwidth=min(fw, content_w[col]), stretch=False)
         except Exception:
             continue
+
+    # For Arabic RTL tables that overflow horizontally, align scroll to the RIGHT edge so #, Metric, Actual are visible first
+    if align_rtl_right and avail_w > 120 and total_w > avail_w + 4:
+        is_rtl_table = has_arabic or (cols[-1] in ("num", "cid", "id"))
+        if is_rtl_table and not getattr(tree, "_user_xscrolled", False):
+            try:
+                tree.xview_moveto(1.0)
+            except Exception:
+                pass
 
 
 def enable_treeview_sorting(tree: ttk.Treeview) -> None:
     """Enables click-to-sort on EVERY column header of a ttk.Treeview with ▲/▼ arrows,
-
-    automatically attaches a horizontal scrollbar, and auto-expands column widths to fit all data.
+    automatically attaches a horizontal scrollbar, auto-expands column widths to fit all data & full screen width,
+    and re-fits automatically on window resize.
     """
+    for c in tree["columns"]:
+        try:
+            tree.column(c, stretch=False)
+        except Exception:
+            pass
+
     # 0. Remember initial column widths for reset action
     if not hasattr(tree, "_initial_column_widths"):
         tree._initial_column_widths = {c: tree.column(c, "width") for c in tree["columns"]}
@@ -299,11 +397,16 @@ def enable_treeview_sorting(tree: ttk.Treeview) -> None:
     # 1. Attach horizontal scrollbar (xscroll) & Shift-MouseWheel binding
     attach_treeview_hscroll(tree)
 
-    # 2. Hook tree.insert so newly populated rows trigger auto_expand seamlessly
+    # 2. Hook tree.insert & tree.delete so newly populated rows trigger auto_expand seamlessly
     if not getattr(tree, "_has_auto_expand_hook", False):
         tree._has_auto_expand_hook = True
         orig_insert = tree.insert
+        orig_delete = tree.delete
         sched = [False]
+
+        def _wrapped_delete(*args: Any, **kwargs: Any) -> Any:
+            tree._user_xscrolled = False
+            return orig_delete(*args, **kwargs)
 
         def _wrapped_insert(*args: Any, **kwargs: Any) -> Any:
             res = orig_insert(*args, **kwargs)
@@ -323,7 +426,39 @@ def enable_treeview_sorting(tree: ttk.Treeview) -> None:
                     sched[0] = False
             return res
 
+        tree.delete = _wrapped_delete
         tree.insert = _wrapped_insert
+
+    # 2.5. Responsive re-fit on window/container resize (debounced 90ms)
+    if not getattr(tree, "_has_resize_hook", False):
+        tree._has_resize_hook = True
+        resize_state = {"last_w": 0, "job": None}
+
+        def _on_tree_configure(event: tk.Event) -> None:
+            nw = int(getattr(event, "width", 0) or 0)
+            if nw <= 120 or abs(nw - resize_state["last_w"]) <= 10:
+                return
+            resize_state["last_w"] = nw
+            if resize_state["job"] is not None:
+                try:
+                    tree.after_cancel(resize_state["job"])
+                except Exception:
+                    pass
+
+            def _run_refit() -> None:
+                resize_state["job"] = None
+                try:
+                    if tree.winfo_exists():
+                        auto_expand_treeview_columns(tree)
+                except Exception:
+                    pass
+
+            try:
+                resize_state["job"] = tree.after(90, _run_refit)
+            except Exception:
+                resize_state["job"] = None
+
+        tree.bind("<Configure>", _on_tree_configure, add="+")
 
     # 3. If items already exist, trigger auto-expand after layout settles
     if tree.get_children(""):
@@ -855,21 +990,29 @@ def open_arabic_skills_guide(parent: tk.Tk, db: CardDB, store: Any) -> None:
         ("name", "اسم البطاقة", 190),
         ("num", "ID", 52),
     )
-    t_c = ttk.Treeview(fr_c, columns=tuple(c[0] for c in cols_c), show="headings")
+    t_c_wrap = tk.Frame(fr_c, bg=BG_DARK)
+    t_c_wrap.pack(fill="both", expand=True, padx=4, pady=4)
+    t_c = ttk.Treeview(t_c_wrap, columns=tuple(c[0] for c in cols_c), show="headings")
     for cid, txt, w in cols_c:
         t_c.heading(cid, text=rtl(txt))
         t_c.column(cid, width=w, anchor="e" if cid in ("explain", "name") else "center")
-    vsb_c = ttk.Scrollbar(fr_c, orient="vertical", command=t_c.yview)
-    t_c.configure(yscrollcommand=vsb_c.set)
+    vsb_c = ttk.Scrollbar(t_c_wrap, orient="vertical", command=t_c.yview)
+    hsb_c = ttk.Scrollbar(t_c_wrap, orient="horizontal", command=t_c.xview)
+    t_c.configure(yscrollcommand=vsb_c.set, xscrollcommand=hsb_c.set)
+    t_c._has_hsb = True
+    t_c._hsb_widget = hsb_c
+    hsb_c.pack(side="bottom", fill="x")
     vsb_c.pack(side="left", fill="y")
-    t_c.pack(side="right", fill="both", expand=True, padx=4, pady=4)
+    t_c.pack(side="right", fill="both", expand=True)
     enable_treeview_sorting(t_c)
 
     detail_var = tk.StringVar(value=rtl("اضغط على أي بطاقة لعرض شرحها العربي الكامل هنا..."))
-    tk.Label(
+    detail_lbl = tk.Label(
         fr_c, textvariable=detail_var, bg=BG_CARD, fg=COL_GOLD,
         font=(FONT_UI, 9, "bold"), anchor="e", justify="right", wraplength=1080, padx=10, pady=8,
-    ).pack(fill="x", padx=4, pady=(0, 4))
+    )
+    detail_lbl.pack(fill="x", padx=4, pady=(0, 4))
+    detail_lbl.bind("<Configure>", lambda e: detail_lbl.configure(wraplength=max(400, e.width - 28)))
 
     def _on_sel(_e: Any) -> None:
         sel = t_c.selection()

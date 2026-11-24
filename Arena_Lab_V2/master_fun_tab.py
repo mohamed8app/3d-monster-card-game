@@ -194,7 +194,7 @@ class MasterFunTab:
         self.inner = tk.Frame(self.scroll_canvas, bg=BG_DARK)
         self._inner_win = self.scroll_canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda _e: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all")))
-        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(980, e.width)))
+        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(400, e.width)))
 
         # 1. Master Fun Equation Hero Banner (MFE 0..100 + 6 Sub-Pillars + Fun-Killer Veto)
         hero = tk.Frame(self.inner, bg=BG_CARD, highlightbackground=COL_GOLD, highlightthickness=1, padx=14, pady=10)
@@ -203,25 +203,7 @@ class MasterFunTab:
         self.cv_hero.pack(fill="x")
         self.cv_hero.bind("<Configure>", lambda _e: self._draw_hero_banner())
 
-        # 2. Visual Charts Row (RTL: Left = 10-Env Lift & Aether, Right = 6-Pillar MFE & 6-Lane Heatmap)
-        charts = tk.Frame(self.inner, bg=BG_DARK)
-        charts.pack(fill="x", pady=(0, 8))
-        charts.grid_columnconfigure(0, weight=52, uniform="mf")
-        charts.grid_columnconfigure(1, weight=48, uniform="mf")
-
-        p_env = self._make_panel(charts, "رادار توازن البيئات الـ 10 (أثر الفوز Lift عن 50%) + سقف الإيثر الفعلي", COL_AMBER)
-        p_env.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        self.cv_env = tk.Canvas(p_env, bg=BG_PANEL, height=250, highlightthickness=0)
-        self.cv_env.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_env.bind("<Configure>", lambda _e: self._draw_env_and_aether_chart())
-
-        p_lanes = self._make_panel(charts, "مكوّنات معادلة المتعة الـ 6 + خريطة حرارة الـ 6 خانات (Spatial Lanes)", COL_PURPLE)
-        p_lanes.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        self.cv_lanes = tk.Canvas(p_lanes, bg=BG_PANEL, height=250, highlightthickness=0)
-        self.cv_lanes.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_lanes.bind("<Configure>", lambda _e: self._draw_pillars_and_lanes_chart())
-
-        # 3. 16-Indicator Master Fun & Anti-Frustration Table
+        # 2. 16-Indicator Master Fun & Anti-Frustration Table (Full Width First!)
         tbl_panel = self._make_panel(
             self.inner,
             "بطاقة المعايير الـ 6 الذهبية للمتعة القصوى وكشف الإحباط (16 مؤشراً — اضغط على أي عمود للترتيب)",
@@ -249,7 +231,7 @@ class MasterFunTab:
         self.mf_tree.pack(fill="x", padx=8, pady=(2, 8))
         enable_treeview_sorting(self.mf_tree)
 
-        # 4. Dedicated 10-Environment Live Balance Audit Table
+        # 3. Dedicated 10-Environment Live Balance Audit Table (Full Width)
         env_tbl_panel = self._make_panel(
             self.inner,
             "جدول التدقيق المباشر لكل بيئة من البيئات الـ 10 منفردة (نسبة الفوز + الرفع Lift + نموذج البيئة المختص)",
@@ -278,6 +260,19 @@ class MasterFunTab:
         self.env_tree.tag_configure("nodata", foreground="#94A3B8", background=BG_PANEL)
         self.env_tree.pack(fill="x", padx=8, pady=(2, 8))
         enable_treeview_sorting(self.env_tree)
+
+        # 4. Visual Charts Stacked Vertically at Full Screen Width
+        p_lanes = self._make_panel(self.inner, "مكوّنات معادلة المتعة الـ 6 + خريطة حرارة الـ 6 خانات (Spatial Lanes)", COL_PURPLE)
+        p_lanes.pack(fill="x", pady=(0, 8))
+        self.cv_lanes = tk.Canvas(p_lanes, bg=BG_PANEL, height=255, highlightthickness=0)
+        self.cv_lanes.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_lanes.bind("<Configure>", lambda _e: self._draw_pillars_and_lanes_chart())
+
+        p_env = self._make_panel(self.inner, "رادار توازن البيئات الـ 10 (أثر الفوز Lift عن 50%) + سقف الإيثر الفعلي", COL_AMBER)
+        p_env.pack(fill="x", pady=(0, 8))
+        self.cv_env = tk.Canvas(p_env, bg=BG_PANEL, height=255, highlightthickness=0)
+        self.cv_env.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_env.bind("<Configure>", lambda _e: self._draw_env_and_aether_chart())
 
     def _make_panel(self, parent: tk.Widget, title: str, accent: str) -> tk.Frame:
         f = tk.Frame(parent, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1)

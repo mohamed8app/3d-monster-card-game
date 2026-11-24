@@ -107,7 +107,7 @@ class GameplayEnjoymentTab:
         self.inner = tk.Frame(self.scroll_canvas, bg=BG_DARK)
         self._inner_win = self.scroll_canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda _e: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all")))
-        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(980, e.width)))
+        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(400, e.width)))
         self.scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         # Hero Score Banner
@@ -117,25 +117,7 @@ class GameplayEnjoymentTab:
         self.cv_score.pack(fill="x")
         self.cv_score.bind("<Configure>", lambda _e: self._draw_score_banner())
 
-        # Visual Charts Row (RTL: Excitement Curve on RIGHT 54%, Tiers & WOW Highlights on LEFT 46%)
-        charts = tk.Frame(self.inner, bg=BG_DARK)
-        charts.pack(fill="x", pady=(0, 8))
-        charts.grid_columnconfigure(0, weight=46, uniform="enj")
-        charts.grid_columnconfigure(1, weight=54, uniform="enj")
-
-        p_tiers = self._make_panel(charts, "توزيع مستويات متعة المباريات + أبرز لحظات الإبهار (WOW Highlights)", COL_CYAN)
-        p_tiers.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        self.cv_tiers = tk.Canvas(p_tiers, bg=BG_PANEL, height=245, highlightthickness=0)
-        self.cv_tiers.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_tiers.bind("<Configure>", lambda _e: self._draw_tiers_and_highlights())
-
-        p_arc = self._make_panel(charts, "منحنى تصاعد الحماس والقوس الدرامي عبر الأدوار (T1 → T20)", COL_GOLD)
-        p_arc.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        self.cv_arc = tk.Canvas(p_arc, bg=BG_PANEL, height=245, highlightthickness=0)
-        self.cv_arc.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_arc.bind("<Configure>", lambda _e: self._draw_excitement_arc())
-
-        # Self-Explanatory 14-Indicator Diagnostic Table
+        # Self-Explanatory 14-Indicator Diagnostic Table (Full Width First!)
         tbl_panel = self._make_panel(
             self.inner,
             "بطاقة التقييم التفصيلية لمعيار المتعة والإثارة (14 مؤشراً — النتيجة + الجيد + المثالي + التشخيص التلقائي)",
@@ -164,6 +146,19 @@ class GameplayEnjoymentTab:
 
         self.enj_tree.pack(fill="x", padx=8, pady=(2, 8))
         enable_treeview_sorting(self.enj_tree)
+
+        # Visual Charts Stacked Vertically at Full Screen Width
+        p_arc = self._make_panel(self.inner, "منحنى تصاعد الحماس والقوس الدرامي عبر الأدوار (T1 → T20)", COL_GOLD)
+        p_arc.pack(fill="x", pady=(0, 8))
+        self.cv_arc = tk.Canvas(p_arc, bg=BG_PANEL, height=250, highlightthickness=0)
+        self.cv_arc.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_arc.bind("<Configure>", lambda _e: self._draw_excitement_arc())
+
+        p_tiers = self._make_panel(self.inner, "توزيع مستويات متعة المباريات + أبرز لحظات الإبهار (WOW Highlights)", COL_CYAN)
+        p_tiers.pack(fill="x", pady=(0, 8))
+        self.cv_tiers = tk.Canvas(p_tiers, bg=BG_PANEL, height=250, highlightthickness=0)
+        self.cv_tiers.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_tiers.bind("<Configure>", lambda _e: self._draw_tiers_and_highlights())
 
     def _make_panel(self, parent: tk.Widget, title: str, accent: str) -> tk.Frame:
         f = tk.Frame(parent, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1)

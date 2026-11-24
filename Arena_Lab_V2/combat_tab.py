@@ -97,7 +97,7 @@ class CombatQualityTab:
         self.inner = tk.Frame(self.scroll_canvas, bg=BG_DARK)
         self._inner_win = self.scroll_canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda _e: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all")))
-        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(980, e.width)))
+        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(400, e.width)))
         self.scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         # --- Hero Score Banner ---
@@ -107,25 +107,7 @@ class CombatQualityTab:
         self.cv_score.pack(fill="x")
         self.cv_score.bind("<Configure>", lambda _e: self._draw_score_banner())
 
-        # --- Visual Charts Row (RTL: Clash Outcomes on RIGHT 52%, Damage/Heal/Overkill Economy on LEFT 48%) ---
-        charts = tk.Frame(self.inner, bg=BG_DARK)
-        charts.pack(fill="x", pady=(0, 8))
-        charts.grid_columnconfigure(0, weight=48, uniform="cc")
-        charts.grid_columnconfigure(1, weight=52, uniform="cc")
-
-        p_econ = self._make_panel(charts, "ميزان الضرر والشفاء والضرر الزائد (Overkill) والحواجز", COL_GOLD)
-        p_econ.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        self.cv_econ = tk.Canvas(p_econ, bg=BG_PANEL, height=235, highlightthickness=0)
-        self.cv_econ.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_econ.bind("<Configure>", lambda _e: self._draw_damage_economy())
-
-        p_clash = self._make_panel(charts, "توزيع نتائج الاشتباك القتالي (تبادل / قتل نظيف / موت متبادل / مراوغة)", COL_RED)
-        p_clash.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        self.cv_clash = tk.Canvas(p_clash, bg=BG_PANEL, height=235, highlightthickness=0)
-        self.cv_clash.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_clash.bind("<Configure>", lambda _e: self._draw_clash_outcomes())
-
-        # --- Self-Explanatory 18-Indicator Diagnostic Table ---
+        # --- Self-Explanatory 18-Indicator Diagnostic Table (Full Width First!) ---
         tbl_panel = self._make_panel(
             self.inner,
             "بطاقة التقييم التفصيلية لمعيار جودة القتال (18 مؤشراً — النتيجة + الجيد + المثالي + التشخيص التلقائي)",
@@ -154,6 +136,19 @@ class CombatQualityTab:
 
         self.cq_tree.pack(fill="x", padx=8, pady=(2, 8))
         enable_treeview_sorting(self.cq_tree)
+
+        # --- Visual Charts Stacked Vertically at Full Screen Width ---
+        p_clash = self._make_panel(self.inner, "توزيع نتائج الاشتباك القتالي (تبادل / قتل نظيف / موت متبادل / مراوغة)", COL_RED)
+        p_clash.pack(fill="x", pady=(0, 8))
+        self.cv_clash = tk.Canvas(p_clash, bg=BG_PANEL, height=240, highlightthickness=0)
+        self.cv_clash.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_clash.bind("<Configure>", lambda _e: self._draw_clash_outcomes())
+
+        p_econ = self._make_panel(self.inner, "ميزان الضرر والشفاء والضرر الزائد (Overkill) والحواجز", COL_GOLD)
+        p_econ.pack(fill="x", pady=(0, 8))
+        self.cv_econ = tk.Canvas(p_econ, bg=BG_PANEL, height=240, highlightthickness=0)
+        self.cv_econ.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_econ.bind("<Configure>", lambda _e: self._draw_damage_economy())
 
     def _make_panel(self, parent: tk.Widget, title: str, accent: str) -> tk.Frame:
         f = tk.Frame(parent, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1)

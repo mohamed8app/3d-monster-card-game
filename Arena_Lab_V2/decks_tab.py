@@ -154,11 +154,11 @@ class FinalDecksTab:
         self.inner = tk.Frame(self.scroll_canvas, bg=BG_DARK)
         self._inner_win = self.scroll_canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda _e: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all")))
-        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(1020, e.width)))
+        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(400, e.width)))
 
         # Hero Summary Strip for Selected Model
         hero = tk.Frame(self.inner, bg=BG_CARD, highlightbackground=BG_BORDER, highlightthickness=1, padx=14, pady=8)
-        hero.pack(fill="x", pady=(2, 6))
+        hero.pack(fill="x", pady=(2, 8))
         tk.Label(
             hero, textvariable=self.hero_title_var, bg=BG_CARD, fg=FG_TEXT,
             font=(FONT_UI, 12, "bold"), anchor="e", justify="right",
@@ -169,63 +169,74 @@ class FinalDecksTab:
         ).pack(fill="x", pady=(2, 0))
 
         # ==================================================================
-        # Quick Visual Charts Row (Right = Card Types & Roles | Left = Mana Curve & Tribes/Elements)
+        # Table 1 (Full Width): All 41 Models Table (Click to inspect any model's deck!)
         # ==================================================================
-        charts = tk.Frame(self.inner, bg=BG_DARK)
-        charts.pack(fill="x", pady=(0, 8))
-        charts.grid_columnconfigure(0, weight=48, uniform="dk_ch")
-        charts.grid_columnconfigure(1, weight=52, uniform="dk_ch")
-
-        p_curve = self._make_panel(
-            charts, "منحنى تكلفة المانا (0 → 7 مانا) + أبرز العشائر والعناصر داخل الديك", COL_CYAN
+        p_models = self._make_panel(
+            self.inner,
+            "قائمة النماذج الـ 41 (اضغط على أي نموذج لعرض ديكه النهائي ورسمه البياني بالأسفل)",
+            COL_BLUE,
         )
-        p_curve.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        self.cv_curve = tk.Canvas(p_curve, bg=BG_PANEL, height=235, highlightthickness=0)
-        self.cv_curve.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_curve.bind("<Configure>", lambda _e: self._draw_mana_and_affinities_chart())
+        p_models.pack(fill="x", pady=(0, 8))
 
-        p_types = self._make_panel(
-            charts, "الشكل البياني السريع لأنواع البطاقات والأدوار القتالية في الديك (50 بطاقة)", COL_GOLD
-        )
-        p_types.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        self.cv_types = tk.Canvas(p_types, bg=BG_PANEL, height=235, highlightthickness=0)
-        self.cv_types.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_types.bind("<Configure>", lambda _e: self._draw_card_types_chart())
+        mod_Fr = tk.Frame(p_models, bg=BG_PANEL)
+        mod_Fr.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+
+        mod_cols = [
+            ("state", "حالة الديك", 110),
+            ("mix", "وحش/حاجز/سحر/خاص", 165),
+            ("wr", "الفوز %", 85),
+            ("matches", "المباريات", 90),
+            ("model", "اسم النموذج (عربي)", 320),
+            ("num", "#", 40),
+        ]
+        self.models_tree = ttk.Treeview(mod_Fr, columns=tuple(c for c, _, _ in mod_cols), show="headings", height=10)
+        for cid, txt, w in mod_cols:
+            self.models_tree.heading(cid, text=rtl(txt))
+            self.models_tree.column(cid, width=w, minwidth=w, stretch=False, anchor="e" if cid == "model" else "center")
+
+        self.models_tree.tag_configure("settled", foreground="#4ADE80", background="#142620")
+        self.models_tree.tag_configure("initial", foreground="#FACC15", background=BG_PANEL)
+
+        m_vsb = ttk.Scrollbar(mod_Fr, orient="vertical", command=self.models_tree.yview)
+        m_hsb = ttk.Scrollbar(mod_Fr, orient="horizontal", command=self.models_tree.xview)
+        self.models_tree.configure(yscrollcommand=m_vsb.set, xscrollcommand=m_hsb.set)
+        self.models_tree._has_hsb = True
+        self.models_tree._hsb_widget = m_hsb
+
+        m_hsb.pack(side="bottom", fill="x")
+        m_vsb.pack(side="left", fill="y")
+        self.models_tree.pack(side="right", fill="both", expand=True)
+        self.models_tree.bind("<<TreeviewSelect>>", self._on_model_tree_selected)
+        enable_treeview_sorting(self.models_tree)
 
         # ==================================================================
-        # Bottom Split Section: Right = 41 Models Roster Table | Left = 50-Card Final Deck Table
+        # Table 2 (Full Width): Selected Model's 50-Card Final Deck Table
         # ==================================================================
-        split = tk.Frame(self.inner, bg=BG_DARK)
-        split.pack(fill="both", expand=True, pady=(0, 6))
-        split.grid_columnconfigure(0, weight=62, uniform="dk_sp")
-        split.grid_columnconfigure(1, weight=38, uniform="dk_sp")
-
-        # LEFT (62%): Selected Model's 50-Card Deck Table
         p_deck = self._make_panel(
-            split,
+            self.inner,
             "بطاقات الديك النهائي للنموذج المختار (50 بطاقة) — اضغط أي عنوان عمود للترتيب أو أي بطاقة لشرحها",
             COL_GREEN,
         )
-        p_deck.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
+        p_deck.pack(fill="x", pady=(0, 8))
 
         deck_Fr = tk.Frame(p_deck, bg=BG_PANEL)
-        deck_Fr.pack(fill="both", expand=True, padx=6, pady=(2, 4))
+        deck_Fr.pack(fill="both", expand=True, padx=8, pady=(2, 4))
 
         deck_cols = [
-            ("explain", "الشرح العربي المختصر للقدرات", 250),
-            ("wr", "فوز البطاقة", 76),
-            ("played", "لُعبت", 58),
-            ("stats", "مانا | هـ/د", 86),
-            ("role", "العنصر / العشيرة / الدور", 150),
-            ("type", "نوع البطاقة", 88),
-            ("qty", "النسخ", 48),
-            ("name", "اسم البطاقة", 155),
-            ("cid", "ID", 46),
+            ("explain", "الشرح العربي المختصر للقدرات", 340),
+            ("wr", "فوز البطاقة", 85),
+            ("played", "لُعبت", 68),
+            ("stats", "مانا | هـ/د", 100),
+            ("role", "العنصر / العشيرة / الدور", 170),
+            ("type", "نوع البطاقة", 95),
+            ("qty", "النسخ", 54),
+            ("name", "اسم البطاقة", 195),
+            ("cid", "ID", 50),
         ]
-        self.deck_tree = ttk.Treeview(deck_Fr, columns=tuple(c for c, _, _ in deck_cols), show="headings", height=15)
+        self.deck_tree = ttk.Treeview(deck_Fr, columns=tuple(c for c, _, _ in deck_cols), show="headings", height=16)
         for cid, txt, w in deck_cols:
             self.deck_tree.heading(cid, text=rtl(txt))
-            self.deck_tree.column(cid, width=w, anchor="e" if cid in ("explain", "name", "role") else "center")
+            self.deck_tree.column(cid, width=w, minwidth=w, stretch=False, anchor="e" if cid in ("explain", "name", "role") else "center")
 
         self.deck_tree.tag_configure("monster", foreground="#EEF2F9", background=BG_PANEL)
         self.deck_tree.tag_configure("barrier", foreground="#38BDF8", background="#132230")
@@ -233,13 +244,18 @@ class FinalDecksTab:
         self.deck_tree.tag_configure("special", foreground="#C084FC", background="#211730")
 
         d_vsb = ttk.Scrollbar(deck_Fr, orient="vertical", command=self.deck_tree.yview)
-        self.deck_tree.configure(yscrollcommand=d_vsb.set)
+        d_hsb = ttk.Scrollbar(deck_Fr, orient="horizontal", command=self.deck_tree.xview)
+        self.deck_tree.configure(yscrollcommand=d_vsb.set, xscrollcommand=d_hsb.set)
+        self.deck_tree._has_hsb = True
+        self.deck_tree._hsb_widget = d_hsb
+
+        d_hsb.pack(side="bottom", fill="x")
         d_vsb.pack(side="left", fill="y")
         self.deck_tree.pack(side="right", fill="both", expand=True)
         self.deck_tree.bind("<<TreeviewSelect>>", self._on_deck_card_selected)
         enable_treeview_sorting(self.deck_tree)
 
-        tk.Label(
+        card_detail_lbl = tk.Label(
             p_deck,
             textvariable=self.card_detail_var,
             bg=BG_CARD,
@@ -247,44 +263,31 @@ class FinalDecksTab:
             font=(FONT_UI, 9, "bold"),
             anchor="e",
             justify="right",
-            wraplength=760,
-            padx=10,
-            pady=7,
-        ).pack(fill="x", padx=6, pady=(0, 6))
-
-        # RIGHT (38%): All 41 Models Table (Click to inspect any model's deck!)
-        p_models = self._make_panel(
-            split,
-            "قائمة النماذج الـ 41 (اضغط على أي نموذج لعرض ديكه ورسمه البياني)",
-            COL_BLUE,
+            wraplength=1100,
+            padx=12,
+            pady=8,
         )
-        p_models.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
+        card_detail_lbl.pack(fill="x", padx=8, pady=(0, 8))
+        card_detail_lbl.bind("<Configure>", lambda e: card_detail_lbl.configure(wraplength=max(400, e.width - 28)))
 
-        mod_Fr = tk.Frame(p_models, bg=BG_PANEL)
-        mod_Fr.pack(fill="both", expand=True, padx=6, pady=(2, 6))
+        # ==================================================================
+        # Visual Charts Stacked Vertically at Full Screen Width
+        # ==================================================================
+        p_types = self._make_panel(
+            self.inner, "الشكل البياني السريع لأنواع البطاقات والأدوار القتالية في الديك (50 بطاقة)", COL_GOLD
+        )
+        p_types.pack(fill="x", pady=(0, 8))
+        self.cv_types = tk.Canvas(p_types, bg=BG_PANEL, height=240, highlightthickness=0)
+        self.cv_types.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_types.bind("<Configure>", lambda _e: self._draw_card_types_chart())
 
-        mod_cols = [
-            ("state", "حالة الديك", 74),
-            ("mix", "وحش/حاجز/سحر/خاص", 118),
-            ("wr", "الفوز %", 64),
-            ("matches", "المباريات", 68),
-            ("model", "اسم النموذج (عربي)", 155),
-            ("num", "#", 34),
-        ]
-        self.models_tree = ttk.Treeview(mod_Fr, columns=tuple(c for c, _, _ in mod_cols), show="headings", height=17)
-        for cid, txt, w in mod_cols:
-            self.models_tree.heading(cid, text=rtl(txt))
-            self.models_tree.column(cid, width=w, anchor="e" if cid == "model" else "center")
-
-        self.models_tree.tag_configure("settled", foreground="#4ADE80", background="#142620")
-        self.models_tree.tag_configure("initial", foreground="#FACC15", background=BG_PANEL)
-
-        m_vsb = ttk.Scrollbar(mod_Fr, orient="vertical", command=self.models_tree.yview)
-        self.models_tree.configure(yscrollcommand=m_vsb.set)
-        m_vsb.pack(side="left", fill="y")
-        self.models_tree.pack(side="right", fill="both", expand=True)
-        self.models_tree.bind("<<TreeviewSelect>>", self._on_model_tree_selected)
-        enable_treeview_sorting(self.models_tree)
+        p_curve = self._make_panel(
+            self.inner, "منحنى تكلفة المانا (0 → 7 مانا) + أبرز العشائر والعناصر داخل الديك", COL_CYAN
+        )
+        p_curve.pack(fill="x", pady=(0, 8))
+        self.cv_curve = tk.Canvas(p_curve, bg=BG_PANEL, height=240, highlightthickness=0)
+        self.cv_curve.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_curve.bind("<Configure>", lambda _e: self._draw_mana_and_affinities_chart())
 
     def _make_panel(self, parent: tk.Widget, title: str, accent: str) -> tk.Frame:
         f = tk.Frame(parent, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1)
@@ -506,6 +509,10 @@ class FinalDecksTab:
 
         self._sync_tree_selection_to_model(self.selected_model_id)
         self._render_selected_model()
+        try:
+            self.models_tree.xview_moveto(1.0)
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # Populate Selected Model's Hero Strip, Charts & 50-Card Table
@@ -609,6 +616,10 @@ class FinalDecksTab:
 
         self._draw_card_types_chart()
         self._draw_mana_and_affinities_chart()
+        try:
+            self.deck_tree.xview_moveto(1.0)
+        except Exception:
+            pass
 
     def _on_deck_card_selected(self, _e: Any = None) -> None:
         sel = self.deck_tree.selection()

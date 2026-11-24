@@ -108,7 +108,7 @@ class MechanicsPerformanceTab:
         self.inner = tk.Frame(self.scroll_canvas, bg=BG_DARK)
         self._inner_win = self.scroll_canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda _e: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all")))
-        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(980, e.width)))
+        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(400, e.width)))
         self.scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         # Hero Score Banner
@@ -118,25 +118,7 @@ class MechanicsPerformanceTab:
         self.cv_score.pack(fill="x")
         self.cv_score.bind("<Configure>", lambda _e: self._draw_score_banner())
 
-        # Visual Charts Row (RTL: 9-System Match Presence on RIGHT 52%, WR Impact around 50% on LEFT 48%)
-        charts = tk.Frame(self.inner, bg=BG_DARK)
-        charts.pack(fill="x", pady=(0, 8))
-        charts.grid_columnconfigure(0, weight=48, uniform="mp")
-        charts.grid_columnconfigure(1, weight=52, uniform="mp")
-
-        p_wr = self._make_panel(charts, "أثر كل ميكانيكية على نسبة الفوز عند تفعيلها (حول خط 50%)", COL_CYAN)
-        p_wr.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        self.cv_wr = tk.Canvas(p_wr, bg=BG_PANEL, height=255, highlightthickness=0)
-        self.cv_wr.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_wr.bind("<Configure>", lambda _e: self._draw_wr_impact())
-
-        p_pres = self._make_panel(charts, "نسبة حضور الأنظمة الـ 9 في المباريات (كاشف الميكانيكيات الميتة)", COL_GOLD)
-        p_pres.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        self.cv_pres = tk.Canvas(p_pres, bg=BG_PANEL, height=255, highlightthickness=0)
-        self.cv_pres.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_pres.bind("<Configure>", lambda _e: self._draw_presence())
-
-        # Self-Explanatory 14-Indicator Diagnostic Table
+        # Self-Explanatory 14-Indicator Diagnostic Table (Full Width First!)
         tbl_panel = self._make_panel(
             self.inner,
             "بطاقة التقييم التفصيلية لمعيار أداء الميكانيكيات (14 مؤشراً — النتيجة + الجيد + المثالي + التشخيص التلقائي)",
@@ -165,6 +147,19 @@ class MechanicsPerformanceTab:
 
         self.mp_tree.pack(fill="x", padx=8, pady=(2, 8))
         enable_treeview_sorting(self.mp_tree)
+
+        # Visual Charts Stacked Vertically at Full Screen Width
+        p_pres = self._make_panel(self.inner, "نسبة حضور الأنظمة الـ 9 في المباريات (كاشف الميكانيكيات الميتة)", COL_GOLD)
+        p_pres.pack(fill="x", pady=(0, 8))
+        self.cv_pres = tk.Canvas(p_pres, bg=BG_PANEL, height=255, highlightthickness=0)
+        self.cv_pres.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_pres.bind("<Configure>", lambda _e: self._draw_presence())
+
+        p_wr = self._make_panel(self.inner, "أثر كل ميكانيكية على نسبة الفوز عند تفعيلها (حول خط 50%)", COL_CYAN)
+        p_wr.pack(fill="x", pady=(0, 8))
+        self.cv_wr = tk.Canvas(p_wr, bg=BG_PANEL, height=255, highlightthickness=0)
+        self.cv_wr.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_wr.bind("<Configure>", lambda _e: self._draw_wr_impact())
 
     def _make_panel(self, parent: tk.Widget, title: str, accent: str) -> tk.Frame:
         f = tk.Frame(parent, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1)

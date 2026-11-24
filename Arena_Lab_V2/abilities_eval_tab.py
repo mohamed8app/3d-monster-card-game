@@ -240,11 +240,11 @@ class AbilitiesAndSpellsEvalTab:
         self.inner = tk.Frame(self.scroll_canvas, bg=BG_DARK)
         self._inner_win = self.scroll_canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda _e: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all")))
-        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(1020, e.width)))
+        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(400, e.width)))
 
         # Hero Summary Banner
         hero = tk.Frame(self.inner, bg=BG_CARD, highlightbackground=BG_BORDER, highlightthickness=1, padx=14, pady=8)
-        hero.pack(fill="x", pady=(2, 6))
+        hero.pack(fill="x", pady=(2, 8))
         tk.Label(
             hero, textvariable=self.hero_title_var, bg=BG_CARD, fg=FG_TEXT,
             font=(FONT_UI, 12, "bold"), anchor="e", justify="right",
@@ -255,55 +255,31 @@ class AbilitiesAndSpellsEvalTab:
         ).pack(fill="x", pady=(2, 0))
 
         # ==================================================================
-        # Visual Charts Row (Right = Extremes around 50% WR | Left = Most Used & Health Breakdown)
-        # ==================================================================
-        charts = tk.Frame(self.inner, bg=BG_DARK)
-        charts.pack(fill="x", pady=(0, 8))
-        charts.grid_columnconfigure(0, weight=46, uniform="ab_ch")
-        charts.grid_columnconfigure(1, weight=54, uniform="ab_ch")
-
-        p_use = self._make_panel(
-            charts, "الأكثر اعتماداً في الديكات النهائية الـ 41 والمباريات + ملخص توازن القسم", COL_CYAN
-        )
-        p_use.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        self.cv_usage = tk.Canvas(p_use, bg=BG_PANEL, height=230, highlightthickness=0)
-        self.cv_usage.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_usage.bind("<Configure>", lambda _e: self._draw_usage_chart())
-
-        p_wr = self._make_panel(
-            charts, "أعلى نسبة فوز (مرشح إضعاف 🔴) مقابل أدنى نسبة فوز (مرشح تقوية 🔵) حول خط 50%", COL_GOLD
-        )
-        p_wr.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        self.cv_wr = tk.Canvas(p_wr, bg=BG_PANEL, height=230, highlightthickness=0)
-        self.cv_wr.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_wr.bind("<Configure>", lambda _e: self._draw_wr_extremes_chart())
-
-        # ==================================================================
-        # Main Sortable Evaluation Table
+        # Main Sortable Evaluation Table (Full Width First!)
         # ==================================================================
         p_tbl = self._make_panel(
             self.inner,
             "جدول التقييم الشامل (الاسم + الشرح العربي + القيمة/الضرر + مرات اللعب + نسبة الفوز + اقتراح التعديل التلقائي)",
             COL_BLUE,
         )
-        p_tbl.pack(fill="both", expand=True, pady=(0, 6))
+        p_tbl.pack(fill="x", pady=(0, 8))
 
         t_fr = tk.Frame(p_tbl, bg=BG_PANEL)
-        t_fr.pack(fill="both", expand=True, padx=6, pady=(2, 4))
+        t_fr.pack(fill="both", expand=True, padx=8, pady=(2, 4))
 
         cols = [
-            ("rec", "كيف تعدّلها؟ (اقتراح التوازن التلقائي بالأرقام)", 320),
+            ("rec", "كيف تعدّلها؟ (اقتراح التوازن التلقائي بالأرقام)", 340),
             ("status", "التقييم", 96),
-            ("wr", "نسبة الفوز %", 82),
-            ("decks", "بالديكات الـ41", 82),
-            ("played", "مرات اللعب", 78),
-            ("power", "القيمة/الضرر والتكلفة", 132),
-            ("cards", "البطاقات", 64),
-            ("desc", "الشرح العربي الواضح للقدرة / السحر", 265),
-            ("name", "الاسم العربي (والرمز)", 180),
+            ("wr", "نسبة الفوز %", 86),
+            ("decks", "بالديكات الـ41", 86),
+            ("played", "مرات اللعب", 82),
+            ("power", "القيمة/الضرر والتكلفة", 138),
+            ("cards", "البطاقات", 68),
+            ("desc", "الشرح العربي الواضح للقدرة / السحر", 290),
+            ("name", "الاسم العربي (والرمز)", 190),
             ("num", "#", 36),
         ]
-        self.eval_tree = ttk.Treeview(t_fr, columns=tuple(c for c, _, _ in cols), show="headings", height=14)
+        self.eval_tree = ttk.Treeview(t_fr, columns=tuple(c for c, _, _ in cols), show="headings", height=18)
         for cid, txt, w in cols:
             self.eval_tree.heading(cid, text=rtl(txt))
             self.eval_tree.column(cid, width=w, anchor="e" if cid in ("rec", "desc", "name") else "center")
@@ -315,14 +291,18 @@ class AbilitiesAndSpellsEvalTab:
         self.eval_tree.tag_configure("nodata", foreground="#94A3B8", background=BG_PANEL)
 
         vsb_t = ttk.Scrollbar(t_fr, orient="vertical", command=self.eval_tree.yview)
-        self.eval_tree.configure(yscrollcommand=vsb_t.set)
+        hsb_t = ttk.Scrollbar(t_fr, orient="horizontal", command=self.eval_tree.xview)
+        self.eval_tree.configure(yscrollcommand=vsb_t.set, xscrollcommand=hsb_t.set)
+        self.eval_tree._has_hsb = True
+        self.eval_tree._hsb_widget = hsb_t
+        hsb_t.pack(side="bottom", fill="x")
         vsb_t.pack(side="left", fill="y")
         self.eval_tree.pack(side="right", fill="both", expand=True)
         self.eval_tree.bind("<<TreeviewSelect>>", self._on_row_selected)
         enable_treeview_sorting(self.eval_tree)
 
-        # Drill-down card inspector box at bottom
-        tk.Label(
+        # Drill-down card inspector box at bottom (full-width dynamic wrap)
+        drill_lbl = tk.Label(
             p_tbl,
             textvariable=self.drill_var,
             bg=BG_CARD,
@@ -333,7 +313,28 @@ class AbilitiesAndSpellsEvalTab:
             wraplength=1120,
             padx=12,
             pady=8,
-        ).pack(fill="x", padx=6, pady=(0, 6))
+        )
+        drill_lbl.pack(fill="x", padx=8, pady=(0, 8))
+        drill_lbl.bind("<Configure>", lambda e: drill_lbl.configure(wraplength=max(400, e.width - 28)))
+
+        # ==================================================================
+        # Visual Charts Stacked Vertically at Full Screen Width
+        # ==================================================================
+        p_wr = self._make_panel(
+            self.inner, "أعلى نسبة فوز (مرشح إضعاف 🔴) مقابل أدنى نسبة فوز (مرشح تقوية 🔵) حول خط 50%", COL_GOLD
+        )
+        p_wr.pack(fill="x", pady=(0, 8))
+        self.cv_wr = tk.Canvas(p_wr, bg=BG_PANEL, height=245, highlightthickness=0)
+        self.cv_wr.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_wr.bind("<Configure>", lambda _e: self._draw_wr_extremes_chart())
+
+        p_use = self._make_panel(
+            self.inner, "الأكثر اعتماداً في الديكات النهائية الـ 41 والمباريات + ملخص توازن القسم", COL_CYAN
+        )
+        p_use.pack(fill="x", pady=(0, 8))
+        self.cv_usage = tk.Canvas(p_use, bg=BG_PANEL, height=245, highlightthickness=0)
+        self.cv_usage.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_usage.bind("<Configure>", lambda _e: self._draw_usage_chart())
 
     def _make_panel(self, parent: tk.Widget, title: str, accent: str) -> tk.Frame:
         f = tk.Frame(parent, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1)

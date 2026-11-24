@@ -502,7 +502,7 @@ class SimulationIntegrityTab:
         self.inner = tk.Frame(self.scroll_canvas, bg=BG_DARK)
         self._inner_win = self.scroll_canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda _e: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all")))
-        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(980, e.width)))
+        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(400, e.width)))
         self.scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         # Hero Score Banner
@@ -512,25 +512,7 @@ class SimulationIntegrityTab:
         self.cv_score.pack(fill="x")
         self.cv_score.bind("<Configure>", lambda _e: self._draw_score_banner())
 
-        # Visual Charts Row (RTL: 14-Check LED Matrix on RIGHT 54%, Fuzz Stress Telemetry on LEFT 46%)
-        charts = tk.Frame(self.inner, bg=BG_DARK)
-        charts.pack(fill="x", pady=(0, 8))
-        charts.grid_columnconfigure(0, weight=46, uniform="si12")
-        charts.grid_columnconfigure(1, weight=54, uniform="si12")
-
-        p_fuzz = self._make_panel(charts, "تقرير ضغط اختبار الفوضى (تغطية البطاقات والسرعة ونهايات المباريات)", COL_CYAN)
-        p_fuzz.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        self.cv_fuzz = tk.Canvas(p_fuzz, bg=BG_PANEL, height=225, highlightthickness=0)
-        self.cv_fuzz.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_fuzz.bind("<Configure>", lambda _e: self._draw_fuzz_telemetry())
-
-        p_led = self._make_panel(charts, "لوحة مصفوفة الفحوصات الهندسية الـ 14 (Pass / Fail LED Matrix)", COL_GREEN)
-        p_led.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        self.cv_led = tk.Canvas(p_led, bg=BG_PANEL, height=225, highlightthickness=0)
-        self.cv_led.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_led.bind("<Configure>", lambda _e: self._draw_led_matrix())
-
-        # Self-Explanatory 14-Indicator Diagnostic Table
+        # Self-Explanatory 14-Indicator Diagnostic Table (Full Width First!)
         tbl_panel = self._make_panel(
             self.inner,
             "بطاقة التقييم التفصيلية لسلامة المحاكي والقواعد (14 فحصاً آلياً — النتيجة + الجيد + المثالي + التشخيص)",
@@ -559,6 +541,19 @@ class SimulationIntegrityTab:
 
         self.int_tree.pack(fill="x", padx=8, pady=(2, 8))
         enable_treeview_sorting(self.int_tree)
+
+        # Visual Charts Stacked Vertically at Full Screen Width
+        p_led = self._make_panel(self.inner, "لوحة مصفوفة الفحوصات الهندسية الـ 14 (Pass / Fail LED Matrix)", COL_GREEN)
+        p_led.pack(fill="x", pady=(0, 8))
+        self.cv_led = tk.Canvas(p_led, bg=BG_PANEL, height=235, highlightthickness=0)
+        self.cv_led.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_led.bind("<Configure>", lambda _e: self._draw_led_matrix())
+
+        p_fuzz = self._make_panel(self.inner, "تقرير ضغط اختبار الفوضى (تغطية البطاقات والسرعة ونهايات المباريات)", COL_CYAN)
+        p_fuzz.pack(fill="x", pady=(0, 8))
+        self.cv_fuzz = tk.Canvas(p_fuzz, bg=BG_PANEL, height=235, highlightthickness=0)
+        self.cv_fuzz.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_fuzz.bind("<Configure>", lambda _e: self._draw_fuzz_telemetry())
 
     def _make_panel(self, parent: tk.Widget, title: str, accent: str) -> tk.Frame:
         f = tk.Frame(parent, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1)

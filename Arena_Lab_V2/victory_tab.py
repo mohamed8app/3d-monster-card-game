@@ -95,7 +95,7 @@ class VictoryConditionsTab:
         self.inner = tk.Frame(self.scroll_canvas, bg=BG_DARK)
         self._inner_win = self.scroll_canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda _e: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all")))
-        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(980, e.width)))
+        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(400, e.width)))
         self.scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         # Hero Score Banner
@@ -105,25 +105,7 @@ class VictoryConditionsTab:
         self.cv_score.pack(fill="x")
         self.cv_score.bind("<Configure>", lambda _e: self._draw_score_banner())
 
-        # Visual Charts Row (RTL: Face Damage vs Killing Blow on RIGHT 52%, Victory Profiles & Drama on LEFT 48%)
-        charts = tk.Frame(self.inner, bg=BG_DARK)
-        charts.pack(fill="x", pady=(0, 8))
-        charts.grid_columnconfigure(0, weight=48, uniform="vc")
-        charts.grid_columnconfigure(1, weight=52, uniform="vc")
-
-        p_prof = self._make_panel(charts, "أنماط الفوز (سريع / وسطي / تحكم / موت مفاجئ) + دراما الحسم", COL_CYAN)
-        p_prof.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        self.cv_prof = tk.Canvas(p_prof, bg=BG_PANEL, height=240, highlightthickness=0)
-        self.cv_prof.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_prof.bind("<Configure>", lambda _e: self._draw_profiles())
-
-        p_ch = self._make_panel(charts, "مصادر إنزال دم القائد (500 HP) مقابل الضربة القاضية النهائية", COL_GOLD)
-        p_ch.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        self.cv_ch = tk.Canvas(p_ch, bg=BG_PANEL, height=240, highlightthickness=0)
-        self.cv_ch.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_ch.bind("<Configure>", lambda _e: self._draw_channels())
-
-        # Self-Explanatory 14-Indicator Diagnostic Table
+        # Self-Explanatory 14-Indicator Diagnostic Table (Full Width First!)
         tbl_panel = self._make_panel(
             self.inner,
             "بطاقة التقييم التفصيلية لمعيار طرق الفوز (14 مؤشراً — النتيجة + الجيد + المثالي + التشخيص التلقائي)",
@@ -152,6 +134,19 @@ class VictoryConditionsTab:
 
         self.vc_tree.pack(fill="x", padx=8, pady=(2, 8))
         enable_treeview_sorting(self.vc_tree)
+
+        # Visual Charts Stacked Vertically at Full Screen Width
+        p_ch = self._make_panel(self.inner, "مصادر إنزال دم القائد (500 HP) مقابل الضربة القاضية النهائية", COL_GOLD)
+        p_ch.pack(fill="x", pady=(0, 8))
+        self.cv_ch = tk.Canvas(p_ch, bg=BG_PANEL, height=245, highlightthickness=0)
+        self.cv_ch.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_ch.bind("<Configure>", lambda _e: self._draw_channels())
+
+        p_prof = self._make_panel(self.inner, "أنماط الفوز (سريع / وسطي / تحكم / موت مفاجئ) + دراما الحسم", COL_CYAN)
+        p_prof.pack(fill="x", pady=(0, 8))
+        self.cv_prof = tk.Canvas(p_prof, bg=BG_PANEL, height=245, highlightthickness=0)
+        self.cv_prof.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_prof.bind("<Configure>", lambda _e: self._draw_profiles())
 
     def _make_panel(self, parent: tk.Widget, title: str, accent: str) -> tk.Frame:
         f = tk.Frame(parent, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1)

@@ -94,7 +94,7 @@ class ResourceEconomyTab:
         self.inner = tk.Frame(self.scroll_canvas, bg=BG_DARK)
         self._inner_win = self.scroll_canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda _e: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all")))
-        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(980, e.width)))
+        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(400, e.width)))
         self.scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         # Hero Score Banner
@@ -104,25 +104,7 @@ class ResourceEconomyTab:
         self.cv_score.pack(fill="x")
         self.cv_score.bind("<Configure>", lambda _e: self._draw_score_banner())
 
-        # Visual Charts Row (RTL: Cost Curve + WR on RIGHT 50%, Turn Mana Curve + Spend Split on LEFT 50%)
-        charts = tk.Frame(self.inner, bg=BG_DARK)
-        charts.pack(fill="x", pady=(0, 8))
-        charts.grid_columnconfigure(0, weight=50, uniform="re")
-        charts.grid_columnconfigure(1, weight=50, uniform="re")
-
-        p_curve = self._make_panel(charts, "منحنى المانا عبر الأدوار (المتاح مقابل المنفق) + توزيع صرف المانا", COL_CYAN)
-        p_curve.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        self.cv_curve = tk.Canvas(p_curve, bg=BG_PANEL, height=245, highlightthickness=0)
-        self.cv_curve.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_curve.bind("<Configure>", lambda _e: self._draw_mana_curve())
-
-        p_costs = self._make_panel(charts, "توزيع اللعب ونسبة الفوز حسب تكلفة البطاقة (0 – 7 مانا)", COL_GOLD)
-        p_costs.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        self.cv_costs = tk.Canvas(p_costs, bg=BG_PANEL, height=245, highlightthickness=0)
-        self.cv_costs.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_costs.bind("<Configure>", lambda _e: self._draw_cost_tiers())
-
-        # Self-Explanatory 14-Indicator Diagnostic Table
+        # Self-Explanatory 14-Indicator Diagnostic Table (Full Width First!)
         tbl_panel = self._make_panel(
             self.inner,
             "بطاقة التقييم التفصيلية لمعيار الموارد والتكلفة (14 مؤشراً — النتيجة + الجيد + المثالي + التشخيص التلقائي)",
@@ -151,6 +133,19 @@ class ResourceEconomyTab:
 
         self.re_tree.pack(fill="x", padx=8, pady=(2, 8))
         enable_treeview_sorting(self.re_tree)
+
+        # Visual Charts Stacked Vertically at Full Screen Width
+        p_costs = self._make_panel(self.inner, "توزيع اللعب ونسبة الفوز حسب تكلفة البطاقة (0 – 7 مانا)", COL_GOLD)
+        p_costs.pack(fill="x", pady=(0, 8))
+        self.cv_costs = tk.Canvas(p_costs, bg=BG_PANEL, height=250, highlightthickness=0)
+        self.cv_costs.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_costs.bind("<Configure>", lambda _e: self._draw_cost_tiers())
+
+        p_curve = self._make_panel(self.inner, "منحنى المانا عبر الأدوار (المتاح مقابل المنفق) + توزيع صرف المانا", COL_CYAN)
+        p_curve.pack(fill="x", pady=(0, 8))
+        self.cv_curve = tk.Canvas(p_curve, bg=BG_PANEL, height=250, highlightthickness=0)
+        self.cv_curve.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_curve.bind("<Configure>", lambda _e: self._draw_mana_curve())
 
     def _make_panel(self, parent: tk.Widget, title: str, accent: str) -> tk.Frame:
         f = tk.Frame(parent, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1)

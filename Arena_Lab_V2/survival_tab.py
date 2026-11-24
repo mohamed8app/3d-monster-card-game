@@ -119,7 +119,7 @@ class MonsterSurvivalTab:
         self.inner = tk.Frame(self.scroll_canvas, bg=BG_DARK)
         self._inner_win = self.scroll_canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda _e: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all")))
-        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(980, e.width)))
+        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(400, e.width)))
         self.scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         # --- Hero Score Banner (0 - 100% Survival Score + Passing Guide) ---
@@ -130,41 +130,7 @@ class MonsterSurvivalTab:
         self.cv_score.pack(fill="x")
         self.cv_score.bind("<Configure>", lambda _e: self._draw_score_banner())
 
-        # --- Visual Row (RTL: 4-Way Lifespan Breakdown on RIGHT 54% + Exit Causes Donut on LEFT 46%) ---
-        charts = tk.Frame(self.inner, bg=BG_DARK)
-        charts.pack(fill="x", pady=(0, 8))
-        charts.grid_columnconfigure(0, weight=46, uniform="sc")
-        charts.grid_columnconfigure(1, weight=54, uniform="sc")
-
-        # Left Panel: Exit Causes Donut + RTL Bars
-        p_exit = self._make_panel(charts, "أسباب خروج الوحوش من الساحة (موت / تضحية / إرجاع لليد)", COL_PURPLE)
-        p_exit.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        self.cv_exits = tk.Canvas(p_exit, bg=BG_PANEL, height=260, highlightthickness=0)
-        self.cv_exits.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_exits.bind("<Configure>", lambda _e: self._draw_exit_causes())
-
-        # Right Panel: Interactive 4-Way Breakdown Chart
-        p_brk = tk.Frame(charts, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1)
-        p_brk.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        hdr_b = tk.Frame(p_brk, bg=BG_PANEL, padx=10, pady=6)
-        hdr_b.pack(fill="x")
-        tk.Frame(hdr_b, bg=COL_GREEN, width=4, height=15).pack(side="right", padx=(7, 0))
-        tk.Label(hdr_b, text=rtl("متوسط عمر الوحش المقتول حسب:"), bg=BG_PANEL, fg=FG_TEXT, font=(FONT_UI, 9, "bold")).pack(side="right", padx=(8, 0))
-
-        for key, lbl in (("tier", "التكلفة T1-7"), ("role", "الأدوار 6"), ("tribe", "العشائر 10"), ("elem", "العناصر 10")):
-            btn = tk.Button(
-                hdr_b, text=rtl(lbl), command=lambda k=key: self._set_breakdown_mode(k),
-                bg=COL_BLUE if key == "tier" else "#242C3D", fg="#FFFFFF",
-                relief="flat", font=(FONT_UI, 8, "bold"), padx=8, pady=2, cursor="hand2",
-            )
-            btn.pack(side="right", padx=2)
-            self._mode_btns[key] = btn
-
-        self.cv_breakdown = tk.Canvas(p_brk, bg=BG_PANEL, height=260, highlightthickness=0)
-        self.cv_breakdown.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_breakdown.bind("<Configure>", lambda _e: self._draw_breakdown_chart())
-
-        # --- Self-Explanatory 16-Indicator Diagnostic Table ---
+        # --- Self-Explanatory 16-Indicator Diagnostic Table (Full Width First!) ---
         tbl_panel = self._make_panel(
             self.inner,
             "بطاقة التقييم التفصيلية لمعيار بقاء الوحوش وساحة المعركة (16 مؤشراً — النتيجة + الجيد + المثالي + التشخيص التلقائي)",
@@ -193,6 +159,33 @@ class MonsterSurvivalTab:
 
         self.surv_tree.pack(fill="x", padx=8, pady=(2, 8))
         enable_treeview_sorting(self.surv_tree)
+
+        # --- Visual Charts Stacked Vertically at Full Screen Width ---
+        p_brk = tk.Frame(self.inner, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1)
+        p_brk.pack(fill="x", pady=(0, 8))
+        hdr_b = tk.Frame(p_brk, bg=BG_PANEL, padx=10, pady=6)
+        hdr_b.pack(fill="x")
+        tk.Frame(hdr_b, bg=COL_GREEN, width=4, height=15).pack(side="right", padx=(7, 0))
+        tk.Label(hdr_b, text=rtl("متوسط عمر الوحش المقتول حسب:"), bg=BG_PANEL, fg=FG_TEXT, font=(FONT_UI, 9, "bold")).pack(side="right", padx=(8, 0))
+
+        for key, lbl in (("tier", "التكلفة T1-7"), ("role", "الأدوار 6"), ("tribe", "العشائر 10"), ("elem", "العناصر 10")):
+            btn = tk.Button(
+                hdr_b, text=rtl(lbl), command=lambda k=key: self._set_breakdown_mode(k),
+                bg=COL_BLUE if key == "tier" else "#242C3D", fg="#FFFFFF",
+                relief="flat", font=(FONT_UI, 8, "bold"), padx=8, pady=2, cursor="hand2",
+            )
+            btn.pack(side="right", padx=2)
+            self._mode_btns[key] = btn
+
+        self.cv_breakdown = tk.Canvas(p_brk, bg=BG_PANEL, height=260, highlightthickness=0)
+        self.cv_breakdown.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_breakdown.bind("<Configure>", lambda _e: self._draw_breakdown_chart())
+
+        p_exit = self._make_panel(self.inner, "أسباب خروج الوحوش من الساحة (موت / تضحية / إرجاع لليد)", COL_PURPLE)
+        p_exit.pack(fill="x", pady=(0, 8))
+        self.cv_exits = tk.Canvas(p_exit, bg=BG_PANEL, height=260, highlightthickness=0)
+        self.cv_exits.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_exits.bind("<Configure>", lambda _e: self._draw_exit_causes())
 
     def _make_panel(self, parent: tk.Widget, title: str, accent: str) -> tk.Frame:
         f = tk.Frame(parent, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1)

@@ -214,7 +214,7 @@ class StrategicIntelligenceTab:
         self.inner = tk.Frame(self.scroll_canvas, bg=BG_DARK)
         self._inner_win = self.scroll_canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda _e: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all")))
-        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(980, e.width)))
+        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(400, e.width)))
         self.scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         # Hero Score Banner
@@ -224,25 +224,7 @@ class StrategicIntelligenceTab:
         self.cv_score.pack(fill="x")
         self.cv_score.bind("<Configure>", lambda _e: self._draw_score_banner())
 
-        # Visual Charts Row (RTL: Choices + 6-Lane Heatmap on RIGHT 52%, Skill Expression Ladder on LEFT 48%)
-        charts = tk.Frame(self.inner, bg=BG_DARK)
-        charts.pack(fill="x", pady=(0, 8))
-        charts.grid_columnconfigure(0, weight=48, uniform="si")
-        charts.grid_columnconfigure(1, weight=52, uniform="si")
-
-        p_skill = self._make_panel(charts, "سلّم سقف المهارة وعقاب الأخطاء (هل المهارة تغلب الحظ؟)", COL_CYAN)
-        p_skill.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        self.cv_skill = tk.Canvas(p_skill, bg=BG_PANEL, height=245, highlightthickness=0)
-        self.cv_skill.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_skill.bind("<Configure>", lambda _e: self._draw_skill_ladder())
-
-        p_depth = self._make_panel(charts, "توزيع عمق الخيارات المميزة بالدور + خريطة استخدام الـ 6 خانات", COL_GOLD)
-        p_depth.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        self.cv_depth = tk.Canvas(p_depth, bg=BG_PANEL, height=245, highlightthickness=0)
-        self.cv_depth.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_depth.bind("<Configure>", lambda _e: self._draw_depth_and_lanes())
-
-        # Self-Explanatory 14-Indicator Diagnostic Table
+        # Self-Explanatory 14-Indicator Diagnostic Table (Full Width First!)
         tbl_panel = self._make_panel(
             self.inner,
             "بطاقة التقييم التفصيلية لمعيار الذكاء الاستراتيجي وعمق القرار (14 مؤشراً — النتيجة + الجيد + المثالي + التشخيص)",
@@ -271,6 +253,19 @@ class StrategicIntelligenceTab:
 
         self.si_tree.pack(fill="x", padx=8, pady=(2, 8))
         enable_treeview_sorting(self.si_tree)
+
+        # Visual Charts Stacked Vertically at Full Screen Width
+        p_depth = self._make_panel(self.inner, "توزيع عمق الخيارات المميزة بالدور + خريطة استخدام الـ 6 خانات", COL_GOLD)
+        p_depth.pack(fill="x", pady=(0, 8))
+        self.cv_depth = tk.Canvas(p_depth, bg=BG_PANEL, height=250, highlightthickness=0)
+        self.cv_depth.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_depth.bind("<Configure>", lambda _e: self._draw_depth_and_lanes())
+
+        p_skill = self._make_panel(self.inner, "سلّم سقف المهارة وعقاب الأخطاء (هل المهارة تغلب الحظ؟)", COL_CYAN)
+        p_skill.pack(fill="x", pady=(0, 8))
+        self.cv_skill = tk.Canvas(p_skill, bg=BG_PANEL, height=250, highlightthickness=0)
+        self.cv_skill.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_skill.bind("<Configure>", lambda _e: self._draw_skill_ladder())
 
     def _make_panel(self, parent: tk.Widget, title: str, accent: str) -> tk.Frame:
         f = tk.Frame(parent, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1)

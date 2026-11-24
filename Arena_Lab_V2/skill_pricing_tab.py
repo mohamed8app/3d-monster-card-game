@@ -534,7 +534,7 @@ class SkillPricingAdvisorTab:
         self.inner = tk.Frame(self.scroll_canvas, bg=BG_DARK)
         self._inner_win = self.scroll_canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda _e: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all")))
-        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(1020, e.width)))
+        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(400, e.width)))
 
         # 1. Hero Banner (Pricing Health Score + 5 Verdict KPIs + Live Telemetry Status)
         hero = tk.Frame(self.inner, bg=BG_CARD, highlightbackground=COL_GOLD, highlightthickness=1, padx=14, pady=8)
@@ -550,31 +550,13 @@ class SkillPricingAdvisorTab:
         self.cv_meta.pack(fill="x")
         self.cv_meta.bind("<Configure>", lambda _e: self._draw_meta_strip())
 
-        # 2. Visual Charts Row (2 Live Charts)
-        charts = tk.Frame(self.inner, bg=BG_DARK)
-        charts.pack(fill="x", pady=(0, 8))
-        charts.grid_columnconfigure(0, weight=50, uniform="sp")
-        charts.grid_columnconfigure(1, weight=50, uniform="sp")
-
-        p_left = self._make_panel(charts, "أعلى البطاقات/المهارات تكراراً في المباراة مقابل نسبة الفوز (كاشف الإسبام)", COL_ORANGE)
-        p_left.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        self.cv_spam = tk.Canvas(p_left, bg=BG_PANEL, height=220, highlightthickness=0)
-        self.cv_spam.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_spam.bind("<Configure>", lambda _e: self._draw_spam_chart())
-
-        p_right = self._make_panel(charts, "ترتيب البطاقات والمهارات حسب القيمة/الفوز (المرشحة لرفع السعر مقابل الخفض)", COL_CYAN)
-        p_right.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        self.cv_vpm = tk.Canvas(p_right, bg=BG_PANEL, height=220, highlightthickness=0)
-        self.cv_vpm.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_vpm.bind("<Configure>", lambda _e: self._draw_vpm_chart())
-
-        # 3. Mode & Filter Toolbar
-        ctrl = tk.Frame(self.inner, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1, padx=10, pady=7)
+        # 2. Mode & Filter Toolbar (2 Clean Non-Cramped Rows)
+        ctrl = tk.Frame(self.inner, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1, padx=10, pady=6)
         ctrl.pack(fill="x", pady=(0, 8))
 
-        # Right: Mode radios
+        # Row 1: Mode radios
         m_box = tk.Frame(ctrl, bg=BG_PANEL)
-        m_box.pack(side="right")
+        m_box.pack(fill="x", pady=(0, 4))
         tk.Label(m_box, text=rtl("نطاق التقييم الجراحي:"), bg=BG_PANEL, fg=FG_MUTED, font=(FONT_UI, 8, "bold")).pack(side="right", padx=(6, 0))
         for val, lbl in (
             ("all_cards", "🌐 كل البطاقات (1,470)"),
@@ -589,11 +571,15 @@ class SkillPricingAdvisorTab:
                 bg=BG_PANEL, fg=FG_TEXT, selectcolor=BG_CARD,
                 activebackground=BG_PANEL, activeforeground=COL_GOLD,
                 font=(FONT_UI, 8, "bold"), cursor="hand2",
-            ).pack(side="right", padx=3)
+            ).pack(side="right", padx=4)
 
-        # Middle: Verdict Filter buttons
-        f_box = tk.Frame(ctrl, bg=BG_PANEL)
-        f_box.pack(side="right", padx=(14, 0))
+        # Row 2: Verdict Filter radios + Search box
+        row2 = tk.Frame(ctrl, bg=BG_PANEL)
+        row2.pack(fill="x")
+
+        f_box = tk.Frame(row2, bg=BG_PANEL)
+        f_box.pack(side="right")
+        tk.Label(f_box, text=rtl("تصفية القرار:"), bg=BG_PANEL, fg=FG_MUTED, font=(FONT_UI, 8, "bold")).pack(side="right", padx=(6, 0))
         for val, lbl, fg in (
             ("all", "الكل", FG_TEXT),
             ("raise", "🔴 ارفع السعر", "#FCA5A5"),
@@ -606,21 +592,20 @@ class SkillPricingAdvisorTab:
                 bg=BG_PANEL, fg=fg, selectcolor=BG_CARD,
                 activebackground=BG_PANEL, activeforeground=fg,
                 font=(FONT_UI, 8, "bold"), cursor="hand2",
-            ).pack(side="right", padx=3)
+            ).pack(side="right", padx=4)
 
-        # Left: Search entry
-        s_box = tk.Frame(ctrl, bg=BG_PANEL)
+        s_box = tk.Frame(row2, bg=BG_PANEL)
         s_box.pack(side="left")
-        tk.Label(s_box, text=rtl("🔍 بحث:"), bg=BG_PANEL, fg=FG_MUTED, font=(FONT_UI, 8, "bold")).pack(side="right", padx=(4, 0))
+        tk.Label(s_box, text=rtl("🔍 بحث سريع:"), bg=BG_PANEL, fg=FG_MUTED, font=(FONT_UI, 8, "bold")).pack(side="right", padx=(4, 0))
         ent = tk.Entry(
-            s_box, textvariable=self._search_var, width=18,
+            s_box, textvariable=self._search_var, width=26,
             bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT, relief="flat",
             font=(FONT_UI, 9), justify="right",
         )
         ent.pack(side="right", ipady=2)
         self._search_var.trace_add("write", lambda *_: self._apply_filter_and_fill())
 
-        # 4. Main Sortable Pricing Table (11 Surgical Columns)
+        # 3. Main Sortable Pricing Table (12 Surgical Columns — Full Width + VSB & HSB!)
         tbl_panel = self._make_panel(
             self.inner,
             "جدول التوصية الجراحية المباشرة لتسعير كل بطاقة ومهارة (يحدد هل التعديل لمانا البطاقة أم مانا المهارة أم قوة الأثر)",
@@ -628,21 +613,24 @@ class SkillPricingAdvisorTab:
         )
         tbl_panel.pack(fill="x", pady=(0, 8))
 
+        sp_fr = tk.Frame(tbl_panel, bg=BG_PANEL)
+        sp_fr.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+
         headers = [
-            ("reason", "التشخيص الجراحي والنصيحة والسبب الرياضي", 330),
-            ("verdict", "قرار التسعير", 130),
-            ("target", "عنصر التعديل", 95),
-            ("vpm", "القيمة/مانا", 85),
-            ("impact", "الأثر/المواصفات", 115),
-            ("wr", "نسبة الفوز", 75),
-            ("upm", "لعب/مباراة", 75),
-            ("sug", "المقترح", 85),
-            ("cur", "الحالي", 65),
-            ("cards", "النوع", 68),
-            ("skill", "البطاقة / المهارة", 195),
-            ("num", "#", 30),
+            ("reason", "التشخيص الجراحي والنصيحة والسبب الرياضي", 360),
+            ("verdict", "قرار التسعير", 135),
+            ("target", "عنصر التعديل", 100),
+            ("vpm", "القيمة/مانا", 88),
+            ("impact", "الأثر/المواصفات", 120),
+            ("wr", "نسبة الفوز", 80),
+            ("upm", "لعب/مباراة", 80),
+            ("sug", "المقترح", 88),
+            ("cur", "الحالي", 68),
+            ("cards", "النوع", 72),
+            ("skill", "البطاقة / المهارة", 210),
+            ("num", "#", 34),
         ]
-        self.sp_tree = ttk.Treeview(tbl_panel, columns=tuple(c for c, _, _ in headers), show="headings", height=16)
+        self.sp_tree = ttk.Treeview(sp_fr, columns=tuple(c for c, _, _ in headers), show="headings", height=18)
         for c, txt, w in headers:
             self.sp_tree.heading(c, text=rtl(txt))
             self.sp_tree.column(c, width=w, anchor="e" if c in ("skill", "reason") else "center")
@@ -652,11 +640,19 @@ class SkillPricingAdvisorTab:
         self.sp_tree.tag_configure("drop", foreground="#93C5FD", background="#152033")
         self.sp_tree.tag_configure("buff", foreground="#D8B4FE", background="#221730")
         self.sp_tree.tag_configure("nodata", foreground="#94A3B8", background=BG_PANEL)
-        self.sp_tree.pack(fill="x", padx=8, pady=(2, 8))
+
+        sp_vsb = ttk.Scrollbar(sp_fr, orient="vertical", command=self.sp_tree.yview)
+        sp_hsb = ttk.Scrollbar(sp_fr, orient="horizontal", command=self.sp_tree.xview)
+        self.sp_tree.configure(yscrollcommand=sp_vsb.set, xscrollcommand=sp_hsb.set)
+        self.sp_tree._has_hsb = True
+        self.sp_tree._hsb_widget = sp_hsb
+        sp_hsb.pack(side="bottom", fill="x")
+        sp_vsb.pack(side="left", fill="y")
+        self.sp_tree.pack(side="right", fill="both", expand=True)
         enable_treeview_sorting(self.sp_tree)
         self.sp_tree.bind("<<TreeviewSelect>>", self._on_row_selected)
 
-        # 5. Drill-Down Inspector
+        # 4. Drill-Down Inspector (Full Width + VSB & HSB!)
         drill_panel = self._make_panel(
             self.inner,
             "تفاصيل البطاقة أو البطاقات الحاملة للمهارة (اضغط على أي صف بالأعلى لمعرفة بطاقاته بالكامل)",
@@ -671,22 +667,46 @@ class SkillPricingAdvisorTab:
         )
         self.drill_lbl.pack(fill="x", padx=10, pady=(0, 4))
 
+        dr_fr = tk.Frame(drill_panel, bg=BG_PANEL)
+        dr_fr.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+
         d_headers = [
-            ("desc", "تفاصيل القدرة والمهارات", 370),
-            ("wr", "فوز البطاقة", 84),
-            ("plays", "مرات اللعب", 80),
-            ("stats", "الإحصائيات", 105),
-            ("scost", "تكلفة المهارة", 86),
-            ("mcost", "تكلفة الكارت", 82),
-            ("name", "اسم البطاقة", 215),
-            ("cid", "ID", 52),
+            ("desc", "تفاصيل القدرة والمهارات", 400),
+            ("wr", "فوز البطاقة", 88),
+            ("plays", "مرات اللعب", 84),
+            ("stats", "الإحصائيات", 110),
+            ("scost", "تكلفة المهارة", 90),
+            ("mcost", "تكلفة الكارت", 86),
+            ("name", "اسم البطاقة", 225),
+            ("cid", "ID", 54),
         ]
-        self.drill_tree = ttk.Treeview(drill_panel, columns=tuple(c for c, _, _ in d_headers), show="headings", height=7)
+        self.drill_tree = ttk.Treeview(dr_fr, columns=tuple(c for c, _, _ in d_headers), show="headings", height=9)
         for c, txt, w in d_headers:
             self.drill_tree.heading(c, text=rtl(txt))
             self.drill_tree.column(c, width=w, anchor="e" if c in ("name", "desc") else "center")
-        self.drill_tree.pack(fill="x", padx=8, pady=(0, 8))
+
+        dr_vsb = ttk.Scrollbar(dr_fr, orient="vertical", command=self.drill_tree.yview)
+        dr_hsb = ttk.Scrollbar(dr_fr, orient="horizontal", command=self.drill_tree.xview)
+        self.drill_tree.configure(yscrollcommand=dr_vsb.set, xscrollcommand=dr_hsb.set)
+        self.drill_tree._has_hsb = True
+        self.drill_tree._hsb_widget = dr_hsb
+        dr_hsb.pack(side="bottom", fill="x")
+        dr_vsb.pack(side="left", fill="y")
+        self.drill_tree.pack(side="right", fill="both", expand=True)
         enable_treeview_sorting(self.drill_tree)
+
+        # 5. Visual Charts Stacked Vertically at Full Screen Width
+        p_right = self._make_panel(self.inner, "ترتيب البطاقات والمهارات حسب القيمة/الفوز (المرشحة لرفع السعر مقابل الخفض)", COL_CYAN)
+        p_right.pack(fill="x", pady=(0, 8))
+        self.cv_vpm = tk.Canvas(p_right, bg=BG_PANEL, height=235, highlightthickness=0)
+        self.cv_vpm.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_vpm.bind("<Configure>", lambda _e: self._draw_vpm_chart())
+
+        p_left = self._make_panel(self.inner, "أعلى البطاقات/المهارات تكراراً في المباراة مقابل نسبة الفوز (كاشف الإسبام)", COL_ORANGE)
+        p_left.pack(fill="x", pady=(0, 8))
+        self.cv_spam = tk.Canvas(p_left, bg=BG_PANEL, height=235, highlightthickness=0)
+        self.cv_spam.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_spam.bind("<Configure>", lambda _e: self._draw_spam_chart())
 
     def _make_panel(self, parent: tk.Widget, title: str, accent: str) -> tk.Frame:
         f = tk.Frame(parent, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1)

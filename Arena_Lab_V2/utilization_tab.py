@@ -96,7 +96,7 @@ class CardUtilizationTab:
         self.inner = tk.Frame(self.scroll_canvas, bg=BG_DARK)
         self._inner_win = self.scroll_canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda _e: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all")))
-        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(980, e.width)))
+        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(400, e.width)))
         self.scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         # Hero Score Banner
@@ -106,25 +106,7 @@ class CardUtilizationTab:
         self.cv_score.pack(fill="x")
         self.cv_score.bind("<Configure>", lambda _e: self._draw_score_banner())
 
-        # Visual Charts Row (RTL: Played vs Drafted Types on RIGHT 52%, Drawn Card Fate Funnel on LEFT 48%)
-        charts = tk.Frame(self.inner, bg=BG_DARK)
-        charts.pack(fill="x", pady=(0, 8))
-        charts.grid_columnconfigure(0, weight=48, uniform="cu")
-        charts.grid_columnconfigure(1, weight=52, uniform="cu")
-
-        p_fate = self._make_panel(charts, "مصير البطاقات المسحوبة (تخطيط / فوري / تضحية / متبقّي / محترق)", COL_CYAN)
-        p_fate.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        self.cv_fate = tk.Canvas(p_fate, bg=BG_PANEL, height=235, highlightthickness=0)
-        self.cv_fate.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_fate.bind("<Configure>", lambda _e: self._draw_card_fate())
-
-        p_types = self._make_panel(charts, "مقارنة الفئات: اللعب الفعلي بالمباريات مقابل الاختيار في أحدث الديكات", COL_GOLD)
-        p_types.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        self.cv_types = tk.Canvas(p_types, bg=BG_PANEL, height=235, highlightthickness=0)
-        self.cv_types.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_types.bind("<Configure>", lambda _e: self._draw_type_comparison())
-
-        # Self-Explanatory 14-Indicator Diagnostic Table
+        # Self-Explanatory 14-Indicator Diagnostic Table (Full Width First!)
         tbl_panel = self._make_panel(
             self.inner,
             "بطاقة التقييم التفصيلية لمعيار استخدام البطاقات (14 مؤشراً — النتيجة + الجيد + المثالي + التشخيص التلقائي)",
@@ -153,6 +135,19 @@ class CardUtilizationTab:
 
         self.cu_tree.pack(fill="x", padx=8, pady=(2, 8))
         enable_treeview_sorting(self.cu_tree)
+
+        # Visual Charts Stacked Vertically at Full Screen Width
+        p_types = self._make_panel(self.inner, "مقارنة الفئات: اللعب الفعلي بالمباريات مقابل الاختيار في أحدث الديكات", COL_GOLD)
+        p_types.pack(fill="x", pady=(0, 8))
+        self.cv_types = tk.Canvas(p_types, bg=BG_PANEL, height=240, highlightthickness=0)
+        self.cv_types.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_types.bind("<Configure>", lambda _e: self._draw_type_comparison())
+
+        p_fate = self._make_panel(self.inner, "مصير البطاقات المسحوبة (تخطيط / فوري / تضحية / متبقّي / محترق)", COL_CYAN)
+        p_fate.pack(fill="x", pady=(0, 8))
+        self.cv_fate = tk.Canvas(p_fate, bg=BG_PANEL, height=240, highlightthickness=0)
+        self.cv_fate.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_fate.bind("<Configure>", lambda _e: self._draw_card_fate())
 
     def _make_panel(self, parent: tk.Widget, title: str, accent: str) -> tk.Frame:
         f = tk.Frame(parent, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1)

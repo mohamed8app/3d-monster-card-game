@@ -153,7 +153,7 @@ class CompetitiveFairnessTab:
         self.inner = tk.Frame(self.scroll_canvas, bg=BG_DARK)
         self._inner_win = self.scroll_canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda _e: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all")))
-        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(980, e.width)))
+        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(400, e.width)))
         self.scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         # Hero Score Banner
@@ -163,25 +163,7 @@ class CompetitiveFairnessTab:
         self.cv_score.pack(fill="x")
         self.cv_score.bind("<Configure>", lambda _e: self._draw_score_banner())
 
-        # Visual Charts Row (RTL: Fairness Balance Scale on RIGHT 52%, Free-10 Order & Mirror Audit on LEFT 48%)
-        charts = tk.Frame(self.inner, bg=BG_DARK)
-        charts.pack(fill="x", pady=(0, 8))
-        charts.grid_columnconfigure(0, weight=48, uniform="cf")
-        charts.grid_columnconfigure(1, weight=52, uniform="cf")
-
-        p_free = self._make_panel(charts, "عدالة ترتيب النماذج الحرة (حر 1 ← حر 10) + نتائج المواجهات المتطابقة", COL_CYAN)
-        p_free.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        self.cv_free = tk.Canvas(p_free, bg=BG_PANEL, height=240, highlightthickness=0)
-        self.cv_free.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_free.bind("<Configure>", lambda _e: self._draw_free10_and_mirror())
-
-        p_scale = self._make_panel(charts, "ميزان العدالة التنافسية حول خط 50% (P1/P2 • Mirror • اليد • السحب)", COL_GOLD)
-        p_scale.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        self.cv_scale = tk.Canvas(p_scale, bg=BG_PANEL, height=240, highlightthickness=0)
-        self.cv_scale.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_scale.bind("<Configure>", lambda _e: self._draw_fairness_scale())
-
-        # Self-Explanatory 14-Indicator Diagnostic Table
+        # Self-Explanatory 14-Indicator Diagnostic Table (Full Width First!)
         tbl_panel = self._make_panel(
             self.inner,
             "بطاقة التقييم التفصيلية لمعيار العدالة التنافسية (14 مؤشراً — النتيجة + الجيد + المثالي + التشخيص التلقائي)",
@@ -210,6 +192,19 @@ class CompetitiveFairnessTab:
 
         self.cf_tree.pack(fill="x", padx=8, pady=(2, 8))
         enable_treeview_sorting(self.cf_tree)
+
+        # Visual Charts Stacked Vertically at Full Screen Width
+        p_scale = self._make_panel(self.inner, "ميزان العدالة التنافسية حول خط 50% (P1/P2 • Mirror • اليد • السحب)", COL_GOLD)
+        p_scale.pack(fill="x", pady=(0, 8))
+        self.cv_scale = tk.Canvas(p_scale, bg=BG_PANEL, height=245, highlightthickness=0)
+        self.cv_scale.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_scale.bind("<Configure>", lambda _e: self._draw_fairness_scale())
+
+        p_free = self._make_panel(self.inner, "عدالة ترتيب النماذج الحرة (حر 1 ← حر 10) + نتائج المواجهات المتطابقة", COL_CYAN)
+        p_free.pack(fill="x", pady=(0, 8))
+        self.cv_free = tk.Canvas(p_free, bg=BG_PANEL, height=245, highlightthickness=0)
+        self.cv_free.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_free.bind("<Configure>", lambda _e: self._draw_free10_and_mirror())
 
     def _make_panel(self, parent: tk.Widget, title: str, accent: str) -> tk.Frame:
         f = tk.Frame(parent, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1)

@@ -283,8 +283,12 @@ class ArenaAnalyticsApp:
     ) -> None:
         self.root = root
         self.root.title(rtl("مختبر Arena Lab V2 — منظومة التحليل والمعايير الـ 13 (بيانات التدريب المباشرة)"))
-        self.root.geometry("1360x850")
-        self.root.minsize(1140, 700)
+        self.root.geometry("1440x880")
+        self.root.minsize(1000, 680)
+        try:
+            self.root.state("zoomed")
+        except Exception:
+            pass
         self.root.configure(bg=BG_DARK)
 
         self.cfg = _load_config()
@@ -353,6 +357,34 @@ class ArenaAnalyticsApp:
         )
         style.configure("Treeview.Heading", background=BG_INPUT, foreground=ACCENT_GOLD, font=(FONT_UI, 9, "bold"))
         style.map("Treeview", background=[("selected", "#2E405E")])
+        style.configure(
+            "Horizontal.TScrollbar",
+            background="#2E3C54",
+            troughcolor="#141822",
+            bordercolor="#1B202B",
+            arrowcolor="#F59E0B",
+            lightcolor="#3B82F6",
+            darkcolor="#1D2432",
+        )
+        style.map(
+            "Horizontal.TScrollbar",
+            background=[("active", "#3B82F6"), ("pressed", "#1D4ED8")],
+            arrowcolor=[("active", "#FFFFFF")],
+        )
+        style.configure(
+            "Vertical.TScrollbar",
+            background="#2E3C54",
+            troughcolor="#141822",
+            bordercolor="#1B202B",
+            arrowcolor="#F59E0B",
+            lightcolor="#3B82F6",
+            darkcolor="#1D2432",
+        )
+        style.map(
+            "Vertical.TScrollbar",
+            background=[("active", "#3B82F6"), ("pressed", "#1D4ED8")],
+            arrowcolor=[("active", "#FFFFFF")],
+        )
 
     def _build_ui(self) -> None:
         # ==============================================================
@@ -528,11 +560,24 @@ class ArenaAnalyticsApp:
                     tab_obj._is_dirty = False
                     if hasattr(tab_obj, "refresh"):
                         tab_obj.refresh()
-                for attr_name in dir(tab_obj):
-                    if attr_name.endswith("_tree") or attr_name == "tree":
-                        t = getattr(tab_obj, attr_name, None)
-                        if isinstance(t, ttk.Treeview):
-                            auto_expand_treeview_columns(t)
+
+                def _fit_tab_trees(target_tab: Any = tab_obj) -> None:
+                    try:
+                        sc = getattr(target_tab, "scroll_canvas", None)
+                        inner_win = getattr(target_tab, "_inner_win", None)
+                        if sc is not None and inner_win is not None:
+                            sw = int(sc.winfo_width())
+                            if sw > 200:
+                                sc.itemconfigure(inner_win, width=sw)
+                        for attr_name in dir(target_tab):
+                            if attr_name.endswith("_tree") or attr_name == "tree":
+                                t = getattr(target_tab, attr_name, None)
+                                if isinstance(t, ttk.Treeview) and t.winfo_exists():
+                                    auto_expand_treeview_columns(t)
+                    except Exception:
+                        pass
+
+                self.root.after(25, _fit_tab_trees)
         except Exception:
             pass
 

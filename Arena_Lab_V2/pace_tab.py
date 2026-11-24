@@ -145,7 +145,7 @@ class GamePaceTab:
         self.inner = tk.Frame(self.scroll_canvas, bg=BG_DARK)
         self._inner_win = self.scroll_canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda _e: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all")))
-        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(980, e.width)))
+        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(400, e.width)))
         self.scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         # --- Hero Score Banner (0 - 100% Pace Score + Clear Passing Standards!) ---
@@ -156,25 +156,7 @@ class GamePaceTab:
         self.cv_score.pack(fill="x")
         self.cv_score.bind("<Configure>", lambda _e: self._draw_score_banner())
 
-        # --- Visual Charts Row (RTL: Timeline on RIGHT 48%, Distribution Histogram on LEFT 52%) ---
-        charts = tk.Frame(self.inner, bg=BG_DARK)
-        charts.pack(fill="x", pady=(0, 8))
-        charts.grid_columnconfigure(0, weight=52, uniform="pc")
-        charts.grid_columnconfigure(1, weight=48, uniform="pc")
-
-        p_hist = self._make_panel(charts, "توزيع أطوال المباريات (مع تظليل النطاق المثالي 11–16 جولة والوسيط)", COL_BLUE)
-        p_hist.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        self.cv_hist = tk.Canvas(p_hist, bg=BG_PANEL, height=230, highlightthickness=0)
-        self.cv_hist.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_hist.bind("<Configure>", lambda _e: self._draw_length_histogram())
-
-        p_time = self._make_panel(charts, "الخط الزمني لإيقاع المباراة (متى تبدأ الأحداث ومتى يُحسم التفوق؟)", COL_CYAN)
-        p_time.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        self.cv_timeline = tk.Canvas(p_time, bg=BG_PANEL, height=230, highlightthickness=0)
-        self.cv_timeline.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_timeline.bind("<Configure>", lambda _e: self._draw_pace_timeline())
-
-        # --- Self-Explanatory 14-Indicator Diagnostic Table ---
+        # --- Self-Explanatory 14-Indicator Diagnostic Table (Full Width First!) ---
         tbl_panel = self._make_panel(
             self.inner,
             "بطاقة التقييم التفصيلية لمعيار إيقاع المباراة (14 مؤشراً — النتيجة + الجيد + المثالي + التشخيص التلقائي)",
@@ -205,6 +187,19 @@ class GamePaceTab:
 
         self.pace_tree.pack(fill="x", padx=8, pady=(2, 8))
         enable_treeview_sorting(self.pace_tree)
+
+        # --- Visual Charts Stacked Vertically at Full Screen Width ---
+        p_time = self._make_panel(self.inner, "الخط الزمني لإيقاع المباراة (متى تبدأ الأحداث ومتى يُحسم التفوق؟)", COL_CYAN)
+        p_time.pack(fill="x", pady=(0, 8))
+        self.cv_timeline = tk.Canvas(p_time, bg=BG_PANEL, height=240, highlightthickness=0)
+        self.cv_timeline.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_timeline.bind("<Configure>", lambda _e: self._draw_pace_timeline())
+
+        p_hist = self._make_panel(self.inner, "توزيع أطوال المباريات (مع تظليل النطاق المثالي 11–16 جولة والوسيط)", COL_BLUE)
+        p_hist.pack(fill="x", pady=(0, 8))
+        self.cv_hist = tk.Canvas(p_hist, bg=BG_PANEL, height=240, highlightthickness=0)
+        self.cv_hist.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_hist.bind("<Configure>", lambda _e: self._draw_length_histogram())
 
     def _make_panel(self, parent: tk.Widget, title: str, accent: str) -> tk.Frame:
         f = tk.Frame(parent, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1)

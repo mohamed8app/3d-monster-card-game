@@ -108,7 +108,7 @@ class ArchetypeBalanceTab:
         self.inner = tk.Frame(self.scroll_canvas, bg=BG_DARK)
         self._inner_win = self.scroll_canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda _e: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all")))
-        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(980, e.width)))
+        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self._inner_win, width=max(400, e.width)))
         self.scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         # Hero Score Banner
@@ -118,52 +118,7 @@ class ArchetypeBalanceTab:
         self.cv_score.pack(fill="x")
         self.cv_score.bind("<Configure>", lambda _e: self._draw_score_banner())
 
-        # Visual Charts Row (RTL: Interactive 5-Way Breakdown on RIGHT 56%, Extremes & Categories on LEFT 44%)
-        charts = tk.Frame(self.inner, bg=BG_DARK)
-        charts.pack(fill="x", pady=(0, 8))
-        charts.grid_columnconfigure(0, weight=44, uniform="bal")
-        charts.grid_columnconfigure(1, weight=56, uniform="bal")
-
-        p_ext = self._make_panel(charts, "الأقوى (مرشح إضعاف) مقابل الأضعف (مرشح تقوية) + المجموعات الأربع", COL_RED)
-        p_ext.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        self.cv_extremes = tk.Canvas(p_ext, bg=BG_PANEL, height=275, highlightthickness=0)
-        self.cv_extremes.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_extremes.bind("<Configure>", lambda _e: self._draw_extremes())
-
-        p_grp = self._make_panel(charts, "نسبة الفوز التفصيلية حول خط التوازن 50% (اضغط للتبديل)", COL_GOLD)
-        p_grp.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-
-        # 5-Way Toggle Bar (RTL right-to-left)
-        tbar = tk.Frame(p_grp, bg=BG_PANEL, padx=8, pady=2)
-        tbar.pack(fill="x")
-        modes = [
-            ("Tribe", "العشائر (10)"),
-            ("Environment", "العناصر (10)"),
-            ("Playstyle", "الأساليب (10)"),
-            ("Free", "الميتا الحرة (10)"),
-            ("Roles", "الأدوار (6)"),
-        ]
-        for key, lbl in modes:
-            btn = tk.Button(
-                tbar,
-                text=rtl(lbl),
-                command=lambda k=key: self._set_chart_mode(k),
-                bg=COL_BLUE if key == "Tribe" else BG_CARD,
-                fg="#FFFFFF" if key == "Tribe" else FG_MUTED,
-                relief="flat",
-                font=(FONT_UI, 8, "bold"),
-                padx=8,
-                pady=2,
-                cursor="hand2",
-            )
-            btn.pack(side="right", padx=2)
-            self._mode_buttons[key] = btn
-
-        self.cv_group = tk.Canvas(p_grp, bg=BG_PANEL, height=248, highlightthickness=0)
-        self.cv_group.pack(fill="both", expand=True, padx=8, pady=(2, 8))
-        self.cv_group.bind("<Configure>", lambda _e: self._draw_group_bars())
-
-        # Self-Explanatory 14-Indicator Diagnostic Table
+        # Self-Explanatory 14-Indicator Diagnostic Table (Full Width First!)
         tbl_panel = self._make_panel(
             self.inner,
             "بطاقة التقييم التفصيلية لمعيار توازن العشائر والعناصر والنماذج (14 مؤشراً — النتيجة + الجيد + المثالي + التشخيص)",
@@ -192,6 +147,46 @@ class ArchetypeBalanceTab:
 
         self.bal_tree.pack(fill="x", padx=8, pady=(2, 8))
         enable_treeview_sorting(self.bal_tree)
+
+        # Visual Charts Stacked Vertically at Full Screen Width
+        p_grp = self._make_panel(self.inner, "نسبة الفوز التفصيلية حول خط التوازن 50% (اضغط للتبديل)", COL_GOLD)
+        p_grp.pack(fill="x", pady=(0, 8))
+
+        # 5-Way Toggle Bar (RTL right-to-left)
+        tbar = tk.Frame(p_grp, bg=BG_PANEL, padx=8, pady=2)
+        tbar.pack(fill="x")
+        modes = [
+            ("Tribe", "العشائر (10)"),
+            ("Environment", "العناصر (10)"),
+            ("Playstyle", "الأساليب (10)"),
+            ("Free", "الميتا الحرة (10)"),
+            ("Roles", "الأدوار (6)"),
+        ]
+        for key, lbl in modes:
+            btn = tk.Button(
+                tbar,
+                text=rtl(lbl),
+                command=lambda k=key: self._set_chart_mode(k),
+                bg=COL_BLUE if key == "Tribe" else BG_CARD,
+                fg="#FFFFFF" if key == "Tribe" else FG_MUTED,
+                relief="flat",
+                font=(FONT_UI, 8, "bold"),
+                padx=8,
+                pady=2,
+                cursor="hand2",
+            )
+            btn.pack(side="right", padx=2)
+            self._mode_buttons[key] = btn
+
+        self.cv_group = tk.Canvas(p_grp, bg=BG_PANEL, height=255, highlightthickness=0)
+        self.cv_group.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_group.bind("<Configure>", lambda _e: self._draw_group_bars())
+
+        p_ext = self._make_panel(self.inner, "الأقوى (مرشح إضعاف) مقابل الأضعف (مرشح تقوية) + المجموعات الأربع", COL_RED)
+        p_ext.pack(fill="x", pady=(0, 8))
+        self.cv_extremes = tk.Canvas(p_ext, bg=BG_PANEL, height=275, highlightthickness=0)
+        self.cv_extremes.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.cv_extremes.bind("<Configure>", lambda _e: self._draw_extremes())
 
     def _make_panel(self, parent: tk.Widget, title: str, accent: str) -> tk.Frame:
         f = tk.Frame(parent, bg=BG_PANEL, highlightbackground=BG_BORDER, highlightthickness=1)
